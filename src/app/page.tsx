@@ -34,6 +34,7 @@ export default async function HomePage() {
   return (
     <HomePageClient
       pageContent={pageContent?.content || "<p>Добро пожаловать на платформу ЕЦПР</p>"}
+      bannerUrl={pageContent?.bannerUrl || null}
       conferenceCount={conferenceCount}
       participantCount={participantCount}
       upcomingConferences={upcomingConferences}

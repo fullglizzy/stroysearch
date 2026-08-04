@@ -2,30 +2,22 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { Search, FileText, Download, Upload, Coins, Eye } from "lucide-react";
+import { Search, FileText, Download, Upload, Coins, Eye, X, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 interface DocRow {
   id: string;
@@ -48,16 +40,21 @@ interface TreeItem {
 interface Props {
   documents: DocRow[];
   treeItems: TreeItem[];
+  moderatorText: string | null;
+  bannerUrl: string | null;
 }
 
-export function LibraryPageClient({ documents, treeItems }: Props) {
+export function LibraryPageClient({ documents, treeItems, moderatorText, bannerUrl }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const [classifier, setClassifier] = useState("all");
+  const [classifier, setClassifier] = useState(searchParams.get("classifier") || "all");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadLoading, setUploadLoading] = useState(false);
+
+  const currentClassifierName = classifier !== "all" ? treeItems.find(t => t.fullNumberPath === classifier)?.name : null;
   const [buyLoading, setBuyLoading] = useState<string | null>(null);
 
   const filtered = documents.filter((d) => {
@@ -190,9 +187,24 @@ export function LibraryPageClient({ documents, treeItems }: Props) {
         </Dialog>
       </div>
 
+      {/* Баннер (ТЗ §8.1) */}
+      {bannerUrl && (
+        <div className="mb-6 rounded-lg overflow-hidden">
+          <img src={bannerUrl} alt="Баннер библиотеки" className="w-full h-auto max-h-48 object-cover" />
+        </div>
+      )}
+
+      {/* Текст модератора (ТЗ §8.1) */}
+      {moderatorText && (
+        <div
+          className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm"
+          dangerouslySetInnerHTML={{ __html: moderatorText }}
+        />
+      )}
+
       {/* Filters */}
       <Card className="mb-6">
-        <CardContent className="pt-6">
+        <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -221,7 +233,7 @@ export function LibraryPageClient({ documents, treeItems }: Props) {
         <div className="space-y-3">
           {filtered.map((doc) => (
             <Card key={doc.id} className="hover:shadow-sm transition-shadow">
-              <CardContent className="pt-4 flex items-center justify-between gap-4">
+              <CardContent className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <FileText className="h-4 w-4 text-menthol flex-shrink-0" />

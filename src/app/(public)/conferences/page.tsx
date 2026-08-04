@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { getPageContent } from "@/server/admin/content";
 import { ConferencesPageClient } from "@/components/tables/ConferencesPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConferencesPage() {
+  const pageContent = await getPageContent("conferences");
+
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true, fullNumberPath: true },
@@ -40,5 +43,12 @@ export default async function ConferencesPage() {
     participantCount: c._count.participants,
   }));
 
-  return <ConferencesPageClient conferences={rows} treeItems={treeItems} />;
+  return (
+    <ConferencesPageClient
+      conferences={rows}
+      treeItems={treeItems}
+      moderatorText={pageContent?.content || null}
+      bannerUrl={pageContent?.bannerUrl || null}
+    />
+  );
 }

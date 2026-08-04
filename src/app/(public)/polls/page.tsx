@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { getPageContent } from "@/server/admin/content";
 import { PollsPageClient } from "@/components/tables/PollsPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function PollsPage() {
+  const pageContent = await getPageContent("polls");
+
   const polls = await prisma.poll.findMany({
     where: { isActive: true },
     include: {
@@ -33,5 +36,11 @@ export default async function PollsPage() {
     })),
   }));
 
-  return <PollsPageClient polls={rows} />;
+  return (
+    <PollsPageClient
+      polls={rows}
+      moderatorText={pageContent?.content || null}
+      bannerUrl={pageContent?.bannerUrl || null}
+    />
+  );
 }

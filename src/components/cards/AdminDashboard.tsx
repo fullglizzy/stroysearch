@@ -107,7 +107,7 @@ export function AdminDashboard({ stats, userType }: AdminDashboardProps) {
         .map((section) => (
           <Link key={section.href} href={section.href}>
             <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer relative">
-              <CardContent className="pt-6">
+              <CardContent>
                 <section.icon className="h-8 w-8 text-menthol mb-3" />
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">{section.title}</h3>

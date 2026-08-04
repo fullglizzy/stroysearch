@@ -52,9 +52,11 @@ interface TreeItem {
 interface Props {
   conferences: ConfRow[];
   treeItems: TreeItem[];
+  moderatorText: string | null;
+  bannerUrl: string | null;
 }
 
-export function ConferencesPageClient({ conferences, treeItems }: Props) {
+export function ConferencesPageClient({ conferences, treeItems, moderatorText, bannerUrl }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -149,6 +151,21 @@ export function ConferencesPageClient({ conferences, treeItems }: Props) {
         </Dialog>
       </div>
 
+      {/* Баннер (ТЗ §9) */}
+      {bannerUrl && (
+        <div className="mb-6 rounded-lg overflow-hidden">
+          <img src={bannerUrl} alt="Баннер конференций" className="w-full h-auto max-h-48 object-cover" />
+        </div>
+      )}
+
+      {/* Текст модератора (ТЗ §9) */}
+      {moderatorText && (
+        <div
+          className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm"
+          dangerouslySetInnerHTML={{ __html: moderatorText }}
+        />
+      )}
+
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Поиск конференций..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
@@ -164,7 +181,7 @@ export function ConferencesPageClient({ conferences, treeItems }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((conf) => (
             <Card key={conf.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-4">
+              <CardContent>
                 <h3 className="font-semibold text-lg mb-2">{conf.title}</h3>
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-3">
                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {formatDate(conf.date)}</span>

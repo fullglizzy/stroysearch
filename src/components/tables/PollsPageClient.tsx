@@ -26,9 +26,11 @@ interface PollRow {
 
 interface Props {
   polls: PollRow[];
+  moderatorText: string | null;
+  bannerUrl: string | null;
 }
 
-export function PollsPageClient({ polls }: Props) {
+export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
@@ -70,6 +72,14 @@ export function PollsPageClient({ polls }: Props) {
     return (
       <div className="container-page py-8">
         <h1 className="text-3xl font-bold mb-2">Статистика и опросы</h1>
+        {bannerUrl && (
+          <div className="mb-6 rounded-lg overflow-hidden">
+            <img src={bannerUrl} alt="Баннер опросов" className="w-full h-auto max-h-48 object-cover" />
+          </div>
+        )}
+        {moderatorText && (
+          <div className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm" dangerouslySetInnerHTML={{ __html: moderatorText }} />
+        )}
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Нет активных опросов</p>
@@ -86,6 +96,21 @@ export function PollsPageClient({ polls }: Props) {
           <p className="text-muted-foreground mt-1">Голосуйте и получайте монеты</p>
         </div>
       </div>
+
+      {/* Баннер (ТЗ §10.1) */}
+      {bannerUrl && (
+        <div className="mb-6 rounded-lg overflow-hidden">
+          <img src={bannerUrl} alt="Баннер опросов" className="w-full h-auto max-h-48 object-cover" />
+        </div>
+      )}
+
+      {/* Текст модератора (ТЗ §10.1) */}
+      {moderatorText && (
+        <div
+          className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm"
+          dangerouslySetInnerHTML={{ __html: moderatorText }}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {polls.map((poll) => {

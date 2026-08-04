@@ -24,6 +24,7 @@ interface ProfileFormProps {
     roles: string[];
   };
   username: string;
+  nick: string | null;
 }
 
 const ROLE_OPTIONS = [
@@ -34,7 +35,7 @@ const ROLE_OPTIONS = [
   { value: "OTHER", label: "Иное" },
 ];
 
-export function ProfileForm({ initialData, username }: ProfileFormProps) {
+export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -98,10 +99,14 @@ export function ProfileForm({ initialData, username }: ProfileFormProps) {
       )}
 
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="space-y-4">
           <div>
             <Label>Логин (нельзя изменить)</Label>
             <Input value={username} disabled className="mt-1" />
+          </div>
+          <div>
+            <Label>Ник (нельзя изменить после регистрации — ТЗ §11.8)</Label>
+            <Input value={nick || "—"} disabled className="mt-1" />
           </div>
           <div>
             <Label>Email</Label>
@@ -111,7 +116,7 @@ export function ProfileForm({ initialData, username }: ProfileFormProps) {
       </Card>
 
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="space-y-4">
           <h3 className="font-semibold">Личная информация</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -153,7 +158,7 @@ export function ProfileForm({ initialData, username }: ProfileFormProps) {
       </Card>
 
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="space-y-4">
           <h3 className="font-semibold">Роли</h3>
           <div className="space-y-3">
             {ROLE_OPTIONS.map((role) => (
@@ -171,7 +176,7 @@ export function ProfileForm({ initialData, username }: ProfileFormProps) {
       </Card>
 
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <Label htmlFor="isContactsHidden">
               Скрыть мои персональные данные от всех

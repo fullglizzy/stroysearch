@@ -40,6 +40,7 @@ export default async function ProfilePage() {
           roles: user.profile?.roles.map((r) => r.role) || [],
         }}
         username={user.username}
+        nick={user.profile?.nick || null}
       />
     </div>
   );

@@ -116,7 +116,7 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
     <div className="space-y-6">
       {/* Balance Card */}
       <Card className="bg-gradient-to-r from-menthol/10 to-menthol/5 border-menthol/20">
-        <CardContent className="pt-6">
+        <CardContent>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Баланс монет</p>

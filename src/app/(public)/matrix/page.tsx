@@ -1,9 +1,13 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
+import { getPageContent } from "@/server/admin/content";
 import { MatrixPageClient } from "@/components/tables/MatrixPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function MatrixPage() {
+  const pageContent = await getPageContent("matrix");
+
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true, fullNumberPath: true },
@@ -51,7 +55,16 @@ export default async function MatrixPage() {
     };
   });
 
-  return <MatrixPageClient products={rows} treeItems={treeItems} />;
+  return (
+    <Suspense fallback={<div className="container-page py-8">Загрузка...</div>}>
+      <MatrixPageClient
+        products={rows}
+        treeItems={treeItems}
+        moderatorText={pageContent?.content || null}
+        bannerUrl={pageContent?.bannerUrl || null}
+      />
+    </Suspense>
+  );
 }
 
 function parseJsonArray(val: string): string[] {

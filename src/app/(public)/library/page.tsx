@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { getPageContent } from "@/server/admin/content";
 import { LibraryPageClient } from "@/components/tables/LibraryPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
+  const pageContent = await getPageContent("library");
+
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true, fullNumberPath: true },
@@ -35,5 +38,12 @@ export default async function LibraryPage() {
     purchasesCount: d.purchasesCount,
   }));
 
-  return <LibraryPageClient documents={rows} treeItems={treeItems} />;
+  return (
+    <LibraryPageClient
+      documents={rows}
+      treeItems={treeItems}
+      moderatorText={pageContent?.content || null}
+      bannerUrl={pageContent?.bannerUrl || null}
+    />
+  );
 }

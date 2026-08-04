@@ -26,7 +26,7 @@ export default async function CompanyDashboardPage() {
         ].map((item) => (
           <Link key={item.href} href={item.href}>
             <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
-              <CardContent className="pt-6">
+              <CardContent>
                 <item.icon className={`h-8 w-8 ${item.color} mb-3`} />
                 <h3 className="font-semibold mb-1">{item.title}</h3>
                 <p className="text-sm text-muted-foreground">{item.desc}</p>

@@ -30,6 +30,7 @@ import { supportTicketSchema } from "@/lib/validators";
 
 interface HomePageProps {
   pageContent: string;
+  bannerUrl: string | null;
   conferenceCount: number;
   participantCount: number;
   upcomingConferences: {
@@ -42,6 +43,7 @@ interface HomePageProps {
 
 export function HomePageClient({
   pageContent,
+  bannerUrl,
   conferenceCount,
   participantCount,
   upcomingConferences,
@@ -95,6 +97,16 @@ export function HomePageClient({
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-menthol/5 to-white py-16 md:py-24">
         <div className="container-page">
+          {/* Баннер №1 (ТЗ §4.1) */}
+          {bannerUrl && (
+            <div className="mb-8 rounded-lg overflow-hidden max-w-3xl mx-auto">
+              <img
+                src={bannerUrl}
+                alt="Баннер платформы"
+                className="w-full h-auto max-h-48 object-cover"
+              />
+            </div>
+          )}
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
               Единый центр продуктовых решений
@@ -102,7 +114,7 @@ export function HomePageClient({
             </h1>
             <div
               className="prose prose-gray max-w-none text-muted-foreground text-base md:text-lg leading-relaxed mb-8"
-              dangerouslySetInnerHTML={{ __html: pageContent.slice(0, 400) + "..." }}
+              dangerouslySetInnerHTML={{ __html: pageContent }}
             />
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
@@ -140,7 +152,7 @@ export function HomePageClient({
         <div className="container-page">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="text-center">
-              <CardContent className="pt-6">
+              <CardContent>
                 <Calendar className="h-8 w-8 text-menthol mx-auto mb-3" />
                 <div className="text-3xl font-bold text-foreground">
                   {conferenceCount}
@@ -149,7 +161,7 @@ export function HomePageClient({
               </CardContent>
             </Card>
             <Card className="text-center">
-              <CardContent className="pt-6">
+              <CardContent>
                 <Users className="h-8 w-8 text-orange-accent mx-auto mb-3" />
                 <div className="text-3xl font-bold text-foreground">
                   {participantCount}
@@ -158,7 +170,7 @@ export function HomePageClient({
               </CardContent>
             </Card>
             <Card className="text-center">
-              <CardContent className="pt-6">
+              <CardContent>
                 <TrendingUp className="h-8 w-8 text-menthol mx-auto mb-3" />
                 <div className="text-3xl font-bold text-foreground">
                   19
@@ -175,7 +187,7 @@ export function HomePageClient({
         <div className="container-page">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-6">
+              <CardContent>
                 <h3 className="text-xl font-semibold mb-2">Личный кабинет участника</h3>
                 <p className="text-muted-foreground text-sm mb-4">
                   Управляйте профилем, финансами, отзывами, участвуйте в конференциях и опросах
@@ -189,7 +201,7 @@ export function HomePageClient({
               </CardContent>
             </Card>
             <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-6">
+              <CardContent>
                 <h3 className="text-xl font-semibold mb-2">Личный кабинет компании</h3>
                 <p className="text-muted-foreground text-sm mb-4">
                   Управляйте товарами и услугами, добавляйте продукты в матрицу материалов
@@ -245,7 +257,7 @@ export function HomePageClient({
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <h3 className="font-semibold mb-2">{item.title}</h3>
                     <p className="text-sm text-muted-foreground">{item.desc}</p>
                   </CardContent>

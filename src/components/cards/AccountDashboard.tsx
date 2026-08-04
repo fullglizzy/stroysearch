@@ -63,28 +63,28 @@ export function AccountDashboard({ user }: AccountDashboardProps) {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="text-center">
             <Star className="h-6 w-6 text-orange-accent mx-auto mb-2" />
             <div className="text-2xl font-bold">{user.stats.receivedReviews}</div>
             <p className="text-xs text-muted-foreground">Получено отзывов</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="text-center">
             <FileText className="h-6 w-6 text-menthol mx-auto mb-2" />
             <div className="text-2xl font-bold">{user.stats.documents}</div>
             <p className="text-xs text-muted-foreground">Документов</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="text-center">
             <Calendar className="h-6 w-6 text-menthol mx-auto mb-2" />
             <div className="text-2xl font-bold">{user.stats.conferences}</div>
             <p className="text-xs text-muted-foreground">Конференций</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="text-center">
             <Star className="h-6 w-6 text-orange-accent mx-auto mb-2" />
             <div className="text-2xl font-bold">{user.stats.givenReviews}</div>
             <p className="text-xs text-muted-foreground">Оставлено отзывов</p>
@@ -140,7 +140,7 @@ export function AccountDashboard({ user }: AccountDashboardProps) {
         ].map((item) => (
           <Link key={item.href} href={item.href}>
             <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
-              <CardContent className="pt-6">
+              <CardContent>
                 <item.icon className={`h-8 w-8 ${item.color} mb-3`} />
                 <h3 className="font-semibold mb-1">{item.title}</h3>
                 <p className="text-sm text-muted-foreground">{item.desc}</p>
