@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, ChevronDown, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { comparePath } from "@/lib/utils";
 
 interface FlatItem {
   id: string;
@@ -49,10 +50,15 @@ function buildTree(flat: FlatItem[]): TreeNode[] {
   function assignLevel(nodes: TreeNode[], level: number) {
     for (const node of nodes) {
       node.level = level;
+      // Сортируем детей числово по fullNumberPath
+      node.children.sort((a, b) => comparePath(a.fullNumberPath, b.fullNumberPath));
       assignLevel(node.children, level + 1);
     }
   }
   assignLevel(roots, 0);
+
+  // Сортируем корневые узлы
+  roots.sort((a, b) => comparePath(a.fullNumberPath, b.fullNumberPath));
 
   return roots;
 }

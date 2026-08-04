@@ -36,6 +36,7 @@ import {
   FolderTree,
   Loader2,
 } from "lucide-react";
+import { comparePath } from "@/lib/utils";
 
 // ── Types ──
 
@@ -76,6 +77,7 @@ function buildTree(flat: TreeItemFlat[]): TreeNode[] {
   function assignLevel(nodes: TreeNode[], lvl: number) {
     for (const n of nodes) {
       n.level = lvl;
+      n.children.sort((a, b) => comparePath(a.fullNumberPath, b.fullNumberPath));
       assignLevel(n.children, lvl + 1);
     }
   }

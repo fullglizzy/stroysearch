@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { comparePath } from "@/lib/utils";
 
 // ── Вспомогательные функции для автоперенумерации ──
 
@@ -90,11 +91,13 @@ export async function getAllTreeItems(includeDeleted = false): Promise<TreeItemF
   const where = includeDeleted ? {} : { deletedAt: null };
   const items = await prisma.productTreeItem.findMany({
     where,
-    orderBy: { fullNumberPath: "asc" },
     include: {
       _count: { select: { products: true, documents: true } },
     },
   });
+
+  // Естественная (numeric) сортировка: "2.6.4.10" > "2.6.4.2"
+  items.sort((a, b) => comparePath(a.fullNumberPath, b.fullNumberPath));
 
   return items.map((item) => ({
     id: item.id,

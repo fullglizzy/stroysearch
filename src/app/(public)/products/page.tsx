@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { comparePath } from "@/lib/utils";
 import { ProductTree } from "@/components/tree/ProductTree";
 import { getPageContent } from "@/server/admin/content";
 import { ProductsPageClient } from "@/components/cards/ProductsPageClient";
@@ -19,11 +20,13 @@ interface FlatItem {
 async function getTreeItems(): Promise<FlatItem[]> {
   const items = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
-    orderBy: { fullNumberPath: "asc" },
     include: {
       _count: { select: { products: true, documents: true } },
     },
   });
+
+  // Естественная (numeric) сортировка
+  items.sort((a, b) => comparePath(a.fullNumberPath, b.fullNumberPath));
 
   return items.map((item) => ({
     id: item.id,
