@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Loader2, Save, Plus, Trash2, Gift, Package } from "lucide-react";
 
 interface BillingConfig {
@@ -47,6 +48,9 @@ export function FinancesManager({ config, gifts }: Props) {
   const [giftPrice, setGiftPrice] = useState("");
   const [giftLimit, setGiftLimit] = useState("");
   const [giftLoading, setGiftLoading] = useState(false);
+  const [deleteGiftId, setDeleteGiftId] = useState<string | null>(null);
+  const [deleteGiftLoading, setDeleteGiftLoading] = useState(false);
+  const [giftError, setGiftError] = useState("");
 
   async function saveConfig() {
     setConfigLoading(true);
@@ -84,19 +88,27 @@ export function FinancesManager({ config, gifts }: Props) {
       });
       if (res.ok) {
         setGiftName(""); setGiftPrice(""); setGiftLimit("");
+        setGiftError("");
         router.refresh();
+      } else {
+        const d = await res.json();
+        setGiftError(d.error || "Ошибка");
       }
-    } catch { alert("Ошибка"); }
+    } catch { setGiftError("Ошибка соединения"); }
     setGiftLoading(false);
   }
 
-  async function deleteGift(id: string) {
-    if (!confirm("Удалить подарок?")) return;
-    await fetch(`/api/admin/gifts?id=${id}`, { method: "DELETE" });
+  async function handleDeleteGift() {
+    if (!deleteGiftId) return;
+    setDeleteGiftLoading(true);
+    await fetch(`/api/admin/gifts?id=${deleteGiftId}`, { method: "DELETE" });
+    setDeleteGiftId(null);
+    setDeleteGiftLoading(false);
     router.refresh();
   }
 
   return (
+    <>
     <Tabs defaultValue="economy">
       <TabsList className="mb-6">
         <TabsTrigger value="economy">Экономика</TabsTrigger>
@@ -134,6 +146,7 @@ export function FinancesManager({ config, gifts }: Props) {
                 <Plus className="h-4 w-4 mr-1" /> Добавить
               </Button>
             </form>
+            {giftError && <Alert variant="destructive"><AlertDescription>{giftError}</AlertDescription></Alert>}
 
             {gifts.length === 0 ? (
               <div className="border rounded-lg p-8 text-center text-muted-foreground">
@@ -149,7 +162,7 @@ export function FinancesManager({ config, gifts }: Props) {
                       <p className="font-medium text-sm">{g.name}</p>
                       <p className="text-xs text-muted-foreground">{g.coinPrice} монет • лимит: {g.limit}</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-red-500" onClick={() => deleteGift(g.id)}>
+                    <Button variant="ghost" size="icon" className="text-red-500" onClick={() => setDeleteGiftId(g.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -160,5 +173,16 @@ export function FinancesManager({ config, gifts }: Props) {
         </Card>
       </TabsContent>
     </Tabs>
-  );
+
+    <ConfirmDialog
+      open={!!deleteGiftId}
+      onOpenChange={(v) => { if (!v) setDeleteGiftId(null); }}
+      title="Удалить подарок?"
+      message="Подарок будет удалён из каталога."
+      confirmLabel="Удалить"
+      onConfirm={handleDeleteGift}
+      loading={deleteGiftLoading}
+    />
+  </>
+);
 }

@@ -10,7 +10,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Coins, Vote, BarChart3, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Coins, Vote, BarChart3, Loader2, AlertCircle } from "lucide-react";
 
 interface PollRow {
   id: string;
@@ -36,6 +37,7 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string | string[]>>({});
   const [loading, setLoading] = useState<string | null>(null);
+  const [voteError, setVoteError] = useState("");
 
   async function handleVote(pollId: string) {
     if (!session?.user) { router.push("/login"); return; }
@@ -53,13 +55,14 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
 
       if (res.ok) {
         setVotedIds((prev) => new Set(prev).add(pollId));
+        setVoteError("");
         router.refresh();
       } else {
         const d = await res.json();
-        alert(d.error || "Ошибка голосования");
+        setVoteError(d.error || "Ошибка голосования");
       }
     } catch {
-      alert("Ошибка соединения");
+      setVoteError("Ошибка соединения");
     }
     setLoading(null);
   }
@@ -72,6 +75,18 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
     return (
       <div className="container-page py-8">
         <h1 className="text-3xl font-bold mb-2">Статистика и опросы</h1>
+
+        <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-menthol">Как пользоваться опросами</p>
+            <p className="text-muted-foreground">
+              <strong>Голосуйте</strong> в опросах и получайте монеты за каждый ответ.
+              Результаты видны после голосования. <strong>Создать опрос</strong> можно в личном кабинете.
+            </p>
+          </div>
+        </div>
+
         {bannerUrl && (
           <div className="mb-6 rounded-lg overflow-hidden">
             <img src={bannerUrl} alt="Баннер опросов" className="w-full h-auto max-h-48 object-cover" />
@@ -97,6 +112,18 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
         </div>
       </div>
 
+      {/* Info banner */}
+      <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-menthol">Как пользоваться опросами</p>
+          <p className="text-muted-foreground">
+            <strong>Голосуйте</strong> в опросах и получайте монеты за каждый ответ.
+            Результаты видны после голосования. <strong>Создать опрос</strong> можно в личном кабинете.
+          </p>
+        </div>
+      </div>
+
       {/* Баннер (ТЗ §10.1) */}
       {bannerUrl && (
         <div className="mb-6 rounded-lg overflow-hidden">
@@ -111,6 +138,8 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
           dangerouslySetInnerHTML={{ __html: moderatorText }}
         />
       )}
+
+      {voteError && <Alert variant="destructive" className="mb-4"><AlertDescription>{voteError}</AlertDescription></Alert>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {polls.map((poll) => {

@@ -23,6 +23,7 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
   const [signatureType, setSignatureType] = useState("nick");
   const [scores, setScores] = useState<number[]>(Array(9).fill(0));
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function setScore(index: number, value: number) {
@@ -62,10 +63,12 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
       });
 
       if (res.ok) {
+        setSuccess(true);
         router.refresh();
-        setComment("");
-        setScores(Array(9).fill(0));
-        alert("Отзыв опубликован! +1 монета начислена.");
+        setTimeout(() => {
+          setComment("");
+          setScores(Array(9).fill(0));
+        }, 2000);
       } else {
         const d = await res.json();
         setError(d.error || "Ошибка");
@@ -84,6 +87,7 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
         </CardHeader>
         <CardContent className="space-y-4">
           {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+          {success && <Alert><AlertDescription>✅ Отзыв опубликован! +1 монета начислена.</AlertDescription></Alert>}
 
           {/* 9 Criteria */}
           <div className="space-y-3">

@@ -28,7 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
 import { ReviewForm } from "@/components/forms/ReviewForm";
-import { Plus, Search, MessageSquare } from "lucide-react";
+import { Plus, Search, MessageSquare, AlertCircle } from "lucide-react";
 
 interface CompanyRow {
   id: string;
@@ -138,7 +138,7 @@ export function SuppliersPageClient({ companies }: Props) {
   }
 
   return (
-    <div className="container-page py-8">
+	    <div className="px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">База поставщиков и заказчиков</h1>
@@ -191,6 +191,19 @@ export function SuppliersPageClient({ companies }: Props) {
               </form>
             </DialogContent>
           </Dialog>
+        </div>
+      </div>
+
+      {/* Info banner */}
+      <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-menthol">Как пользоваться базой поставщиков</p>
+          <p className="text-muted-foreground">
+            Контакты (телефон, email, рейтинг, отзывы) скрыты иконкой глаза.
+            <strong> Нажмите на глаз</strong> чтобы раскрыть информацию — каждый просмотр учитывается в метрике.
+            Зарегистрированные пользователи могут <strong>оставить отзыв</strong> о компании или участнике.
+          </p>
         </div>
       </div>
 

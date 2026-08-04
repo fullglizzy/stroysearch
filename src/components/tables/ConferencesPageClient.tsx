@@ -26,7 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { Search, Calendar, Clock, Users, Eye, Plus, Coins, ExternalLink, Loader2 } from "lucide-react";
+import { Search, Calendar, Clock, Users, Eye, Plus, Coins, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 
 interface ConfRow {
   id: string;
@@ -66,6 +66,7 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
   const [createError, setCreateError] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState("");
 
   const filtered = conferences.filter((c) => {
     if (!search) return true;
@@ -105,9 +106,9 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
     setJoinLoading(confId);
     try {
       const res = await fetch(`/api/conferences/${confId}/join`, { method: "POST" });
-      if (res.ok) { router.refresh(); }
-      else { const d = await res.json(); alert(d.error || "Недостаточно монет"); }
-    } catch { alert("Ошибка соединения"); }
+      if (res.ok) { router.refresh(); setJoinError(""); }
+      else { const d = await res.json(); setJoinError(d.error || "Недостаточно монет"); }
+    } catch { setJoinError("Ошибка соединения"); }
     setJoinLoading(null);
   }
 
@@ -151,6 +152,19 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
         </Dialog>
       </div>
 
+      {/* Info banner */}
+      <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-menthol">Как пользоваться конференциями</p>
+          <p className="text-muted-foreground">
+            <strong>Создайте</strong> свою конференцию — она появится после одобрения модератором.
+            Для платных конференций укажите цену в монетах.
+            <strong> Участвуйте</strong> в конференциях других организаторов.
+          </p>
+        </div>
+      </div>
+
       {/* Баннер (ТЗ §9) */}
       {bannerUrl && (
         <div className="mb-6 rounded-lg overflow-hidden">
@@ -170,6 +184,8 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Поиск конференций..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
+
+      {joinError && <Alert variant="destructive" className="mb-4"><AlertDescription>{joinError}</AlertDescription></Alert>}
 
       {filtered.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">

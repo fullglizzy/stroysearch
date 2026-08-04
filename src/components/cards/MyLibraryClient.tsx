@@ -13,6 +13,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileText, Upload, Download, Eye, Trash2, Coins, UploadCloud } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface DocRow {
   id: string; title: string; coinPrice: number; fileUrl: string;
@@ -39,6 +40,8 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   function formatSize(bytes: number): string {
     if (!bytes || bytes === 0) return "—";
@@ -91,9 +94,12 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
     setLoading(false);
   }
 
-  async function handleDelete(docId: string) {
-    if (!confirm("Удалить документ?")) return;
-    await fetch(`/api/library/${docId}`, { method: "DELETE" });
+  async function handleDeleteDoc() {
+    if (!deleteDocId) return;
+    setDeleteLoading(true);
+    await fetch(`/api/library/${deleteDocId}`, { method: "DELETE" });
+    setDeleteDocId(null);
+    setDeleteLoading(false);
     router.refresh();
   }
 
@@ -159,7 +165,7 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
                     <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm">Открыть</Button>
                     </a>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDelete(doc.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => setDeleteDocId(doc.id)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -201,6 +207,16 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={!!deleteDocId}
+        onOpenChange={(v) => { if (!v) setDeleteDocId(null); }}
+        title="Удалить документ?"
+        message="Документ будет скрыт из библиотеки."
+        confirmLabel="Удалить"
+        onConfirm={handleDeleteDoc}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

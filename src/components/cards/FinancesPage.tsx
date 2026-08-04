@@ -68,6 +68,7 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
   const [giftError, setGiftError] = useState("");
   const [giftLoading, setGiftLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState("");
 
   async function handleGiftCoins(e: React.FormEvent) {
     e.preventDefault();
@@ -101,13 +102,13 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
     setClaimLoading(giftId);
     try {
       const res = await fetch(`/api/gifts/${giftId}/claim`, { method: "POST" });
-      if (res.ok) router.refresh();
+      if (res.ok) { setClaimError(""); router.refresh(); }
       else {
         const data = await res.json();
-        alert(data.error || "Недостаточно монет");
+        setClaimError(data.error || "Недостаточно монет");
       }
     } catch {
-      alert("Ошибка соединения");
+      setClaimError("Ошибка соединения");
     }
     setClaimLoading(null);
   }
@@ -187,6 +188,8 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
           </form>
         </DialogContent>
       </Dialog>
+
+      {claimError && <Alert variant="destructive" className="mb-4"><AlertDescription>{claimError}</AlertDescription></Alert>}
 
       {/* Gifts / Souvenirs */}
       {gifts.length > 0 && (

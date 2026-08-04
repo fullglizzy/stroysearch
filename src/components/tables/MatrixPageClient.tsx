@@ -15,7 +15,7 @@ import {
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
 import { cn } from "@/lib/utils";
-import { Search, SlidersHorizontal, Plus, X, Filter } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle } from "lucide-react";
 
 interface ProductRow {
   id: string; companyName: string; companyInn: string; companyId: string;
@@ -100,6 +100,19 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
       <p className="text-muted-foreground mb-2">
         Конкурентная таблица — сравнение аналогов по цене, характеристикам и классу
       </p>
+
+      {/* Info banner */}
+      <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-menthol">Как пользоваться матрицей</p>
+          <p className="text-muted-foreground">
+            Используйте <strong>фильтры</strong> по классификатору, классу товара и региону.
+            Нажмите <strong>«Дать аналог»</strong> чтобы добавить свой продукт в сравнение.
+            Контакты компаний открываются по клику на <strong>иконку глаза</strong>.
+          </p>
+        </div>
+      </div>
 
       {/* Баннер (ТЗ §7.1) */}
       {bannerUrl && (

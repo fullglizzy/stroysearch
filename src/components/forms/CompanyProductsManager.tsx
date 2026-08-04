@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Plus, Edit, Trash2, Eye, Package } from "lucide-react";
 
 interface ProductRow {
@@ -62,6 +63,8 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
   const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const productToEdit = editId ? products.find((p) => p.id === editId) : null;
 
@@ -102,12 +105,15 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
     setLoading(false);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Удалить товар?")) return;
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleteLoading(true);
     try {
-      await fetch(`/api/products/${id}`, { method: "DELETE" });
+      await fetch(`/api/products/${deleteId}`, { method: "DELETE" });
+      setDeleteId(null);
       router.refresh();
-    } catch { alert("Ошибка"); }
+    } catch { setError("Ошибка удаления"); }
+    setDeleteLoading(false);
   }
 
   const ProductForm = ({ isEdit }: { isEdit: boolean }) => (
@@ -177,7 +183,7 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditId(p.id)}>
                       <Edit className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDelete(p.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => setDeleteId(p.id)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -195,6 +201,16 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
+        title="Удалить товар?"
+        message="Товар будет удалён из матрицы материалов."
+        confirmLabel="Удалить"
+        onConfirm={handleDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

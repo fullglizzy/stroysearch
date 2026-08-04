@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,8 @@ export function PollsManager({ polls, treeItems }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,9 +69,12 @@ export function PollsManager({ polls, treeItems }: Props) {
     setLoading(false);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Удалить опрос?")) return;
-    await fetch(`/api/polls/${id}`, { method: "DELETE" });
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleteLoading(true);
+    await fetch(`/api/polls/${deleteId}`, { method: "DELETE" });
+    setDeleteId(null);
+    setDeleteLoading(false);
     router.refresh();
   }
 
@@ -109,7 +115,7 @@ export function PollsManager({ polls, treeItems }: Props) {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-base">{p.question}</CardTitle>
-                  <Button variant="ghost" size="icon" className="text-red-500 h-7 w-7" onClick={() => handleDelete(p.id)}><Trash2 className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="text-red-500 h-7 w-7" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
                 <div className="flex gap-2 mt-1">
                   <Badge variant="secondary" className="text-[10px]">{p.pollType === "DICHOTOMOUS" ? "Да/Нет" : "Множественный"}</Badge>
@@ -135,6 +141,16 @@ export function PollsManager({ polls, treeItems }: Props) {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
+        title="Удалить опрос?"
+        message="Результаты голосования будут потеряны."
+        confirmLabel="Удалить"
+        onConfirm={handleDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

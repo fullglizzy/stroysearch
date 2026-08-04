@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Search, FileText, Download, Upload, Coins, Eye, CheckCircle } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { Search, FileText, Download, Upload, Coins, Eye, CheckCircle, AlertCircle } from "lucide-react";
 
 interface DocRow {
   id: string;
@@ -55,6 +56,8 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
 
   const currentClassifierName = classifier ? treeItems.find(t => t.fullNumberPath === classifier)?.name : null;
   const [buyLoading, setBuyLoading] = useState<string | null>(null);
+  const [buyTarget, setBuyTarget] = useState<{ id: string; title: string; price: number } | null>(null);
+  const [buyError, setBuyError] = useState("");
 
   const filtered = documents.filter((d) => {
     if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -102,13 +105,23 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
 
   async function handleBuy(docId: string, docTitle: string, coinPrice: number) {
     if (!session?.user) { router.push("/login"); return; }
-    if (!confirm(`Приобрести документ «${docTitle}» за ${coinPrice} монет?`)) return;
-    setBuyLoading(docId);
+    setBuyTarget({ id: docId, title: docTitle, price: coinPrice });
+  }
+
+  async function confirmBuy() {
+    if (!buyTarget) return;
+    setBuyLoading(buyTarget.id);
     try {
-      const res = await fetch(`/api/library/${docId}/purchase`, { method: "POST" });
-      if (res.ok) { router.refresh(); }
-      else { const d = await res.json(); alert(d.error || "Ошибка покупки"); }
-    } catch { alert("Ошибка соединения"); }
+      const res = await fetch(`/api/library/${buyTarget.id}/purchase`, { method: "POST" });
+      if (res.ok) {
+        setBuyTarget(null);
+        setBuyError("");
+        router.refresh();
+      } else {
+        const d = await res.json();
+        setBuyError(d.error || "Ошибка покупки");
+      }
+    } catch { setBuyError("Ошибка соединения"); }
     setBuyLoading(null);
   }
 
@@ -126,6 +139,7 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
           <h1 className="text-3xl font-bold">Библиотека технических заданий</h1>
           <p className="text-muted-foreground mt-1">Загружайте и приобретайте документы за монеты</p>
         </div>
+
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger>
             <Button className="bg-menthol hover:bg-menthol-dark gap-2"><Upload className="h-4 w-4" /> Загрузить документ</Button>
@@ -156,8 +170,23 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
         </Dialog>
       </div>
 
+      {/* Info banner */}
+      <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="font-medium text-menthol">Как пользоваться библиотекой</p>
+          <p className="text-muted-foreground">
+            <strong>Загрузите</strong> свой документ (PDF до 10 МБ) и установите цену в монетах.
+            После одобрения модератором документ появится в общем доступе.
+            <strong>Приобретайте</strong> документы других участников за монеты.
+          </p>
+        </div>
+      </div>
+
       {bannerUrl && <div className="mb-6 rounded-lg overflow-hidden"><img src={bannerUrl} alt="Баннер библиотеки" className="w-full h-auto max-h-48 object-cover" /></div>}
       {moderatorText && <div className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm" dangerouslySetInnerHTML={{ __html: moderatorText }} />}
+
+      {buyError && <Alert variant="destructive" className="mb-4"><AlertDescription>{buyError}</AlertDescription></Alert>}
 
       <Card className="mb-6">
         <CardContent>
@@ -220,6 +249,17 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!buyTarget}
+        onOpenChange={(v) => { if (!v) setBuyTarget(null); }}
+        title="Приобрести документ?"
+        message={buyTarget ? `Документ «${buyTarget.title}» за ${buyTarget.price} монет. Монеты спишутся с вашего счёта.` : ""}
+        variant="info"
+        confirmLabel="Приобрести"
+        onConfirm={confirmBuy}
+        loading={!!buyLoading}
+      />
     </div>
   );
 }

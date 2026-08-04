@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   ChevronRight,
   ChevronDown,
@@ -148,21 +149,25 @@ function TreeNodeRow({
   const isDeleted = !!node.deletedAt;
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [treeError, setTreeError] = useState("");
 
   async function handleDelete() {
-    if (!confirm(`Удалить «${node.name}» и все вложенные подразделы?`)) return;
     setDeleteLoading(true);
+    setTreeError("");
     try {
       await fetch(`/api/admin/tree/${node.id}`, { method: "DELETE" });
+      setShowDeleteConfirm(false);
       onRefresh();
     } catch {
-      alert("Ошибка удаления");
+      setTreeError("Ошибка удаления");
     }
     setDeleteLoading(false);
   }
 
   async function handleRestore() {
     setRestoreLoading(true);
+    setTreeError("");
     try {
       await fetch(`/api/admin/tree/${node.id}`, {
         method: "PATCH",
@@ -171,7 +176,7 @@ function TreeNodeRow({
       });
       onRefresh();
     } catch {
-      alert("Ошибка восстановления");
+      setTreeError("Ошибка восстановления");
     }
     setRestoreLoading(false);
   }
@@ -256,7 +261,7 @@ function TreeNodeRow({
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-red-500"
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={deleteLoading}
               >
                 <Trash2 className="h-3 w-3" />
@@ -279,6 +284,18 @@ function TreeNodeRow({
           ))}
         </div>
       )}
+
+      {treeError && <Alert variant="destructive" className="mt-2"><AlertDescription>{treeError}</AlertDescription></Alert>}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Удалить раздел?"
+        message={`Раздел «${node.name}» и все вложенные подразделы будут удалены.`}
+        confirmLabel="Удалить"
+        onConfirm={handleDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }
