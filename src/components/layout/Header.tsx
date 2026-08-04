@@ -11,6 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Menu, X, User, Building2, Shield, LogOut } from "lucide-react";
@@ -76,7 +77,9 @@ export function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Мой кабинет</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Мой кабинет</DropdownMenuLabel>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>
                   <Link href={dashboardHref} className="w-full">
