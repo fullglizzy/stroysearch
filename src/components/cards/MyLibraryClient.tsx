@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, Upload, Download, Eye, Trash2, Coins } from "lucide-react";
+import { FileText, Upload, Download, Eye, Trash2, Coins, UploadCloud } from "lucide-react";
 
 interface DocRow {
   id: string; title: string; coinPrice: number; fileUrl: string;
@@ -52,7 +52,28 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
     setError("");
     setLoading(true);
     const fd = new FormData(e.currentTarget);
+    const file = fd.get("file") as File;
+
+    if (!file || !(file instanceof File) || file.size === 0) {
+      setError("Выберите PDF файл");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // 1. Upload file
+      const uploadForm = new FormData();
+      uploadForm.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadForm });
+      if (!uploadRes.ok) {
+        const d = await uploadRes.json();
+        setError(d.error || "Ошибка загрузки файла");
+        setLoading(false);
+        return;
+      }
+      const { fileUrl, fileSize } = await uploadRes.json();
+
+      // 2. Create document
       const res = await fetch("/api/library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,8 +81,8 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
           title: fd.get("title"),
           treeItemId: fd.get("treeItemId") || null,
           coinPrice: parseInt(fd.get("coinPrice") as string) || 5,
-          fileUrl: fd.get("fileUrl"),
-          fileSize: parseInt(fd.get("fileSize") as string) || 0,
+          fileUrl,
+          fileSize,
         }),
       });
       if (res.ok) { setOpen(false); router.refresh(); }
@@ -101,11 +122,8 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="ml-price">Цена (монет)</Label><Input id="ml-price" name="coinPrice" type="number" min={1} max={100} defaultValue={5} /></div>
-              <div className="space-y-2"><Label htmlFor="ml-size">Размер (байт)</Label><Input id="ml-size" name="fileSize" type="number" defaultValue={0} /></div>
-            </div>
-            <div className="space-y-2"><Label htmlFor="ml-url">Ссылка на файл</Label><Input id="ml-url" name="fileUrl" placeholder="https://..." required /></div>
+            <div className="space-y-2"><Label htmlFor="ml-price">Цена (монет)</Label><Input id="ml-price" name="coinPrice" type="number" min={1} max={100} defaultValue={5} /></div>
+            <div className="space-y-2"><Label htmlFor="ml-file">PDF файл (до 10 МБ)</Label><Input id="ml-file" name="file" type="file" accept=".pdf,application/pdf" required /></div>
             <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>{loading ? "Загрузка..." : "Загрузить"}</Button>
           </form>
         </DialogContent>
@@ -115,7 +133,10 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
       <section>
         <h2 className="text-xl font-semibold mb-4">Загруженные ({myDocs.length})</h2>
         {myDocs.length === 0 ? (
-          <p className="text-muted-foreground py-4">Вы ещё не загрузили ни одного документа</p>
+          <div className="text-center text-muted-foreground py-8">
+            <UploadCloud className="h-10 w-10 mx-auto mb-2 opacity-50" />
+            <p>Вы ещё не загрузили ни одного документа</p>
+          </div>
         ) : (
           <div className="space-y-3">
             {myDocs.map((doc) => (
@@ -153,7 +174,10 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
       <section>
         <h2 className="text-xl font-semibold mb-4">Приобретённые ({purchases.length})</h2>
         {purchases.length === 0 ? (
-          <p className="text-muted-foreground py-4">Вы ещё не приобрели ни одного документа</p>
+          <div className="text-center text-muted-foreground py-8">
+            <Download className="h-10 w-10 mx-auto mb-2 opacity-50" />
+            <p>Вы ещё не приобрели ни одного документа</p>
+          </div>
         ) : (
           <div className="space-y-3">
             {purchases.map((p) => (

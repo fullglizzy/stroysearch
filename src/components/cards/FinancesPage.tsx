@@ -22,8 +22,8 @@ import {
   Send,
   TrendingUp,
   TrendingDown,
-  ShoppingCart,
   Loader2,
+  Receipt,
 } from "lucide-react";
 
 interface FinancesPageProps {
@@ -238,7 +238,10 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
         </CardHeader>
         <CardContent>
           {transactions.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">Нет операций</p>
+              <div className="text-center text-muted-foreground py-8">
+                <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p>Нет операций</p>
+              </div>
           ) : (
             <div className="space-y-2">
               {transactions.map((t) => (

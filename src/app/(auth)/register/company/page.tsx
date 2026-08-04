@@ -77,7 +77,7 @@ export default function RegisterCompanyPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="companyName">Название компании</Label>
-              <Input id="companyName" name="companyName" placeholder="ООО «Название»" disabled={loading} />
+              <Input id="companyName" name="companyName" placeholder="ООО «Название»" required disabled={loading} />
             </div>
 
             <div className="space-y-3 pt-2">

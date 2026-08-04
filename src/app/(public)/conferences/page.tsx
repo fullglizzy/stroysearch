@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getPageContent } from "@/server/admin/content";
+import { auth } from "@/lib/auth";
 import { ConferencesPageClient } from "@/components/tables/ConferencesPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConferencesPage() {
   const pageContent = await getPageContent("conferences");
+  const session = await auth();
 
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
@@ -26,6 +28,17 @@ export default async function ConferencesPage() {
     },
     orderBy: { date: "asc" },
   });
+
+  // Get user's joined conferences
+  let joinedConfIds: string[] = [];
+  if (session?.user) {
+    const userId = (session.user as any).id as string;
+    const parts = await prisma.conferenceParticipant.findMany({
+      where: { userId },
+      select: { conferenceId: true },
+    });
+    joinedConfIds = parts.map((p) => p.conferenceId);
+  }
 
   const rows = conferences.map((c) => ({
     id: c.id,
@@ -49,6 +62,7 @@ export default async function ConferencesPage() {
       treeItems={treeItems}
       moderatorText={pageContent?.content || null}
       bannerUrl={pageContent?.bannerUrl || null}
+      joinedConfIds={joinedConfIds}
     />
   );
 }

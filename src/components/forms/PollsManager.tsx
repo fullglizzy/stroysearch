@@ -13,7 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Vote } from "lucide-react";
+import { Plus, Trash2, Vote, Loader2, BarChart3 } from "lucide-react";
 
 interface PollData {
   id: string;
@@ -85,19 +85,23 @@ export function PollsManager({ polls, treeItems }: Props) {
             <div className="space-y-2"><Label>Вопрос</Label><Input name="question" required /></div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2"><Label>Тип</Label><Select name="pollType" defaultValue="DICHOTOMOUS"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DICHOTOMOUS">Да/Нет</SelectItem><SelectItem value="MULTIPLE">Несколько</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label>Монет</Label><Input name="coinReward" type="number" step="0.1" defaultValue="0.1" /></div>
+              <div className="space-y-2"><Label>Монет</Label><Input name="coinReward" type="number" min="0" step="0.1" defaultValue="0.1" /></div>
               <div className="space-y-2"><Label>Категория</Label><Select name="treeItemId"><SelectTrigger><SelectValue placeholder="—" /></SelectTrigger><SelectContent><SelectItem value="">Без категории</SelectItem>{treeItems.slice(0,30).map(t => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="space-y-2"><Label>Варианты ответа</Label>
               {[1,2,3,4].map(i => <Input key={i} name={`opt${i}`} placeholder={`Вариант ${i}`} className="mb-1" />)}
             </div>
-            <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>{loading ? "Создание..." : "Создать"}</Button>
+            <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>{loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Создание...</> : "Создать"}</Button>
           </form>
         </DialogContent>
       </Dialog>
 
       {polls.length === 0 ? (
-        <p className="text-center text-muted-foreground py-8">Нет опросов</p>
+        <div className="border rounded-lg p-12 text-center text-muted-foreground">
+          <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg">Нет опросов</p>
+          <p className="text-sm mt-2">Создайте первый опрос для участников платформы</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {polls.map((p) => (

@@ -43,26 +43,26 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
   const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
-  const [classifier, setClassifier] = useState(searchParams.get("classifier") || "all");
-  const [productClass, setProductClass] = useState(searchParams.get("class") || "all");
+  const [classifier, setClassifier] = useState(searchParams.get("classifier") || "");
+  const [productClass, setProductClass] = useState(searchParams.get("class") || "");
   const [region, setRegion] = useState("");
   const [revals, setRevals] = useState<Record<string, Record<string, boolean>>>({});
   const [showFilters, setShowFilters] = useState(false);
 
   const currentClassifierName = useMemo(() => {
-    if (classifier === "all") return null;
+    if (classifier === "") return null;
     const found = treeItems.find(t => t.fullNumberPath === classifier);
     return found ? `${found.fullNumberPath} — ${found.name}` : classifier;
   }, [classifier, treeItems]);
 
-  const activeFiltersCount = [classifier !== "all", productClass !== "all", !!region].filter(Boolean).length;
+  const activeFiltersCount = [classifier !== "", productClass !== "", !!region].filter(Boolean).length;
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
       if (search && !p.name.toLowerCase().includes(search.toLowerCase())
         && !p.companyName.toLowerCase().includes(search.toLowerCase())) return false;
-      if (classifier !== "all" && p.treeItemPath !== classifier) return false;
-      if (productClass !== "all" && !p.classes.includes(productClass)) return false;
+      if (classifier !== "" && p.treeItemPath !== classifier) return false;
+      if (productClass !== "" && !p.classes.includes(productClass)) return false;
       if (region && p.region !== region) return false;
       return true;
     });
@@ -125,16 +125,16 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
         <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1">
           <Filter className="h-4 w-4" /> Фильтры {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1 h-4">{activeFiltersCount}</Badge>}
         </Button>
-        {(classifier !== "all" || productClass !== "all" || region) && (
-          <Button variant="ghost" size="sm" onClick={() => { setClassifier("all"); setProductClass("all"); setRegion(""); }} className="text-muted-foreground gap-1"><X className="h-3 w-3" /> Сбросить</Button>
+        {(classifier !== "" || productClass !== "" || region) && (
+          <Button variant="ghost" size="sm" onClick={() => { setClassifier(""); setProductClass(""); setRegion(""); }} className="text-muted-foreground gap-1"><X className="h-3 w-3" /> Сбросить</Button>
         )}
       </div>
 
       {/* Active chips */}
-      {(classifier !== "all" || productClass !== "all" || region) && (
+      {(classifier !== "" || productClass !== "" || region) && (
         <div className="flex flex-wrap gap-1.5 mb-4">
-          {classifier !== "all" && currentClassifierName && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setClassifier("all")}>{classifier} <X className="h-3 w-3" /></Badge>}
-          {productClass !== "all" && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setProductClass("all")}>{classLabels[productClass]} <X className="h-3 w-3" /></Badge>}
+          {classifier !== "" && currentClassifierName && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setClassifier("")}>{classifier} <X className="h-3 w-3" /></Badge>}
+          {productClass !== "" && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setProductClass("")}>{classLabels[productClass]} <X className="h-3 w-3" /></Badge>}
           {region && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setRegion("")}>{region} <X className="h-3 w-3" /></Badge>}
         </div>
       )}
@@ -146,20 +146,20 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Классификатор</Label>
-                <Select value={classifier} onValueChange={(v) => setClassifier(v || "all")}>
+                <Select value={classifier} onValueChange={(v) => setClassifier(v || "")}>
                   <SelectTrigger><SelectValue placeholder="Все категории" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Все категории</SelectItem>
+                    <SelectItem value="">Все категории</SelectItem>
                     {treeItems.map((t) => <SelectItem key={t.id} value={t.fullNumberPath}>{t.fullNumberPath} — {t.name.slice(0, 50)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Класс товара</Label>
-                <Select value={productClass} onValueChange={(v) => setProductClass(v || "all")}>
+                <Select value={productClass} onValueChange={(v) => setProductClass(v || "")}>
                   <SelectTrigger><SelectValue placeholder="Все классы" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Все классы</SelectItem>
+                    <SelectItem value="">Все классы</SelectItem>
                     {Object.entries(classLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -179,7 +179,7 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
           <SlidersHorizontal className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Товары не найдены</p>
           <p className="text-sm mt-2">{activeFiltersCount > 0 ? "Измените или сбросьте фильтры" : "В этой категории пока нет товаров"}</p>
-          {classifier !== "all" && <Button variant="link" onClick={() => setClassifier("all")} className="mt-2">Показать все товары</Button>}
+          {classifier !== "" && <Button variant="link" onClick={() => setClassifier("")} className="mt-2">Показать все товары</Button>}
         </div>
       ) : (
         <div className="space-y-8">

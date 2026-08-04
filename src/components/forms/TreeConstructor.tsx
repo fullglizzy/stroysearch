@@ -33,6 +33,7 @@ import {
   Undo2,
   GripVertical,
   FolderTree,
+  Loader2,
 } from "lucide-react";
 
 // ── Types ──
@@ -364,7 +365,7 @@ function AddNodeDialog({
             <Input id="add-banner" name="bannerUrl" placeholder="https://..." />
           </div>
           <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>
-            {loading ? "Создание..." : "Создать раздел"}
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Создание...</> : "Создать раздел"}
           </Button>
         </form>
       </DialogContent>
@@ -489,7 +490,7 @@ function EditNodeDialog({
             </Select>
           </div>
           <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>
-            {loading ? "Сохранение..." : "Сохранить изменения"}
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Сохранение...</> : "Сохранить изменения"}
           </Button>
         </form>
       </DialogContent>

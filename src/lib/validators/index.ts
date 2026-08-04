@@ -26,8 +26,8 @@ export const registerSchema = z.object({
 export const registerCompanySchema = registerSchema.extend({
   inn: z
     .string()
-    .length(10, "ИНН юридического лица должен содержать 10 цифр")
-    .or(z.string().length(12, "ИНН физического лица должен содержать 12 цифр")),
+    .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр"),
+  companyName: z.string().max(255).optional(),
 });
 
 // ────────────── Profile ──────────────
@@ -36,17 +36,25 @@ export const profileSchema = z.object({
   firstName: z.string().max(127).optional(),
   lastName: z.string().max(127).optional(),
   middleName: z.string().max(127).optional(),
-  phone: z.string().max(20).optional(),
+  phone: z.string()
+    .regex(/^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/, "Неверный формат телефона. Пример: +7 (999) 123-45-67")
+    .optional()
+    .or(z.literal("")),
   region: z.string().max(255).optional(),
   classifierIds: z.array(z.string()).optional(),
   roles: z.array(z.enum(["PRODUCTOLOGIST", "TENDER_SPECIALIST", "DESIGNER", "COMPANY_OWNER", "OTHER"])).optional(),
   isContactsHidden: z.boolean().optional(),
+  kpp: z.string().regex(/^\d{9}$/, "КПП должен содержать ровно 9 цифр").optional().or(z.literal("")),
+  legalAddress: z.string().max(511).optional(),
+  directorName: z.string().max(255).optional(),
+  companyName: z.string().max(255).optional(),
 });
 
 // ────────────── Company ──────────────
 
 export const addCompanySchema = z.object({
-  inn: z.string().min(10, "ИНН обязателен").max(12),
+  inn: z.string()
+    .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр"),
   email: z.string().email("Некорректный email"),
 });
 
@@ -86,8 +94,8 @@ export const libraryDocumentSchema = z.object({
   title: z.string().min(1, "Название обязательно").max(511),
   treeItemId: z.string().uuid().optional().nullable(),
   coinPrice: z.number().int().min(0).max(100).default(5),
-  fileUrl: z.string().min(1, "Ссылка на файл обязательна"),
-  fileSize: z.number().int().max(10_485_760, "Максимальный размер файла 10 МБ"),
+  fileUrl: z.string().min(1, "Файл обязателен"),
+  fileSize: z.number().int().min(1).max(10_485_760, "Максимальный размер файла 10 МБ"),
 });
 
 // ────────────── Poll ──────────────
@@ -138,14 +146,14 @@ export const pageContentSchema = z.object({
 
 export const productSchema = z.object({
   companyId: z.string().uuid(),
-  treeItemId: z.string().uuid(),
-  name: z.string().min(1).max(511),
-  classes: z.array(z.enum(["STANDARD", "COMFORT", "BUSINESS", "PREMIUM"])),
+  treeItemId: z.string().uuid("Выберите категорию классификатора"),
+  name: z.string().min(1, "Название обязательно").max(511),
+  classes: z.array(z.enum(["STANDARD", "COMFORT", "BUSINESS", "PREMIUM"])).min(1, "Выберите хотя бы один класс товара"),
   region: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   unit: z.string().max(63).optional().nullable(),
   characteristics: z.any().optional(),
-  price: z.number().positive().optional().nullable(),
+  price: z.number().min(0, "Цена не может быть отрицательной").optional().nullable(),
 });
 
 // ────────────── Types ──────────────

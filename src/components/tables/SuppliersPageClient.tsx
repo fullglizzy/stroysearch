@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ interface Props {
 
 export function SuppliersPageClient({ companies }: Props) {
   const { data: session } = useSession();
+  const router = useRouter();
   const isAdmin =
     session?.user &&
     ["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(
@@ -67,7 +69,7 @@ export function SuppliersPageClient({ companies }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [addError, setAddError] = useState("");
   const [addLoading, setAddLoading] = useState(false);
-  const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; companyId?: string } | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; companyId?: string; label?: string } | null>(null);
 
   const filtered = companies.filter((c) => {
     if (!search) {
@@ -127,7 +129,7 @@ export function SuppliersPageClient({ companies }: Props) {
         setAddError(data.error || "Ошибка добавления");
       } else {
         setAddOpen(false);
-        window.location.reload();
+        router.refresh();
       }
     } catch {
       setAddError("Ошибка соединения");
@@ -208,7 +210,7 @@ export function SuppliersPageClient({ companies }: Props) {
           onChange={(e) => setTypeFilter(e.target.value)}
           className="border rounded-md px-3 py-2 text-sm bg-background"
         >
-          <option value="all">Все</option>
+          <option value="">Все</option>
           <option value="company">Компании</option>
           <option value="participant">Участники</option>
         </select>
@@ -352,23 +354,20 @@ export function SuppliersPageClient({ companies }: Props) {
                       )}
                     </TableCell>
                     <TableCell>
-                      {session?.user && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() =>
-                            setReviewTarget({
-                              id: company.ownerNick ? company.id : company.id,
-                              name: company.name,
-                              companyId: company.inn ? company.id : undefined,
-                            })
-                          }
-                        >
-                          <MessageSquare className="h-3 w-3 mr-1" />
-                          Отзыв
-                        </Button>
-                      )}
+                      <div className="flex gap-1">
+                        {session?.user && company.inn && (
+                          <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                            onClick={() => setReviewTarget({ id: company.id, name: company.name, companyId: company.id, label: "компанию" })}>
+                            <MessageSquare className="h-3 w-3 mr-1" />Компании
+                          </Button>
+                        )}
+                        {session?.user && company.ownerNick && (
+                          <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                            onClick={() => setReviewTarget({ id: company.id, name: company.ownerNick || company.name, label: "участника" })}>
+                            <MessageSquare className="h-3 w-3 mr-1" />Участнику
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -383,16 +382,14 @@ export function SuppliersPageClient({ companies }: Props) {
         <Dialog open={!!reviewTarget} onOpenChange={() => setReviewTarget(null)}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Оставить отзыв</DialogTitle>
-              <DialogDescription>
-                Оцените по 9 критериям (☆1-5). За отзыв начисляется +1 монета.
-              </DialogDescription>
+              <DialogTitle>Оставить отзыв {reviewTarget.label ? `о ${reviewTarget.label}` : ""}</DialogTitle>
+              <DialogDescription>Оцените по 9 критериям (☆1-5). За отзыв начисляется +1 монета.</DialogDescription>
             </DialogHeader>
             <ReviewForm
               targetId={reviewTarget.id}
               targetName={reviewTarget.name}
               companyId={reviewTarget.companyId}
-              criteriaLabels={[
+              criteriaLabels={reviewTarget.companyId ? [
                 "Качество оказанной работы/услуги/материала/поставки",
                 "Организация работы на объекте / организация поставки",
                 "Взаимодействие со специалистами компании",
@@ -402,6 +399,16 @@ export function SuppliersPageClient({ companies }: Props) {
                 "Срок выполнения работ/поставки",
                 "Стоимость и условия оплаты",
                 "Особые условия/гибкость в договорных отношениях",
+              ] : [
+                "Качество работы — соответствие результата стандартам, отсутствие ошибок",
+                "Профессионализм — глубокие знания в своей области",
+                "Коммуникабельность — умение ясно излагать мысли, вести диалог",
+                "Уважительность — корректное и тактичное отношение к другим",
+                "Организованность — способность планировать работу, соблюдать сроки",
+                "Ответственность — готовность брать на себя обязательства",
+                "Гибкость и адаптивность — умение быстро перестраиваться",
+                "Работа в команде — способность сотрудничать, поддерживать коллег",
+                "Соблюдение договорённостей — выполнение обязательств по срокам и условиям",
               ]}
             />
           </DialogContent>

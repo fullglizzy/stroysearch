@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
-import { Search, FileText, Download, Upload, Coins, Eye, X, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { Search, FileText, Download, Upload, Coins, Eye, CheckCircle } from "lucide-react";
 
 interface DocRow {
   id: string;
@@ -42,84 +40,80 @@ interface Props {
   treeItems: TreeItem[];
   moderatorText: string | null;
   bannerUrl: string | null;
+  purchasedDocIds: string[];
 }
 
-export function LibraryPageClient({ documents, treeItems, moderatorText, bannerUrl }: Props) {
+export function LibraryPageClient({ documents, treeItems, moderatorText, bannerUrl, purchasedDocIds }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const [classifier, setClassifier] = useState(searchParams.get("classifier") || "all");
+  const [classifier, setClassifier] = useState(searchParams.get("classifier") || "");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadLoading, setUploadLoading] = useState(false);
 
-  const currentClassifierName = classifier !== "all" ? treeItems.find(t => t.fullNumberPath === classifier)?.name : null;
+  const currentClassifierName = classifier ? treeItems.find(t => t.fullNumberPath === classifier)?.name : null;
   const [buyLoading, setBuyLoading] = useState<string | null>(null);
 
   const filtered = documents.filter((d) => {
     if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (classifier !== "all" && d.treeItemPath !== classifier) return false;
+    if (classifier && d.treeItemPath !== classifier) return false;
     return true;
   });
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!session?.user) {
-      setUploadError("Требуется авторизация");
-      return;
-    }
+    if (!session?.user) { setUploadError("Требуется авторизация"); return; }
     setUploadLoading(true);
     setUploadError("");
 
-    const formData = new FormData(e.currentTarget);
+    const fd = new FormData(e.currentTarget);
+    const file = fd.get("file") as File;
+    if (!file || !(file instanceof File) || file.size === 0) {
+      setUploadError("Выберите PDF файл");
+      setUploadLoading(false);
+      return;
+    }
+
     try {
+      const uploadForm = new FormData();
+      uploadForm.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadForm });
+      if (!uploadRes.ok) { const d = await uploadRes.json(); setUploadError(d.error || "Ошибка загрузки"); setUploadLoading(false); return; }
+      const { fileUrl, fileSize } = await uploadRes.json();
+
       const res = await fetch("/api/library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: formData.get("title"),
-          treeItemId: formData.get("treeItemId") || null,
-          coinPrice: parseInt(formData.get("coinPrice") as string) || 5,
-          fileUrl: formData.get("fileUrl"),
-          fileSize: parseInt(formData.get("fileSize") as string) || 0,
+          title: fd.get("title"),
+          treeItemId: fd.get("treeItemId") || null,
+          coinPrice: parseInt(fd.get("coinPrice") as string) || 5,
+          fileUrl,
+          fileSize,
         }),
       });
-
-      if (res.ok) {
-        setUploadOpen(false);
-        router.refresh();
-      } else {
-        const d = await res.json();
-        setUploadError(d.error || "Ошибка");
-      }
-    } catch {
-      setUploadError("Ошибка соединения");
-    }
+      if (res.ok) { setUploadOpen(false); router.refresh(); }
+      else { const d = await res.json(); setUploadError(d.error || "Ошибка"); }
+    } catch { setUploadError("Ошибка соединения"); }
     setUploadLoading(false);
   }
 
-  async function handleBuy(docId: string) {
-    if (!session?.user) {
-      router.push("/login");
-      return;
-    }
+  async function handleBuy(docId: string, docTitle: string, coinPrice: number) {
+    if (!session?.user) { router.push("/login"); return; }
+    if (!confirm(`Приобрести документ «${docTitle}» за ${coinPrice} монет?`)) return;
     setBuyLoading(docId);
     try {
       const res = await fetch(`/api/library/${docId}/purchase`, { method: "POST" });
-      if (res.ok) {
-        router.refresh();
-      } else {
-        const d = await res.json();
-        alert(d.error || "Ошибка покупки");
-      }
-    } catch {
-      alert("Ошибка соединения");
-    }
+      if (res.ok) { router.refresh(); }
+      else { const d = await res.json(); alert(d.error || "Ошибка покупки"); }
+    } catch { alert("Ошибка соединения"); }
     setBuyLoading(null);
   }
 
   function formatSize(bytes: number): string {
+    if (!bytes || bytes === 0) return "—";
     if (bytes < 1024) return bytes + " Б";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " КБ";
     return (bytes / (1024 * 1024)).toFixed(1) + " МБ";
@@ -134,75 +128,37 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
         </div>
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger>
-            <Button className="bg-menthol hover:bg-menthol-dark gap-2">
-              <Upload className="h-4 w-4" /> Загрузить документ
-            </Button>
+            <Button className="bg-menthol hover:bg-menthol-dark gap-2"><Upload className="h-4 w-4" /> Загрузить документ</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Загрузить документ</DialogTitle>
-              <DialogDescription>
-                Загрузите техническое задание или спецификацию. PDF до 10 МБ.
-              </DialogDescription>
+              <DialogDescription>PDF до 10 МБ. Документ пройдёт модерацию.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpload} className="space-y-4">
-              {uploadError && (
-                <Alert variant="destructive"><AlertDescription>{uploadError}</AlertDescription></Alert>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="title">Название документа</Label>
-                <Input id="title" name="title" placeholder="ТЗ на фасадные работы" required />
-              </div>
+              {uploadError && <Alert variant="destructive"><AlertDescription>{uploadError}</AlertDescription></Alert>}
+              <div className="space-y-2"><Label htmlFor="title">Название документа</Label><Input id="title" name="title" placeholder="ТЗ на фасадные работы" required /></div>
               <div className="space-y-2">
                 <Label htmlFor="treeItemId">Классификатор</Label>
                 <Select name="treeItemId">
                   <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Без категории</SelectItem>
-                    {treeItems.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.fullNumberPath} — {t.name.slice(0, 50)}</SelectItem>
-                    ))}
+                    {treeItems.map((t) => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath} — {t.name.slice(0, 50)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="coinPrice">Цена (монет)</Label>
-                  <Input id="coinPrice" name="coinPrice" type="number" min={1} max={100} defaultValue={5} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fileSize">Размер (байт)</Label>
-                  <Input id="fileSize" name="fileSize" type="number" defaultValue={0} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fileUrl">Ссылка на файл</Label>
-                <Input id="fileUrl" name="fileUrl" placeholder="https://..." required />
-              </div>
-              <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={uploadLoading}>
-                {uploadLoading ? "Загрузка..." : "Загрузить"}
-              </Button>
+              <div className="space-y-2"><Label htmlFor="coinPrice">Цена (монет)</Label><Input id="coinPrice" name="coinPrice" type="number" min={1} max={100} defaultValue={5} /></div>
+              <div className="space-y-2"><Label htmlFor="lib-file">PDF файл (до 10 МБ)</Label><Input id="lib-file" name="file" type="file" accept=".pdf,application/pdf" required /></div>
+              <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={uploadLoading}>{uploadLoading ? "Загрузка..." : "Загрузить"}</Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Баннер (ТЗ §8.1) */}
-      {bannerUrl && (
-        <div className="mb-6 rounded-lg overflow-hidden">
-          <img src={bannerUrl} alt="Баннер библиотеки" className="w-full h-auto max-h-48 object-cover" />
-        </div>
-      )}
+      {bannerUrl && <div className="mb-6 rounded-lg overflow-hidden"><img src={bannerUrl} alt="Баннер библиотеки" className="w-full h-auto max-h-48 object-cover" /></div>}
+      {moderatorText && <div className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm" dangerouslySetInnerHTML={{ __html: moderatorText }} />}
 
-      {/* Текст модератора (ТЗ §8.1) */}
-      {moderatorText && (
-        <div
-          className="prose prose-gray max-w-none text-muted-foreground mb-6 text-sm"
-          dangerouslySetInnerHTML={{ __html: moderatorText }}
-        />
-      )}
-
-      {/* Filters */}
       <Card className="mb-6">
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -210,20 +166,17 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Поиск по названию..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
-            <Select value={classifier} onValueChange={(v) => setClassifier(v || "all")}>
-              <SelectTrigger><SelectValue placeholder="Классификатор" /></SelectTrigger>
+            <Select value={classifier} onValueChange={(v) => setClassifier(v || "")}>
+              <SelectTrigger><SelectValue placeholder="Все категории" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Все категории</SelectItem>
-                {treeItems.map((t) => (
-                  <SelectItem key={t.id} value={t.fullNumberPath}>{t.fullNumberPath} — {t.name.slice(0, 40)}</SelectItem>
-                ))}
+                <SelectItem value="">Все категории</SelectItem>
+                {treeItems.map((t) => <SelectItem key={t.id} value={t.fullNumberPath}>{t.fullNumberPath} — {t.name.slice(0, 40)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Documents list */}
       {filtered.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -248,17 +201,19 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <Badge variant="secondary" className="gap-1">
-                    <Coins className="h-3 w-3" /> {doc.coinPrice}
-                  </Badge>
-                  <Button
-                    size="sm"
-                    className="bg-orange-accent hover:bg-orange-accent/90"
-                    onClick={() => handleBuy(doc.id)}
-                    disabled={buyLoading === doc.id}
-                  >
-                    Приобрести
-                  </Button>
+                  <Badge variant="secondary" className="gap-1"><Coins className="h-3 w-3" /> {doc.coinPrice}</Badge>
+                  {purchasedDocIds.includes(doc.id) ? (
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-green-100 text-green-700 gap-1"><CheckCircle className="h-3 w-3" /> Куплено</Badge>
+                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline" className="gap-1"><Download className="h-3 w-3" /> Открыть</Button>
+                      </a>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={() => handleBuy(doc.id, doc.title, doc.coinPrice)} disabled={buyLoading === doc.id}>
+                      Приобрести
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

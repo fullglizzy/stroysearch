@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Save, Plus, Trash2, Gift } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Gift, Package } from "lucide-react";
 
 interface BillingConfig {
   id: string;
@@ -108,11 +108,11 @@ export function FinancesManager({ config, gifts }: Props) {
           <CardHeader><CardTitle>Настройка экономики</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Цена 1 монеты (₽)</Label><Input type="number" value={coinPriceRub} onChange={(e) => setCoinPriceRub(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Цена 1 просмотра (₽)</Label><Input type="number" value={viewPriceRub} onChange={(e) => setViewPriceRub(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Монет за добавление компании</Label><Input type="number" value={addCompanyCoins} onChange={(e) => setAddCompanyCoins(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Монет за отзыв</Label><Input type="number" value={reviewCoins} onChange={(e) => setReviewCoins(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Предельный лимит счёта (₽/мес)</Label><Input type="number" value={maxMonthlyLimit} onChange={(e) => setMaxMonthlyLimit(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Цена 1 монеты (₽)</Label><Input type="number" min="0" step="0.01" value={coinPriceRub} onChange={(e) => setCoinPriceRub(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Цена 1 просмотра (₽)</Label><Input type="number" min="0" step="0.01" value={viewPriceRub} onChange={(e) => setViewPriceRub(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Монет за добавление компании</Label><Input type="number" min="0" step="0.1" value={addCompanyCoins} onChange={(e) => setAddCompanyCoins(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Монет за отзыв</Label><Input type="number" min="0" step="0.1" value={reviewCoins} onChange={(e) => setReviewCoins(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Предельный лимит счёта (₽/мес)</Label><Input type="number" min="0" step="0.01" value={maxMonthlyLimit} onChange={(e) => setMaxMonthlyLimit(e.target.value)} /></div>
             </div>
             {configMsg && <Alert><AlertDescription>{configMsg}</AlertDescription></Alert>}
             <Button onClick={saveConfig} className="bg-menthol hover:bg-menthol-dark" disabled={configLoading}>
@@ -128,15 +128,19 @@ export function FinancesManager({ config, gifts }: Props) {
           <CardContent className="space-y-6">
             <form onSubmit={addGift} className="flex gap-3 items-end flex-wrap">
               <div className="space-y-1"><Label>Название</Label><Input value={giftName} onChange={(e) => setGiftName(e.target.value)} placeholder="Сувенир" required /></div>
-              <div className="space-y-1"><Label>Цена (мон.)</Label><Input type="number" value={giftPrice} onChange={(e) => setGiftPrice(e.target.value)} placeholder="10" required className="w-24" /></div>
-              <div className="space-y-1"><Label>Лимит</Label><Input type="number" value={giftLimit} onChange={(e) => setGiftLimit(e.target.value)} placeholder="100" required className="w-24" /></div>
+              <div className="space-y-1"><Label>Цена (мон.)</Label><Input type="number" min="1" value={giftPrice} onChange={(e) => setGiftPrice(e.target.value)} placeholder="10" required className="w-24" /></div>
+              <div className="space-y-1"><Label>Лимит</Label><Input type="number" min="0" value={giftLimit} onChange={(e) => setGiftLimit(e.target.value)} placeholder="100" required className="w-24" /></div>
               <Button type="submit" className="bg-menthol hover:bg-menthol-dark" disabled={giftLoading}>
                 <Plus className="h-4 w-4 mr-1" /> Добавить
               </Button>
             </form>
 
             {gifts.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">Нет подарков</p>
+              <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                <Package className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p>Нет подарков</p>
+                <p className="text-xs mt-1">Добавьте сувениры для участников</p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {gifts.map((g) => (

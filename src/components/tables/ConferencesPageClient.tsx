@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,7 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { Search, Calendar, Clock, Users, Eye, Plus, Coins, ExternalLink } from "lucide-react";
+import { Search, Calendar, Clock, Users, Eye, Plus, Coins, ExternalLink, Loader2 } from "lucide-react";
 
 interface ConfRow {
   id: string;
@@ -54,9 +55,10 @@ interface Props {
   treeItems: TreeItem[];
   moderatorText: string | null;
   bannerUrl: string | null;
+  joinedConfIds: string[];
 }
 
-export function ConferencesPageClient({ conferences, treeItems, moderatorText, bannerUrl }: Props) {
+export function ConferencesPageClient({ conferences, treeItems, moderatorText, bannerUrl, joinedConfIds }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -100,15 +102,13 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
 
   async function handleJoin(confId: string, coinPrice: number) {
     if (!session?.user) { router.push("/login"); return; }
-    if (coinPrice > 0) {
-      setJoinLoading(confId);
-      try {
-        const res = await fetch(`/api/conferences/${confId}/join`, { method: "POST" });
-        if (res.ok) { router.refresh(); }
-        else { const d = await res.json(); alert(d.error || "Недостаточно монет"); }
-      } catch { alert("Ошибка соединения"); }
-      setJoinLoading(null);
-    }
+    setJoinLoading(confId);
+    try {
+      const res = await fetch(`/api/conferences/${confId}/join`, { method: "POST" });
+      if (res.ok) { router.refresh(); }
+      else { const d = await res.json(); alert(d.error || "Недостаточно монет"); }
+    } catch { alert("Ошибка соединения"); }
+    setJoinLoading(null);
   }
 
   const formatDate = (d: Date) => new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -138,7 +138,7 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
                 <div className="space-y-2"><Label htmlFor="date">Дата</Label><Input id="date" name="date" type="date" required /></div>
                 <div className="space-y-2"><Label htmlFor="time">Время (МСК)</Label><Input id="time" name="time" type="time" defaultValue="10:00" required /></div>
               </div>
-              <div className="space-y-2"><Label htmlFor="description">Описание (до 500 слов)</Label><Input id="description" name="description" /></div>
+              <div className="space-y-2"><Label htmlFor="description">Описание (до 500 слов)</Label><Textarea id="description" name="description" rows={3} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label htmlFor="coinPrice">Цена (монет, 0 = бесплатно)</Label><Input id="coinPrice" name="coinPrice" type="number" min={0} defaultValue={0} /></div>
                 <div className="space-y-2"><Label>Категория</Label><Select name="treeItemId"><SelectTrigger><SelectValue placeholder="Выбрать" /></SelectTrigger><SelectContent><SelectItem value="">Без категории</SelectItem>{treeItems.slice(0, 20).map(t => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath} — {t.name.slice(0, 40)}</SelectItem>)}</SelectContent></Select></div>
@@ -201,15 +201,29 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
                     ) : (
                       <Badge variant="outline" className="text-menthol">Бесплатно</Badge>
                     )}
-                    {conf.coinPrice > 0 && session?.user ? (
+                    {joinedConfIds.includes(conf.id) ? (
+                      conf.connectionLink ? (
+                        <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3 w-3" /> Подключиться</Button>
+                        </a>
+                      ) : (
+                        <Badge className="bg-green-100 text-green-700">Вы участвуете</Badge>
+                      )
+                    ) : conf.coinPrice > 0 && session?.user ? (
                       <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={() => handleJoin(conf.id, conf.coinPrice)} disabled={joinLoading === conf.id}>
-                        Участвовать
+                        {joinLoading === conf.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Участвовать"}
                       </Button>
+                    ) : !session?.user && conf.coinPrice > 0 ? (
+                      <Button size="sm" variant="outline" onClick={() => router.push("/login")}>Войти</Button>
                     ) : conf.connectionLink ? (
                       <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
                         <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3 w-3" /> Подключиться</Button>
                       </a>
-                    ) : null}
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => handleJoin(conf.id, conf.coinPrice)} disabled={joinLoading === conf.id}>
+                        {joinLoading === conf.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Участвовать"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

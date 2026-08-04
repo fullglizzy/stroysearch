@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { Menu, X, User, Building2, Shield, LogOut } from "lucide-react";
 
 const navLinks = [
-  { href: "/products", label: "Продукты" },
+  { href: "/products", label: "Продуктовые решения" },
   { href: "/suppliers", label: "Поставщики" },
   { href: "/matrix", label: "Матрица" },
   { href: "/library", label: "Библиотека" },
@@ -27,6 +28,7 @@ const navLinks = [
 
 export function Header() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const userType = (session?.user as any)?.type as string;
@@ -49,15 +51,22 @@ export function Header() {
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-secondary transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  isActive
+                    ? "text-menthol bg-menthol/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Auth Buttons */}

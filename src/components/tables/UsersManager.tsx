@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Search, Coins } from "lucide-react";
+import { Search, Coins, Loader2, Users } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -123,6 +123,13 @@ export function UsersManager({ users }: UsersManagerProps) {
         />
       </div>
 
+      {filtered.length === 0 ? (
+        <div className="border rounded-lg p-12 text-center text-muted-foreground">
+          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg">Пользователи не найдены</p>
+          <p className="text-sm mt-2">Измените поисковый запрос</p>
+        </div>
+      ) : (
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
@@ -178,6 +185,7 @@ export function UsersManager({ users }: UsersManagerProps) {
           </TableBody>
         </Table>
       </div>
+      )}
 
       <Dialog open={addCoinsOpen} onOpenChange={setAddCoinsOpen}>
         <DialogContent>
@@ -199,6 +207,7 @@ export function UsersManager({ users }: UsersManagerProps) {
               <Input
                 id="coinAmount"
                 type="number"
+                min="0"
                 step="0.1"
                 value={coinAmount}
                 onChange={(e) => setCoinAmount(e.target.value)}
@@ -210,6 +219,7 @@ export function UsersManager({ users }: UsersManagerProps) {
               className="w-full bg-menthol hover:bg-menthol-dark"
               disabled={coinLoading || !coinAmount}
             >
+              {coinLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {coinLoading ? "Зачисление..." : "Зачислить"}
             </Button>
           </div>

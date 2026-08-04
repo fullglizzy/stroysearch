@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Phone, Mail, Globe } from "lucide-react";
+import { Eye, Phone, Mail, Globe, Loader2, Save } from "lucide-react";
 
 interface CompanyProfileFormProps {
   initialData: {
@@ -112,8 +112,8 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>КПП</Label>
-              <Input name="kpp" defaultValue={initialData.kpp} />
+              <Label>КПП (9 цифр)</Label>
+              <Input name="kpp" defaultValue={initialData.kpp} maxLength={9} pattern="\d{9}" placeholder="XXXXXXXXX" />
             </div>
             <div className="space-y-2">
               <Label>Директор</Label>
@@ -131,8 +131,8 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
         <CardHeader><CardTitle className="text-base">Контакты</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Телефон</Label>
-            <Input name="phone" defaultValue={initialData.phone} />
+            <Label>Телефон (+7 XXX XXX-XX-XX)</Label>
+            <Input name="phone" defaultValue={initialData.phone} placeholder="+7 (999) 123-45-67" />
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
@@ -156,7 +156,7 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
       </Card>
 
       <Button type="submit" className="bg-menthol hover:bg-menthol-dark" disabled={loading}>
-        {loading ? "Сохранение..." : "Сохранить изменения"}
+        {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Сохранение...</> : <><Save className="h-4 w-4 mr-2" />Сохранить изменения</>}
       </Button>
     </form>
   );

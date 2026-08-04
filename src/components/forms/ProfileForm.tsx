@@ -135,8 +135,8 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="phone">Телефон</Label>
-              <Input id="phone" name="phone" defaultValue={initialData.phone} />
+              <Label htmlFor="phone">Телефон (+7 XXX XXX-XX-XX)</Label>
+              <Input id="phone" name="phone" defaultValue={initialData.phone} placeholder="+7 (999) 123-45-67" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="region">Регион</Label>

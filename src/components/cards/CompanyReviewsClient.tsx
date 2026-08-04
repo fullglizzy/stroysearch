@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/shared/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, User } from "lucide-react";
+import { Building2, User, MessageSquare } from "lucide-react";
 
 interface CompanyReviewsClientProps {
   receivedReviews: any[];
@@ -44,7 +44,10 @@ export function CompanyReviewsClient({ receivedReviews, givenReviews, avgRating 
 
         <TabsContent value="received" className="space-y-4 mt-4">
           {receivedReviews.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">У компании пока нет отзывов</p>
+            <div className="text-center text-muted-foreground py-8">
+              <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p>У компании пока нет отзывов</p>
+            </div>
           ) : (
             receivedReviews.map((r: any) => (
               <Card key={r.id}>
@@ -77,7 +80,10 @@ export function CompanyReviewsClient({ receivedReviews, givenReviews, avgRating 
 
         <TabsContent value="given" className="space-y-4 mt-4">
           {givenReviews.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">Вы ещё не оставляли отзывы</p>
+            <div className="text-center text-muted-foreground py-8">
+              <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p>Вы ещё не оставляли отзывы</p>
+            </div>
           ) : (
             givenReviews.map((r: any) => (
               <Card key={r.id}>

@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Coins, Vote, BarChart3 } from "lucide-react";
+import { Coins, Vote, BarChart3, Loader2 } from "lucide-react";
 
 interface PollRow {
   id: string;
@@ -204,7 +204,7 @@ export function PollsPageClient({ polls, moderatorText, bannerUrl }: Props) {
                       onClick={() => handleVote(poll.id)}
                       disabled={loading === poll.id || !selectedOptions[poll.id]}
                     >
-                      {loading === poll.id ? "..." : "Проголосовать"}
+                      {loading === poll.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Проголосовать"}
                     </Button>
                   )}
                 </div>

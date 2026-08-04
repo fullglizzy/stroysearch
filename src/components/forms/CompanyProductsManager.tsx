@@ -115,8 +115,8 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="space-y-2"><Label htmlFor="name">Название товара</Label><Input id="name" name="name" defaultValue={productToEdit?.name} required /></div>
       <div className="space-y-2">
-        <Label htmlFor="treeItemId">Категория классификатора</Label>
-        <Select name="treeItemId" defaultValue={productToEdit?.treeItemPath ? treeItems.find(t => t.fullNumberPath === productToEdit.treeItemPath)?.id : ""}>
+        <Label htmlFor="treeItemId">Категория классификатора *</Label>
+        <Select name="treeItemId" defaultValue={productToEdit?.treeItemPath ? treeItems.find(t => t.fullNumberPath === productToEdit.treeItemPath)?.id : ""} required>
           <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
           <SelectContent>{treeItems.map(t => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath} — {t.name.slice(0, 50)}</SelectItem>)}</SelectContent>
         </Select>
@@ -132,7 +132,7 @@ export function CompanyProductsManager({ products, treeItems, companyId }: Props
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2"><Label htmlFor="price">Цена (₽)</Label><Input id="price" name="price" type="number" defaultValue={productToEdit?.price ?? ""} /></div>
+        <div className="space-y-2"><Label htmlFor="price">Цена (₽)</Label><Input id="price" name="price" type="number" min="0" step="0.01" defaultValue={productToEdit?.price ?? ""} placeholder="0.00" /></div>
         <div className="space-y-2"><Label htmlFor="unit">Ед. измерения</Label><Input id="unit" name="unit" defaultValue={productToEdit?.unit || ""} placeholder="шт, м², кг..." /></div>
       </div>
       <div className="space-y-2"><Label htmlFor="region">Регион</Label><Input id="region" name="region" defaultValue={productToEdit?.region || ""} /></div>
