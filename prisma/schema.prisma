@@ -1,0 +1,478 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── ПОЛЬЗОВАТЕЛИ ───────────────────────────
+
+model User {
+  id        String     @id @default(uuid())
+  username  String     @unique
+  pwdHash   String
+  email     String     @unique
+  phone     String?    @unique
+  status    String     @default("INACTIVE") // INACTIVE | ACTIVE | BANNED | DELETED
+  type      String     @default("COMMON")   // COMMON | COMPANY | MODERATOR | EDITOR | SUPER | ROOT
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  profile               UserProfile?
+  serviceFields         UserServiceFields?
+  admin                 Admin?
+  givenReviews          Review[]              @relation("ReviewAuthor")
+  receivedReviews       Review[]              @relation("ReviewTarget")
+  documents             LibraryDocument[]
+  conferences           Conference[]
+  products              Product[]
+  wallet                Wallet?
+  invoices              Invoice[]
+  transactions          Transaction[]
+  addedCompanies        Company[]             @relation("AddedCompanies")
+  ownedCompany          Company?              @relation("OwnedCompany")
+  documentPurchases     DocumentPurchase[]
+  conferenceParticipants ConferenceParticipant[]
+  pollVotes             PollVote[]
+  giftClaims            GiftClaim[]
+  supportTickets        SupportTicket[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId           String            @id
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName        String?
+  lastName         String?
+  middleName       String?
+  nick             String?           @unique
+  region           String?
+  roles            UserProfileRole[]
+  classifierIds    String            @default("") // comma-separated
+  isContactsHidden Boolean           @default(true)
+
+  // Поля компании
+  inn              String?           @unique
+  companyName      String?
+  kpp              String?
+  legalAddress     String?
+  directorName     String?
+
+  @@map("user_profiles")
+}
+
+model UserProfileRole {
+  id        String  @id @default(uuid())
+  profileId String
+  profile   UserProfile @relation(fields: [profileId], references: [userId], onDelete: Cascade)
+  role      String  // PRODUCTOLOGIST | TENDER_SPECIALIST | DESIGNER | COMPANY_OWNER | OTHER
+
+  @@map("user_profile_roles")
+}
+
+model UserServiceFields {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailVerifToken String?
+  isEmailVerified Boolean  @default(false)
+  isPhoneVerified Boolean  @default(false)
+  refreshTokenHash String?
+
+  @@map("user_service_fields")
+}
+
+model Admin {
+  userId      String @id
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions String @default("{}") // JSON
+  adminType   String // MODERATOR | EDITOR | SUPER | ROOT
+
+  @@map("admins")
+}
+
+// ─────────────────────────── ПРОДУКТОВОЕ ДЕРЕВО ───────────────────────────
+
+model ProductTreeItem {
+  id             String            @id @default(uuid())
+  name           String
+  parentId       String?
+  parent         ProductTreeItem?  @relation("TreeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children       ProductTreeItem[] @relation("TreeChildren")
+  inBranchNumber Int
+  fullNumberPath String
+  description    String?
+  bannerUrl      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  products       Product[]
+  documents      LibraryDocument[]
+  conferences    Conference[]
+  polls          Poll[]
+
+  @@index([parentId])
+  @@index([fullNumberPath])
+  @@map("product_tree_items")
+}
+
+// ─────────────────────────── КОМПАНИИ ───────────────────────────
+
+model Company {
+  id            String          @id @default(uuid())
+  inn           String          @unique
+  name          String
+  kpp           String?
+  legalAddress  String?
+  phone         String?
+  email         String?
+  website       String?
+  region        String?
+  classifierIds String          @default("") // comma-separated
+  addedById     String?
+  addedBy       User?           @relation("AddedCompanies", fields: [addedById], references: [id])
+  ownerUserId   String?         @unique
+  ownerUser     User?           @relation("OwnedCompany", fields: [ownerUserId], references: [id])
+  reviews       Review[]
+  products      Product[]
+  metrics       CompanyMetrics?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@map("companies")
+}
+
+model CompanyMetrics {
+  companyId    String  @id
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  phoneViews   Int     @default(0)
+  emailViews   Int     @default(0)
+  websiteViews Int     @default(0)
+  reviewsViews Int     @default(0)
+  ratingViews  Int     @default(0)
+
+  @@map("company_metrics")
+}
+
+// ─────────────────────────── ОТЗЫВЫ И РЕЙТИНГ ───────────────────────────
+
+model Review {
+  id              String           @id @default(uuid())
+  authorId        String
+  author          User             @relation("ReviewAuthor", fields: [authorId], references: [id])
+  targetId        String
+  target          User             @relation("ReviewTarget", fields: [targetId], references: [id])
+  companyId       String?
+  company         Company?         @relation(fields: [companyId], references: [id])
+  comment         String
+  signatureType   String           @default("nick")
+  criteria        ReviewCriteria[]
+  weightedAverage Float
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("reviews")
+}
+
+model ReviewCriteria {
+  id            String  @id @default(uuid())
+  reviewId      String
+  review        Review  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  criteriaIndex Int
+  score         Int
+
+  @@map("review_criteria")
+}
+
+// ─────────────────────────── МАТРИЦА МАТЕРИАЛОВ ───────────────────────────
+
+model Product {
+  id              String           @id @default(uuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  ownerUserId     String?
+  ownerUser       User?            @relation(fields: [ownerUserId], references: [id])
+  treeItemId      String
+  treeItem        ProductTreeItem  @relation(fields: [treeItemId], references: [id])
+  name            String
+  classes         String           @default("[]") // JSON array: ["STANDARD","COMFORT",...]
+  region          String?
+  imageUrl        String?
+  unit            String?
+  characteristics String           @default("[]") // JSON
+  price           Float?
+  views           Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  @@map("products")
+}
+
+// ─────────────────────────── БИБЛИОТЕКА ДОКУМЕНТОВ ───────────────────────────
+
+model LibraryDocument {
+  id             String             @id @default(uuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id])
+  treeItemId     String?
+  treeItem       ProductTreeItem?   @relation(fields: [treeItemId], references: [id])
+  title          String
+  coinPrice      Int                @default(5)
+  fileUrl        String
+  fileSize       Int
+  isApproved     Boolean            @default(false)
+  views          Int                @default(0)
+  purchasesCount Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  purchasedBy    DocumentPurchase[]
+
+  @@map("library_documents")
+}
+
+model DocumentPurchase {
+  id          String          @id @default(uuid())
+  documentId  String
+  document    LibraryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  purchasedAt DateTime        @default(now())
+
+  @@unique([documentId, userId])
+  @@map("document_purchases")
+}
+
+// ─────────────────────────── КОНФЕРЕНЦИИ ───────────────────────────
+
+model Conference {
+  id             String                  @id @default(uuid())
+  organizerId    String
+  organizer      User                    @relation(fields: [organizerId], references: [id])
+  title          String
+  logoUrl        String?
+  date           DateTime
+  time           String
+  description    String
+  treeItemId     String?
+  treeItem       ProductTreeItem?        @relation(fields: [treeItemId], references: [id])
+  coinPrice      Int                     @default(0)
+  isPublic       Boolean                 @default(true)
+  connectionLink String?
+  status         String                  @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  moderatorNote  String?
+  views          Int                     @default(0)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  participants   ConferenceParticipant[]
+
+  @@map("conferences")
+}
+
+model ConferenceParticipant {
+  id           String     @id @default(uuid())
+  conferenceId String
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  joinedAt     DateTime   @default(now())
+
+  @@unique([conferenceId, userId])
+  @@map("conference_participants")
+}
+
+// ─────────────────────────── ОПРОСЫ ───────────────────────────
+
+model Poll {
+  id         String           @id @default(uuid())
+  question   String
+  treeItemId String?
+  treeItem   ProductTreeItem? @relation(fields: [treeItemId], references: [id])
+  pollType   String           @default("DICHOTOMOUS") // DICHOTOMOUS | MULTIPLE
+  coinReward Float            @default(0.1)
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  options    PollOption[]
+  votes      PollVote[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id        String  @id @default(uuid())
+  pollId    String
+  poll      Poll    @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text      String
+  sortOrder Int     @default(0)
+
+  votes     PollVote[]
+
+  @@map("poll_options")
+}
+
+model PollVote {
+  id        String     @id @default(uuid())
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@unique([pollId, userId])
+  @@map("poll_votes")
+}
+
+// ─────────────────────────── МОНЕТНАЯ ЭКОНОМИКА ───────────────────────────
+
+model Wallet {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  type         String   // ADD_COMPANY | REVIEW | POLL_VOTE | DOCUMENT_SALE | ...
+  amount       Float
+  balanceAfter Float
+  description  String?
+  metadata     String?  // JSON
+  createdAt    DateTime @default(now())
+
+  @@map("transactions")
+}
+
+// ─────────────────────────── СУВЕНИРЫ / ПОДАРКИ ───────────────────────────
+
+model Gift {
+  id        String   @id @default(uuid())
+  name      String
+  coinPrice Int
+  limit     Int
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claims    GiftClaim[]
+
+  @@map("gifts")
+}
+
+model GiftClaim {
+  id        String   @id @default(uuid())
+  giftId    String
+  gift      Gift     @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  claimDate DateTime @default(now())
+
+  @@map("gift_claims")
+}
+
+// ─────────────────────────── БИЛЛИНГ И СЧЕТА ───────────────────────────
+
+model BillingConfig {
+  id                  String   @id @default("default")
+  coinPriceRub        Float    @default(100)
+  viewPriceRub        Float    @default(100)
+  addCompanyCoins     Float    @default(1)
+  reviewCoins         Float    @default(1)
+  maxMonthlyLimit     Float    @default(1000)
+  updatedAt           DateTime @updatedAt
+
+  bankName            String?
+  bankInn             String?
+  bankBik             String?
+  bankAccount         String?
+  bankCorrAccount     String?
+  organizationName    String?
+  organizationAddress String?
+  organizationInn     String?
+  organizationKpp     String?
+  organizationAccount String?
+  directorName        String?
+  directorPhone       String?
+  directorEmail       String?
+  signatureImage      String?
+  stampImage          String?
+
+  @@map("billing_config")
+}
+
+model Invoice {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  number    String        @unique
+  date      DateTime
+  dueDate   DateTime
+  status    String        @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
+  subtotal  Float
+  limit     Float
+  discount  Float         @default(0)
+  total     Float
+  items     InvoiceItem[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  sentAt    DateTime?
+  paidAt    DateTime?
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+
+  @@map("invoice_items")
+}
+
+// ─────────────────────────── БАННЕРЫ И КОНТЕНТ СТРАНИЦ ───────────────────────────
+
+model PageContent {
+  id        String   @id @default(uuid())
+  pageKey   String   @unique
+  content   String
+  bannerUrl String?
+  updatedAt DateTime @updatedAt
+
+  @@map("page_contents")
+}
+
+// ─────────────────────────── ОБРАЩЕНИЯ В ПОДДЕРЖКУ ───────────────────────────
+
+model SupportTicket {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  email      String
+  subject    String
+  message    String
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("support_tickets")
+}
