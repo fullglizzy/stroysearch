@@ -16,7 +16,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { Search, FileText, Download, Upload, Coins, Eye, CheckCircle, AlertCircle } from "lucide-react";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 interface DocRow {
   id: string;
@@ -47,6 +49,7 @@ interface Props {
 export function LibraryPageClient({ documents, treeItems, moderatorText, bannerUrl, purchasedDocIds }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { guard, dialog: authDialog } = useAuthGuard();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [classifier, setClassifier] = useState(searchParams.get("classifier") || "");
@@ -104,9 +107,10 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
   }
 
   async function handleBuy(docId: string, docTitle: string, coinPrice: number) {
-    if (!session?.user) { router.push("/login"); return; }
     setBuyTarget({ id: docId, title: docTitle, price: coinPrice });
   }
+
+  const guardedBuy = guard(handleBuy);
 
   async function confirmBuy() {
     if (!buyTarget) return;
@@ -114,14 +118,20 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
     try {
       const res = await fetch(`/api/library/${buyTarget.id}/purchase`, { method: "POST" });
       if (res.ok) {
+        toastSuccess("Документ приобретён!", `«${buyTarget.title}» открыт в вашей библиотеке`);
         setBuyTarget(null);
         setBuyError("");
         router.refresh();
       } else {
         const d = await res.json();
         setBuyError(d.error || "Ошибка покупки");
+        toastError("Ошибка", d.error || "Не удалось приобрести документ");
+        setBuyTarget(null);
       }
-    } catch { setBuyError("Ошибка соединения"); }
+    } catch {
+      setBuyError("Ошибка соединения");
+      toastError("Ошибка соединения");
+    }
     setBuyLoading(null);
   }
 
@@ -239,7 +249,7 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
                       </a>
                     </div>
                   ) : (
-                    <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={() => handleBuy(doc.id, doc.title, doc.coinPrice)} disabled={buyLoading === doc.id}>
+                    <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={() => guardedBuy(doc.id, doc.title, doc.coinPrice)} disabled={buyLoading === doc.id}>
                       Приобрести
                     </Button>
                   )}
@@ -249,6 +259,8 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, bannerU
           ))}
         </div>
       )}
+
+      {authDialog}
 
       <ConfirmDialog
         open={!!buyTarget}

@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Star, Loader2 } from "lucide-react";
+import { Star, Loader2, AlertCircle } from "lucide-react";
+import { toastSuccess, toastError } from "@/lib/toast";
 
 interface ReviewFormProps {
   targetId: string;
@@ -22,26 +22,33 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
   const [comment, setComment] = useState("");
   const [signatureType, setSignatureType] = useState("nick");
   const [scores, setScores] = useState<number[]>(Array(9).fill(0));
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ comment?: string; scores?: string }>({});
   const [loading, setLoading] = useState(false);
+
+  const commentLength = comment.length;
+  const commentValid = commentLength >= 100;
+  const allScored = !scores.some((s) => s === 0);
 
   function setScore(index: number, value: number) {
     const newScores = [...scores];
     newScores[index] = value;
     setScores(newScores);
+    if (fieldErrors.scores) setFieldErrors((prev) => ({ ...prev, scores: undefined }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
+    const errors: { comment?: string; scores?: string } = {};
 
     if (comment.length < 100) {
-      setError("Комментарий должен быть не менее 100 знаков");
-      return;
+      errors.comment = `Минимум 100 знаков (сейчас ${comment.length})`;
     }
     if (scores.some((s) => s === 0)) {
-      setError("Оцените все 9 критериев");
+      errors.scores = "Оцените все 9 критериев";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -63,18 +70,17 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
       });
 
       if (res.ok) {
-        setSuccess(true);
+        toastSuccess("Отзыв опубликован!", "+1 монета начислена на ваш счёт");
         router.refresh();
-        setTimeout(() => {
-          setComment("");
-          setScores(Array(9).fill(0));
-        }, 2000);
+        setComment("");
+        setScores(Array(9).fill(0));
+        setFieldErrors({});
       } else {
-        const d = await res.json();
-        setError(d.error || "Ошибка");
+        const d = await res.json().catch(() => ({}));
+        toastError("Ошибка", d.error || "Не удалось опубликовать отзыв");
       }
     } catch {
-      setError("Ошибка соединения");
+      toastError("Ошибка соединения", "Проверьте подключение к интернету");
     }
     setLoading(false);
   }
@@ -86,28 +92,31 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
           <CardTitle className="text-lg">Оставить отзыв: {targetName}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-          {success && <Alert><AlertDescription>✅ Отзыв опубликован! +1 монета начислена.</AlertDescription></Alert>}
-
           {/* 9 Criteria */}
           <div className="space-y-3">
-            <Label className="font-medium">Критерии оценки</Label>
+            <Label className="font-medium">
+              Критерии оценки
+              {fieldErrors.scores && (
+                <span className="text-destructive text-xs ml-2">{fieldErrors.scores}</span>
+              )}
+            </Label>
             {criteriaLabels.map((label, i) => (
-              <div key={i} className="flex items-center justify-between gap-2">
-                <span className="text-sm flex-1">{i + 1}. {label}</span>
-                <div className="flex gap-0.5">
+              <div key={i} className="flex items-center justify-between gap-2 group">
+                <span className="text-sm flex-1 leading-tight">{i + 1}. {label}</span>
+                <div className="flex gap-0.5 flex-shrink-0">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setScore(i, star)}
-                      className="p-0.5"
+                      className="p-0.5 transition-transform hover:scale-110 active:scale-95"
+                      title={`${star} из 5`}
                     >
                       <Star
-                        className={`h-5 w-5 ${
+                        className={`h-5 w-5 transition-colors ${
                           star <= scores[i]
                             ? "fill-orange-accent text-orange-accent"
-                            : "text-muted-foreground/30"
+                            : "text-muted-foreground/30 group-hover:text-muted-foreground/50"
                         }`}
                       />
                     </button>
@@ -119,15 +128,43 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
 
           {/* Comment */}
           <div className="space-y-2">
-            <Label htmlFor="comment">Комментарий (мин. 100 знаков)</Label>
+            <Label htmlFor="comment">
+              Комментарий (мин. 100 знаков)
+              {fieldErrors.comment && (
+                <span className="text-destructive text-xs ml-2">{fieldErrors.comment}</span>
+              )}
+            </Label>
             <Textarea
               id="comment"
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={(e) => {
+                setComment(e.target.value);
+                if (fieldErrors.comment) setFieldErrors((prev) => ({ ...prev, comment: undefined }));
+              }}
               rows={4}
               placeholder="Опишите ваш опыт работы..."
+              className={fieldErrors.comment ? "border-destructive" : ""}
             />
-            <p className="text-xs text-muted-foreground">{comment.length}/100 знаков</p>
+            <p
+              className={`text-xs transition-colors ${
+                commentLength === 0
+                  ? "text-muted-foreground"
+                  : commentValid
+                    ? "text-menthol"
+                    : "text-orange-accent"
+              }`}
+            >
+              {commentLength}/100 знаков
+              {commentLength > 0 && !commentValid && (
+                <span className="ml-1 inline-flex items-center gap-0.5">
+                  <AlertCircle className="h-3 w-3" />
+                  ещё {100 - commentLength}
+                </span>
+              )}
+              {commentValid && (
+                <span className="ml-1">✓</span>
+              )}
+            </p>
           </div>
 
           {/* Signature */}
@@ -136,18 +173,28 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
             <RadioGroup value={signatureType} onValueChange={setSignatureType} className="flex gap-4">
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="nick" id="sig-nick" />
-                <Label htmlFor="sig-nick">Ник</Label>
+                <Label htmlFor="sig-nick" className="cursor-pointer">Ник</Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="name" id="sig-name" />
-                <Label htmlFor="sig-name">Имя</Label>
+                <Label htmlFor="sig-name" className="cursor-pointer">Имя</Label>
               </div>
             </RadioGroup>
           </div>
 
-          <Button type="submit" className="bg-menthol hover:bg-menthol-dark" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Опубликовать отзыв (+1 монета)
+          <Button
+            type="submit"
+            className="w-full bg-menthol hover:bg-menthol-dark"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Публикация...
+              </>
+            ) : (
+              "Опубликовать отзыв (+1 монета)"
+            )}
           </Button>
         </CardContent>
       </Card>

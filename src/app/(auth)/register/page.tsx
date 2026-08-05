@@ -12,11 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { registerUser } from "@/server/auth/actions";
+import { WelcomeDialog } from "@/components/shared/WelcomeDialog";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [registeredUsername, setRegisteredUsername] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,8 +42,9 @@ export default function RegisterPage() {
       redirect: false,
     });
 
-    router.push("/account");
-    router.refresh();
+    setRegisteredUsername(formData.get("username") as string);
+    setShowWelcome(true);
+    setLoading(false);
   }
 
   return (
@@ -146,6 +150,13 @@ export default function RegisterPage() {
           </form>
         </CardContent>
       </Card>
+
+      <WelcomeDialog
+        open={showWelcome}
+        onOpenChange={setShowWelcome}
+        username={registeredUsername}
+        dashboardHref="/account"
+      />
     </div>
   );
 }

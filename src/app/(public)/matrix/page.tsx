@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getPageContent } from "@/server/admin/content";
 import { MatrixPageClient } from "@/components/tables/MatrixPageClient";
+import { computeRating } from "@/lib/rating";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,7 @@ export default async function MatrixPage() {
   });
 
   const rows = products.map((p) => {
-    const ratings = p.company.reviews.map((r) => r.weightedAverage);
-    const avgRating = ratings.length > 0
-      ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 20)
-      : null;
+    const avgRating = computeRating(p.company.reviews);
 
     return {
       id: p.id,

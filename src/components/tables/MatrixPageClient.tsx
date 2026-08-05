@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/select";
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
+import { GuestGuard } from "@/components/shared/GuestGuard";
 import { cn } from "@/lib/utils";
-import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle, Phone, Mail } from "lucide-react";
 
 interface ProductRow {
   id: string; companyName: string; companyInn: string; companyId: string;
@@ -232,8 +233,32 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
                           </div>
                         )}
                         <div className="flex items-center gap-2 mt-auto pt-2 border-t">
-                          {product.companyPhone && (rev.phone ? <span className="text-xs">{product.companyPhone}</span> : <EyeButton onClick={() => handleReveal(product.companyId, "phone")} />)}
-                          {product.companyEmail && (rev.email ? <span className="text-xs">{product.companyEmail}</span> : <EyeButton onClick={() => handleReveal(product.companyId, "email")} />)}
+                          {product.companyPhone && (
+                            rev.phone ? (
+                              <span className="text-xs flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                {product.companyPhone}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                <EyeButton onClick={() => handleReveal(product.companyId, "phone")} fieldLabel="телефон" />
+                              </span>
+                            )
+                          )}
+                          {product.companyEmail && (
+                            rev.email ? (
+                              <span className="text-xs flex items-center gap-1">
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                {product.companyEmail}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                <EyeButton onClick={() => handleReveal(product.companyId, "email")} fieldLabel="email" />
+                              </span>
+                            )
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -245,11 +270,9 @@ export function MatrixPageClient({ products, treeItems, moderatorText, bannerUrl
                     <Plus className="h-8 w-8 text-menthol mb-2" />
                     <p className="text-sm font-medium text-menthol mb-1">Дать аналог</p>
                     <p className="text-xs text-muted-foreground mb-3">Добавьте свой продукт</p>
-                    {session?.user ? (
+                    <GuestGuard actionLabel="Добавить свой продукт">
                       <Link href="/company/products" className={cn(buttonVariants({ size: "sm" }), "bg-menthol hover:bg-menthol-dark")}>Добавить</Link>
-                    ) : (
-                      <Link href="/login" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>Войти</Link>
-                    )}
+                    </GuestGuard>
                   </CardContent>
                 </Card>
               </div>

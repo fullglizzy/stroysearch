@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { SuppliersPageClient } from "@/components/tables/SuppliersPageClient";
+import { computeRating } from "@/lib/rating";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,6 @@ export default async function SuppliersPage() {
   });
 
   const rows = companies.map((c) => {
-    const ratings = c.reviews.map((r) => r.weightedAverage);
-    const avgRating =
-      ratings.length > 0
-        ? ratings.reduce((a, b) => a + b, 0) / ratings.length
-        : null;
 
     return {
       id: c.id,
@@ -42,7 +38,7 @@ export default async function SuppliersPage() {
       website: c.website,
       region: c.region,
       classifierIds: c.classifierIds ? c.classifierIds.split(",").filter(Boolean) : [],
-      rating: avgRating ? Math.round(avgRating * 20) : null, // convert to 0-100
+      rating: computeRating(c.reviews),
       reviewCount: c.reviews.length,
       ownerNick: c.ownerUser?.profile?.nick || null,
       ownerRoles:

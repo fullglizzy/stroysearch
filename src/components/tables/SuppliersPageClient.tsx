@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -28,7 +31,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
 import { ReviewForm } from "@/components/forms/ReviewForm";
-import { Plus, Search, MessageSquare, AlertCircle } from "lucide-react";
+import { Pagination } from "@/components/shared/Pagination";
+import { Plus, Search, MessageSquare, AlertCircle, Loader2, Download, ArrowUpDown, Phone, Mail } from "lucide-react";
+import { validateInn } from "@/lib/inn";
+import { toastSuccess, toastError } from "@/lib/toast";
+import { exportToCSV } from "@/lib/export";
+import { REGIONS } from "@/lib/regions";
 
 interface CompanyRow {
   id: string;
@@ -66,26 +74,59 @@ export function SuppliersPageClient({ companies }: Props) {
   const [revals, setRevals] = useState<Record<string, Record<string, boolean>>>({});
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all"); // all | company | participant
+  const [regionFilter, setRegionFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "rating">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const [addOpen, setAddOpen] = useState(false);
   const [addError, setAddError] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; companyId?: string; label?: string } | null>(null);
 
-  const filtered = companies.filter((c) => {
-    if (!search) {
-      // only apply type filter when no search
-      if (typeFilter === "company" && !c.inn) return false;
-      if (typeFilter === "participant" && c.inn && !c.ownerNick) return false;
-      return true;
+  const filtered = useMemo(() => {
+    let result = companies;
+
+    // Поиск
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter((c) =>
+        c.name.toLowerCase().includes(s) ||
+        c.inn.includes(s) ||
+        (c.ownerNick?.toLowerCase().includes(s)) ||
+        (c.region?.toLowerCase().includes(s))
+      );
     }
-    const s = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(s) ||
-      c.inn.includes(s) ||
-      (c.ownerNick?.toLowerCase().includes(s)) ||
-      (c.region?.toLowerCase().includes(s))
-    );
-  });
+
+    // Тип (компания/участник)
+    if (typeFilter === "company") {
+      result = result.filter((c) => c.inn);
+    } else if (typeFilter === "participant") {
+      result = result.filter((c) => !c.inn || c.ownerNick);
+    }
+
+    // Регион
+    if (regionFilter && regionFilter !== "Все регионы") {
+      result = result.filter((c) => c.region === regionFilter);
+    }
+
+    // Сортировка
+    result = [...result].sort((a, b) => {
+      if (sortBy === "name") {
+        const cmp = a.name.localeCompare(b.name, "ru");
+        return sortDir === "asc" ? cmp : -cmp;
+      } else {
+        const ra = a.rating ?? 0;
+        const rb = b.rating ?? 0;
+        return sortDir === "asc" ? ra - rb : rb - ra;
+      }
+    });
+
+    return result;
+  }, [companies, search, typeFilter, regionFilter, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const handleReveal = useCallback(
     async (companyId: string, field: string) => {
@@ -114,14 +155,26 @@ export function SuppliersPageClient({ companies }: Props) {
     setAddLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const inn = (formData.get("inn") as string).trim();
+    const email = (formData.get("email") as string).trim();
+
+    // Валидация ИНН
+    if (!/^\d{10}$|^\d{12}$/.test(inn)) {
+      setAddError("ИНН должен состоять из 10 или 12 цифр");
+      setAddLoading(false);
+      return;
+    }
+    if (!validateInn(inn)) {
+      setAddError("Неверный ИНН — проверьте контрольную сумму");
+      setAddLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inn: formData.get("inn"),
-          email: formData.get("email"),
-        }),
+        body: JSON.stringify({ inn, email }),
       });
 
       if (!res.ok) {
@@ -129,6 +182,7 @@ export function SuppliersPageClient({ companies }: Props) {
         setAddError(data.error || "Ошибка добавления");
       } else {
         setAddOpen(false);
+        toastSuccess("Компания добавлена", "+1 монета начислена на ваш счёт");
         router.refresh();
       }
     } catch {
@@ -214,19 +268,69 @@ export function SuppliersPageClient({ companies }: Props) {
           <Input
             placeholder="Поиск по названию, ИНН, нику, региону..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9"
           />
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="border rounded-md px-3 py-2 text-sm bg-background"
+        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v ?? "all"); setPage(1); }}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Тип" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все</SelectItem>
+            <SelectItem value="company">Компании</SelectItem>
+            <SelectItem value="participant">Участники</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={regionFilter} onValueChange={(v) => { setRegionFilter(v ?? ""); setPage(1); }}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Регион" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Все регионы</SelectItem>
+            {REGIONS.filter((r) => r !== "Все регионы").map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          onClick={() => {
+            setSortBy(sortBy === "name" ? "rating" : "name");
+            setSortDir("asc");
+            setPage(1);
+          }}
+          title={`Сортировка: ${sortBy === "name" ? "по названию" : "по рейтингу"}`}
         >
-          <option value="">Все</option>
-          <option value="company">Компании</option>
-          <option value="participant">Участники</option>
-        </select>
+          <ArrowUpDown className="h-4 w-4" />
+          {sortBy === "name" ? "Название" : "Рейтинг"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          onClick={() => setSortDir((d) => d === "asc" ? "desc" : "asc")}
+          title={sortDir === "asc" ? "По возрастанию" : "По убыванию"}
+        >
+          {sortDir === "asc" ? "↑" : "↓"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          onClick={() => exportToCSV(filtered as unknown as Record<string, unknown>[], [
+            { key: "ownerNick", label: "Ник" },
+            { key: "inn", label: "ИНН" },
+            { key: "name", label: "Название" },
+            { key: "rating", label: "Рейтинг" },
+            { key: "region", label: "Регион" },
+          ], "baza_postavshchikov")}
+        >
+          <Download className="h-4 w-4" />
+          <span className="hidden sm:inline">CSV</span>
+        </Button>
       </div>
 
       {/* Table */}
@@ -247,14 +351,14 @@ export function SuppliersPageClient({ companies }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {paginated.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                   Компании не найдены
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((company) => {
+              paginated.map((company) => {
                 const key = company.id;
                 const rev = revals[key] || {};
 
@@ -296,11 +400,18 @@ export function SuppliersPageClient({ companies }: Props) {
                       {company.phone ? (
                         <div className="flex items-center gap-1">
                           {rev.phone ? (
-                            <span className="text-sm">{company.phone}</span>
+                            <span className="text-sm flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-muted-foreground" />
+                              {company.phone}
+                            </span>
                           ) : (
-                            <EyeButton
-                              onClick={() => handleReveal(key, "phone")}
-                            />
+                            <span className="inline-flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-muted-foreground" />
+                              <EyeButton
+                                onClick={() => handleReveal(key, "phone")}
+                                fieldLabel="телефон"
+                              />
+                            </span>
                           )}
                           {isAdmin && (
                             <span className="text-[10px] text-muted-foreground">
@@ -316,11 +427,18 @@ export function SuppliersPageClient({ companies }: Props) {
                       {company.email ? (
                         <div className="flex items-center gap-1">
                           {rev.email ? (
-                            <span className="text-sm">{company.email}</span>
+                            <span className="text-sm flex items-center gap-1">
+                              <Mail className="h-3 w-3 text-muted-foreground" />
+                              {company.email}
+                            </span>
                           ) : (
-                            <EyeButton
-                              onClick={() => handleReveal(key, "email")}
-                            />
+                            <span className="inline-flex items-center gap-1">
+                              <Mail className="h-3 w-3 text-muted-foreground" />
+                              <EyeButton
+                                onClick={() => handleReveal(key, "email")}
+                                fieldLabel="email"
+                              />
+                            </span>
                           )}
                           {isAdmin && (
                             <span className="text-[10px] text-muted-foreground">
@@ -389,6 +507,14 @@ export function SuppliersPageClient({ companies }: Props) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Пагинация */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {filtered.length} компаний</span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
 
       {/* Review Dialog */}
       {reviewTarget && (

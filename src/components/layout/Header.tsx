@@ -11,9 +11,10 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
   DropdownMenuGroup,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { Menu, X, User, Building2, Shield, LogOut } from "lucide-react";
 
@@ -41,16 +42,16 @@ export function Header() {
         : "/account";
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container-page flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
+        <Link href="/" className="flex items-center gap-2 font-bold text-xl flex-shrink-0">
           <span className="text-menthol">Е</span>
           <span className="text-foreground">ЦПР</span>
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
           {navLinks.map((link) => {
             const isActive = pathname.startsWith(link.href);
             return (
@@ -69,8 +70,10 @@ export function Header() {
           })}
         </nav>
 
-        {/* Auth Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right side: ThemeToggle, Auth */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <ThemeToggle />
+
           {session?.user ? (
             <DropdownMenu>
               <DropdownMenuTrigger>
@@ -82,7 +85,9 @@ export function Header() {
                   ) : (
                     <User className="h-4 w-4" />
                   )}
-                  {(session.user as any)?.username || session.user?.email}
+                  <span className="max-w-[100px] truncate">
+                    {(session.user as any)?.username || session.user?.email}
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -107,8 +112,8 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="text-red-600"
+                  onClick={() => signOut({ callbackUrl: window.location.origin + "/" })}
+                  className="text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Выйти
@@ -138,7 +143,7 @@ export function Header() {
 
       {/* Mobile Nav */}
       {mobileOpen && (
-        <nav className="md:hidden border-t bg-white p-4">
+        <nav className="md:hidden border-t bg-background p-4">
           <div className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <Link

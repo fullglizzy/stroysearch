@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,7 @@ interface Props {
 export function ConferencesPageClient({ conferences, treeItems, moderatorText, bannerUrl, joinedConfIds }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { guard, dialog: authDialog } = useAuthGuard();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -102,7 +104,6 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
   }
 
   async function handleJoin(confId: string, coinPrice: number) {
-    if (!session?.user) { router.push("/login"); return; }
     setJoinLoading(confId);
     try {
       const res = await fetch(`/api/conferences/${confId}/join`, { method: "POST" });
@@ -225,12 +226,10 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
                       ) : (
                         <Badge className="bg-green-100 text-green-700">Вы участвуете</Badge>
                       )
-                    ) : conf.coinPrice > 0 && session?.user ? (
-                      <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={() => handleJoin(conf.id, conf.coinPrice)} disabled={joinLoading === conf.id}>
+                    ) : conf.coinPrice > 0 ? (
+                      <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={guard(() => handleJoin(conf.id, conf.coinPrice))} disabled={joinLoading === conf.id}>
                         {joinLoading === conf.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Участвовать"}
                       </Button>
-                    ) : !session?.user && conf.coinPrice > 0 ? (
-                      <Button size="sm" variant="outline" onClick={() => router.push("/login")}>Войти</Button>
                     ) : conf.connectionLink ? (
                       <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
                         <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3 w-3" /> Подключиться</Button>
@@ -247,6 +246,8 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, b
           ))}
         </div>
       )}
+
+      {authDialog}
     </div>
   );
 }

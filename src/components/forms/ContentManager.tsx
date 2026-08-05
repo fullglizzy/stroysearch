@@ -8,8 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Save } from "lucide-react";
+import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 
 interface ContentManagerProps {
   pages: {
@@ -43,21 +43,24 @@ export function ContentManager({ pages }: ContentManagerProps) {
     pages.find((p) => p.pageKey === activePage)?.bannerUrl || "",
   );
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [contentError, setContentError] = useState("");
 
   function switchPage(key: string) {
     setActivePage(key);
     setContent(pages.find((p) => p.pageKey === key)?.content || "");
     setBannerUrl(pages.find((p) => p.pageKey === key)?.bannerUrl || "");
-    setError("");
-    setSuccess("");
+    setContentError("");
   }
 
   async function handleSave() {
+    if (!content.trim()) {
+      setContentError("Текст страницы не может быть пустым");
+      toastWarning("Проверьте данные", "Текст страницы обязателен");
+      return;
+    }
+
+    setContentError("");
     setLoading(true);
-    setError("");
-    setSuccess("");
 
     try {
       const res = await fetch("/api/admin/content", {
@@ -71,14 +74,14 @@ export function ContentManager({ pages }: ContentManagerProps) {
       });
 
       if (res.ok) {
-        setSuccess("Сохранено");
+        toastSuccess(`Страница «${pageLabels[activePage] || activePage}» сохранена`);
         router.refresh();
       } else {
-        const data = await res.json();
-        setError(data.error || "Ошибка сохранения");
+        const data = await res.json().catch(() => ({}));
+        toastError("Ошибка сохранения", data.error);
       }
     } catch {
-      setError("Ошибка соединения");
+      toastError("Ошибка соединения");
     }
     setLoading(false);
   }
@@ -95,30 +98,27 @@ export function ContentManager({ pages }: ContentManagerProps) {
         </TabsList>
       </Tabs>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle>{pageLabels[activePage] || activePage}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="content">Текст страницы (HTML)</Label>
+            <Label htmlFor="content">
+              Текст страницы (HTML)
+              {contentError && (
+                <span className="text-destructive text-xs ml-2">{contentError}</span>
+              )}
+            </Label>
             <Textarea
               id="content"
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                if (contentError) setContentError("");
+              }}
               rows={12}
-              className="font-mono text-sm"
+              className={`font-mono text-sm ${contentError ? "border-destructive" : ""}`}
             />
           </div>
           <div className="space-y-2">

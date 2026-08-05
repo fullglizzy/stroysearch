@@ -2,14 +2,28 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Save } from "lucide-react";
+import { toastSuccess, toastError } from "@/lib/toast";
+
+const profileFormSchema = z.object({
+  lastName: z.string().max(255).optional(),
+  firstName: z.string().max(255).optional(),
+  middleName: z.string().max(255).optional(),
+  phone: z.string().max(63).optional(),
+  region: z.string().max(255).optional(),
+  classifierIds: z.string().optional(),
+});
+
+type ProfileFormData = z.infer<typeof profileFormSchema>;
 
 interface ProfileFormProps {
   initialData: {
@@ -38,19 +52,29 @@ const ROLE_OPTIONS = [
 export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [isContactsHidden, setIsContactsHidden] = useState(initialData.isContactsHidden);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      lastName: initialData.lastName,
+      firstName: initialData.firstName,
+      middleName: initialData.middleName,
+      phone: initialData.phone,
+      region: initialData.region,
+      classifierIds: initialData.classifierIds.join(", "),
+    },
+  });
+
+  async function onSubmit(data: ProfileFormData) {
     setLoading(true);
 
-    const formData = new FormData(e.currentTarget);
     const selectedRoles = ROLE_OPTIONS.filter(
-      (r) => formData.get(`role_${r.value}`) === "on",
+      (r) => (document.getElementById(`role_${r.value}`) as HTMLInputElement)?.checked,
     ).map((r) => r.value);
 
     try {
@@ -58,89 +82,87 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: formData.get("firstName") || undefined,
-          lastName: formData.get("lastName") || undefined,
-          middleName: formData.get("middleName") || undefined,
-          phone: formData.get("phone") || undefined,
-          region: formData.get("region") || undefined,
+          firstName: data.firstName || undefined,
+          lastName: data.lastName || undefined,
+          middleName: data.middleName || undefined,
+          phone: data.phone || undefined,
+          region: data.region || undefined,
           isContactsHidden,
           roles: selectedRoles,
-          classifierIds: (formData.get("classifierIds") as string)
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
+          classifierIds: data.classifierIds
+            ? data.classifierIds.split(",").map((s) => s.trim()).filter(Boolean)
+            : [],
         }),
       });
 
       if (res.ok) {
-        setSuccess("Профиль обновлён");
+        toastSuccess("Профиль обновлён");
         router.refresh();
       } else {
-        const data = await res.json();
-        setError(data.error || "Ошибка обновления");
+        const resData = await res.json().catch(() => ({}));
+        toastError("Ошибка", resData.error || "Не удалось обновить профиль");
       }
     } catch {
-      setError("Ошибка соединения");
+      toastError("Ошибка соединения", "Проверьте подключение к интернету");
     }
     setLoading(false);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <Card>
-        <CardContent className="space-y-4">
-          <div>
+        <CardContent className="space-y-4 pt-6">
+          <div className="space-y-2">
             <Label>Логин (нельзя изменить)</Label>
-            <Input value={username} disabled className="mt-1" />
+            <Input value={username} disabled />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Ник (нельзя изменить после регистрации — ТЗ §11.8)</Label>
-            <Input value={nick || "—"} disabled className="mt-1" />
+            <Input value={nick || "—"} disabled />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Email</Label>
-            <Input value={initialData.email} disabled className="mt-1" />
+            <Input value={initialData.email} disabled />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <h3 className="font-semibold">Личная информация</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="lastName">Фамилия</Label>
-              <Input id="lastName" name="lastName" defaultValue={initialData.lastName} />
+              <Input id="lastName" {...register("lastName")} />
+              {errors.lastName && (
+                <p className="text-xs text-destructive">{errors.lastName.message}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="firstName">Имя</Label>
-              <Input id="firstName" name="firstName" defaultValue={initialData.firstName} />
+              <Input id="firstName" {...register("firstName")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="middleName">Отчество</Label>
-              <Input id="middleName" name="middleName" defaultValue={initialData.middleName} />
+              <Input id="middleName" {...register("middleName")} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Телефон (+7 XXX XXX-XX-XX)</Label>
-              <Input id="phone" name="phone" defaultValue={initialData.phone} placeholder="+7 (999) 123-45-67" />
+              <Input
+                id="phone"
+                {...register("phone")}
+                placeholder="+7 (999) 123-45-67"
+              />
+              {errors.phone && (
+                <p className="text-xs text-destructive">{errors.phone.message}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="region">Регион</Label>
-              <Input id="region" name="region" defaultValue={initialData.region} />
+              <Input id="region" {...register("region")} />
             </div>
           </div>
 
@@ -148,17 +170,13 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
             <Label htmlFor="classifierIds">
               Классификаторы (через запятую, например: 1, 3.2, 5.1.1)
             </Label>
-            <Input
-              id="classifierIds"
-              name="classifierIds"
-              defaultValue={initialData.classifierIds.join(", ")}
-            />
+            <Input id="classifierIds" {...register("classifierIds")} />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <h3 className="font-semibold">Роли</h3>
           <div className="space-y-3">
             {ROLE_OPTIONS.map((role) => (
@@ -168,7 +186,9 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
                   name={`role_${role.value}`}
                   defaultChecked={initialData.roles.includes(role.value)}
                 />
-                <Label htmlFor={`role_${role.value}`}>{role.label}</Label>
+                <Label htmlFor={`role_${role.value}`} className="cursor-pointer">
+                  {role.label}
+                </Label>
               </div>
             ))}
           </div>
@@ -176,7 +196,7 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
       </Card>
 
       <Card>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <Label htmlFor="isContactsHidden">
               Скрыть мои персональные данные от всех
