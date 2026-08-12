@@ -59,7 +59,6 @@ async function main() {
     data: {
       id: "default",
       coinPriceRub: 100,
-      viewPriceRub: 100,
       addCompanyCoins: 1,
       reviewCoins: 1,
       maxMonthlyLimit: 1000,
