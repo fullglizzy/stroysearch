@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Save, Upload } from "lucide-react";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 
@@ -21,6 +21,7 @@ interface ContentManagerProps {
   }[];
 }
 
+// Страницы из шапки + главная
 const pageLabels: Record<string, string> = {
   home: "Главная страница",
   products: "Продуктовые решения",
@@ -29,23 +30,27 @@ const pageLabels: Record<string, string> = {
   library: "Библиотека",
   conferences: "Конференции",
   polls: "Статистика и опросы",
-  account: "ЛК Участника",
-  company: "ЛК Компании",
-  admin: "Панель управления",
 };
+
+const PAGE_KEYS = Object.keys(pageLabels);
 
 export function ContentManager({ pages }: ContentManagerProps) {
   const router = useRouter();
-  const [activePage, setActivePage] = useState(pages[0]?.pageKey || "home");
-  const [title, setTitle] = useState(
-    pages.find((p) => p.pageKey === activePage)?.title || "",
+
+  // Вкладки строим по полному списку известных страниц, а не по строкам БД:
+  // на чистой БД pageContent пуст, но вкладки должны отображаться.
+  // Отсутствующие страницы считаются пустыми и создаются при сохранении (API — upsert).
+  const pagesByKey = useMemo(
+    () => new Map(pages.map((p) => [p.pageKey, p])),
+    [pages],
   );
-  const [content, setContent] = useState(
-    pages.find((p) => p.pageKey === activePage)?.content || "",
+
+  const [activePage, setActivePage] = useState(
+    pages[0] && pageLabels[pages[0].pageKey] ? pages[0].pageKey : PAGE_KEYS[0],
   );
-  const [bannerUrl, setBannerUrl] = useState(
-    pages.find((p) => p.pageKey === activePage)?.bannerUrl || "",
-  );
+  const [title, setTitle] = useState(pagesByKey.get(activePage)?.title || "");
+  const [content, setContent] = useState(pagesByKey.get(activePage)?.content || "");
+  const [bannerUrl, setBannerUrl] = useState(pagesByKey.get(activePage)?.bannerUrl || "");
   const [loading, setLoading] = useState(false);
   const [contentError, setContentError] = useState("");
   const [bannerUploading, setBannerUploading] = useState(false);
@@ -76,9 +81,9 @@ export function ContentManager({ pages }: ContentManagerProps) {
 
   function switchPage(key: string) {
     setActivePage(key);
-    setTitle(pages.find((p) => p.pageKey === key)?.title || "");
-    setContent(pages.find((p) => p.pageKey === key)?.content || "");
-    setBannerUrl(pages.find((p) => p.pageKey === key)?.bannerUrl || "");
+    setTitle(pagesByKey.get(key)?.title || "");
+    setContent(pagesByKey.get(key)?.content || "");
+    setBannerUrl(pagesByKey.get(key)?.bannerUrl || "");
     setContentError("");
   }
 
@@ -121,9 +126,9 @@ export function ContentManager({ pages }: ContentManagerProps) {
     <div className="space-y-6">
       <Tabs value={activePage} onValueChange={switchPage}>
         <TabsList className="flex-wrap h-auto">
-          {pages.map((p) => (
-            <TabsTrigger key={p.pageKey} value={p.pageKey} className="text-xs">
-              {pageLabels[p.pageKey] || p.pageKey}
+          {PAGE_KEYS.map((key) => (
+            <TabsTrigger key={key} value={key} className="text-xs">
+              {pageLabels[key]}
             </TabsTrigger>
           ))}
         </TabsList>
