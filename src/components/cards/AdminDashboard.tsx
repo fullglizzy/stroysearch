@@ -60,13 +60,6 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       show: isEditor(userType),
     },
     {
-      href: "/admin/suppliers",
-      icon: Building2,
-      title: "База поставщиков",
-      desc: "Текст и баннер страницы",
-      show: true,
-    },
-    {
       href: "/admin/conferences",
       icon: Calendar,
       title: "Конференции",
