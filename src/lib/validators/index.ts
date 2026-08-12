@@ -150,7 +150,7 @@ export const pollSchema = z.object({
   question: z.string().min(1, "Вопрос обязателен"),
   treeItemId: z.string().uuid().optional().nullable(),
   pollType: z.enum(["DICHOTOMOUS", "MULTIPLE"]),
-  coinReward: z.number().min(0).default(0.1),
+  coinReward: z.number().min(0).max(10, "Награда не может превышать 10 монет").default(0.1),
   options: z
     .array(z.object({ text: z.string().min(1).max(255), sortOrder: z.number().int().default(0) }))
     .min(2, "Минимум 2 варианта ответа"),

@@ -5,20 +5,40 @@ import { ConferencesModeration } from "@/components/tables/ConferencesModeration
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminConferencesPage() {
+const PAGE_SIZE = 20;
+
+export default async function AdminConferencesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const conferences = await prisma.conference.findMany({
-    include: {
-      organizer: {
-        select: { username: true, profile: { select: { nick: true, companyName: true } } },
+  const sp = await searchParams;
+  const get = (k: string) => {
+    const v = sp[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
+
+  const [conferences, total] = await Promise.all([
+    prisma.conference.findMany({
+      include: {
+        organizer: {
+          select: { username: true, profile: { select: { nick: true, companyName: true } } },
+        },
+        treeItem: { select: { fullNumberPath: true, name: true } },
+        _count: { select: { participants: true } },
       },
-      treeItem: { select: { fullNumberPath: true, name: true } },
-      _count: { select: { participants: true } },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-  });
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.conference.count(),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const rows = conferences.map((c) => ({
     id: c.id,
@@ -41,7 +61,7 @@ export default async function AdminConferencesPage() {
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Модерация конференций</h1>
-      <ConferencesModeration conferences={rows} />
+      <ConferencesModeration conferences={rows} total={total} page={page} totalPages={totalPages} />
     </div>
   );
 }

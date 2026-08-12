@@ -18,7 +18,7 @@ export default async function CompanyFinancesPage() {
     take: 50,
   });
   const gifts = await prisma.gift.findMany({
-    where: { limit: { gt: 0 } },
+    where: { limit: { gt: 0 }, deletedAt: null },
     orderBy: { coinPrice: "asc" },
   });
   const billing = await prisma.billingConfig.findUnique({ where: { id: "default" } });
@@ -28,17 +28,17 @@ export default async function CompanyFinancesPage() {
       <h1 className="text-3xl font-bold mb-2">Мои финансы</h1>
       <p className="text-muted-foreground mb-6">Баланс монет, счета и подарки</p>
       <FinancesPage
-        balance={wallet?.balance ?? 0}
+        balance={wallet ? wallet.balance.toNumber() : 0}
         transactions={transactions.map((t) => ({
           id: t.id,
           type: t.type,
-          amount: t.amount,
+          amount: t.amount.toNumber(),
           description: t.description,
           createdAt: t.createdAt,
         }))}
         gifts={gifts}
         userId={userId}
-        coinPriceRub={billing?.coinPriceRub ?? 100}
+        coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
       />
     </div>
   );

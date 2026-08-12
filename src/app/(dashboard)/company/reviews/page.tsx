@@ -10,12 +10,13 @@ export default async function CompanyReviewsPage() {
   if (!session?.user) redirect("/login");
 
   const userId = (session.user as any).id as string;
+  const canReview = (session.user as any).status === "ACTIVE";
 
   const company = await prisma.company.findFirst({
     where: { ownerUserId: userId },
   });
 
-  const [receivedReviews, givenReviews] = await Promise.all([
+  const [receivedReviews, givenReviews, companies, participants] = await Promise.all([
     company
       ? prisma.review.findMany({
           where: { companyId: company.id },
@@ -35,7 +36,29 @@ export default async function CompanyReviewsPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
+    // Кандидаты для вкладки «Оставить отзыв»
+    prisma.company.findMany({
+      select: { id: true, name: true, inn: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { status: "ACTIVE", type: "COMMON" },
+      select: {
+        id: true,
+        username: true,
+        profile: { select: { nick: true, firstName: true, lastName: true } },
+      },
+    }),
   ]);
+
+  const participantRows = participants.map((u) => {
+    const names = [u.profile?.firstName, u.profile?.lastName].filter(Boolean);
+    return {
+      id: u.id,
+      nick: u.profile?.nick || null,
+      name: names.length > 0 ? names.join(" ") : u.username,
+    };
+  });
 
   const avgRating =
     receivedReviews.length > 0
@@ -50,6 +73,9 @@ export default async function CompanyReviewsPage() {
         receivedReviews={receivedReviews}
         givenReviews={givenReviews}
         avgRating={avgRating}
+        companies={companies}
+        participants={participantRows}
+        canReview={canReview}
       />
     </div>
   );

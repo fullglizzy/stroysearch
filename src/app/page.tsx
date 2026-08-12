@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { HomePageClient } from "@/components/cards/HomePageClient";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // страница кэшируется на 60 сек
 
 export default async function HomePage() {
   const pageContent = await prisma.pageContent.findUnique({

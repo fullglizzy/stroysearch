@@ -15,12 +15,29 @@ export default async function AdminFinancesPage() {
   }
 
   const config = await prisma.billingConfig.findUnique({ where: { id: "default" } });
-  const gifts = await prisma.gift.findMany({ orderBy: { coinPrice: "asc" } });
+  const gifts = await prisma.gift.findMany({
+    where: { deletedAt: null },
+    orderBy: { coinPrice: "asc" },
+  });
 
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Финансы и биллинг</h1>
-      <FinancesManager config={config} gifts={gifts} />
+      <FinancesManager
+        config={
+          config
+            ? {
+                ...config,
+                coinPriceRub: config.coinPriceRub.toNumber(),
+                addCompanyCoins: config.addCompanyCoins.toNumber(),
+                reviewCoins: config.reviewCoins.toNumber(),
+                maxMonthlyLimit: config.maxMonthlyLimit.toNumber(),
+                vatRate: config.vatRate.toNumber(),
+              }
+            : null
+        }
+        gifts={gifts}
+      />
     </div>
   );
 }

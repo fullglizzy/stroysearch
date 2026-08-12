@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Pagination } from "@/components/shared/Pagination";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +15,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SupportDialog } from "@/components/shared/SupportDialog";
+import { InvoicePrint, type InvoicePrintData, type BillingRequisites } from "@/components/shared/InvoicePrint";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SUPPORT_TOPICS, SUPPORT_TOPIC_ITEMS } from "@/lib/support";
 import { toastError, toastSuccess } from "@/lib/toast";
-import { Plus, Send, Loader2, CheckCircle2, RotateCcw, MessageSquare, LifeBuoy, Paperclip, X } from "lucide-react";
+import { Plus, Send, Loader2, CheckCircle2, RotateCcw, MessageSquare, LifeBuoy, Paperclip, X, FileText } from "lucide-react";
 
 interface TicketRow {
   id: string;
@@ -68,6 +77,9 @@ interface SupportTicketsClientProps {
   initialTickets: TicketRow[];
   /** user — личный кабинет (мои обращения), staff — админка (все обращения) */
   mode: "user" | "staff";
+  /** Для админки: пагинация списка (опционально) */
+  page?: number;
+  totalPages?: number;
 }
 
 function formatDate(d: Date | string): string {
@@ -79,7 +91,8 @@ function formatDate(d: Date | string): string {
   });
 }
 
-export function SupportTicketsClient({ initialTickets, mode }: SupportTicketsClientProps) {
+export function SupportTicketsClient({ initialTickets, mode, page, totalPages }: SupportTicketsClientProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const autoOpenRef = useRef(false);
   const [tickets, setTickets] = useState<TicketRow[]>(initialTickets);
@@ -155,6 +168,26 @@ export function SupportTicketsClient({ initialTickets, mode }: SupportTicketsCli
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  const [printInvoice, setPrintInvoice] = useState<InvoicePrintData | null>(null);
+  const [printRequisites, setPrintRequisites] = useState<BillingRequisites | null>(null);
+
+  async function openPrintInvoice() {
+    if (!invoice) return;
+    setPrintInvoice(null);
+    try {
+      const [invRes, reqRes] = await Promise.all([
+        fetch(`/api/invoices/${invoice.id}`),
+        fetch("/api/billing/info"),
+      ]);
+      const inv = await invRes.json().catch(() => ({}));
+      const req = await reqRes.json().catch(() => ({}));
+      if (invRes.ok) setPrintInvoice(inv.invoice);
+      if (reqRes.ok) setPrintRequisites(req);
+    } catch {
+      // silent
+    }
+  }
 
   async function handleMarkPaid() {
     if (!selectedId) return;
@@ -405,8 +438,17 @@ export function SupportTicketsClient({ initialTickets, mode }: SupportTicketsCli
                   {invoice.status !== "PAID" && (
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-muted-foreground">
-                        Отправьте счёт пользователю файлом в переписку
+                        Счёт можно распечатать и передать пользователю
                       </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={openPrintInvoice}
+                      >
+                        <FileText className="h-3.5 w-3.5 mr-1" />
+                        Показать счёт
+                      </Button>
                       <Button
                         size="sm"
                         className="bg-menthol hover:bg-menthol-dark"
@@ -527,11 +569,38 @@ export function SupportTicketsClient({ initialTickets, mode }: SupportTicketsCli
       </div>
 
       {/* Диалог создания обращения (user mode) */}
+      {/* Печатный вид счёта */}
+      <Dialog open={!!printInvoice} onOpenChange={(o) => { if (!o) setPrintInvoice(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Счёт</DialogTitle>
+            <DialogDescription>Распечатайте счёт для отправки пользователю</DialogDescription>
+          </DialogHeader>
+          {printInvoice && printRequisites && (
+            <InvoicePrint invoice={printInvoice} requisites={printRequisites} />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <SupportDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={refreshList}
       />
+
+      {mode === "staff" && totalPages && totalPages > 1 && (
+        <div className="flex items-center justify-end mt-4">
+          <Pagination
+            currentPage={page || 1}
+            totalPages={totalPages}
+            onPageChange={(p) => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("page", String(p));
+              router.replace(`/admin/support?${params.toString()}`, { scroll: false });
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

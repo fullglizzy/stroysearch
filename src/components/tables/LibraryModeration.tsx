@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/shared/Pagination";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -23,9 +24,9 @@ interface DocRow {
   treeItem: { fullNumberPath: string; name: string } | null;
 }
 
-interface Props { documents: DocRow[]; }
+interface Props { documents: DocRow[]; total: number; page: number; totalPages: number; }
 
-export function LibraryModeration({ documents }: Props) {
+export function LibraryModeration({ documents, total, page, totalPages }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -126,6 +127,21 @@ export function LibraryModeration({ documents }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} документов</span>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={(p) => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("page", String(p));
+              router.replace(`/admin/library?${params.toString()}`, { scroll: false });
+            }}
+          />
+        </div>
+      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toastSuccess } from "@/lib/toast";
 import { ImagePreview } from "@/components/shared/ImagePreview";
+import { InvoicePrint, type InvoicePrintData, type BillingRequisites } from "@/components/shared/InvoicePrint";
+import { INVOICE_STATUS_LABELS, INVOICE_STATUS_BADGE, formatRub } from "@/lib/invoices";
 import {
   Coins,
   Gift,
@@ -27,6 +29,7 @@ import {
   Loader2,
   Receipt,
   ShoppingCart,
+  FileText,
 } from "lucide-react";
 
 interface FinancesPageProps {
@@ -78,6 +81,40 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
   const [buyError, setBuyError] = useState("");
   const [buyLoading, setBuyLoading] = useState(false);
 
+  // Счета пользователя (догружаются клиентом)
+  const [invoices, setInvoices] = useState<
+    { id: string; number: string; date: string; dueDate: string; status: string; total: number }[]
+  >([]);
+  const [invoiceOpen, setInvoiceOpen] = useState<string | null>(null);
+  const [invoiceData, setInvoiceData] = useState<InvoicePrintData | null>(null);
+  const [requisites, setRequisites] = useState<BillingRequisites | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/invoices")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setInvoices(d.invoices || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  async function openInvoice(invoiceId: string) {
+    setInvoiceOpen(invoiceId);
+    setInvoiceData(null);
+    try {
+      const [invRes, reqRes] = await Promise.all([
+        fetch(`/api/invoices/${invoiceId}`),
+        fetch("/api/billing/info"),
+      ]);
+      const inv = await invRes.json().catch(() => ({}));
+      const req = await reqRes.json().catch(() => ({}));
+      if (invRes.ok) setInvoiceData(inv.invoice);
+      if (reqRes.ok) setRequisites(req);
+    } catch {
+      // silent
+    }
+  }
+
   const buyTotal = (parseInt(buyAmount, 10) || 0) * coinPriceRub;
 
   async function handleBuyCoins(e: React.FormEvent) {
@@ -93,7 +130,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
       if (res.ok) {
         setBuyOpen(false);
         setBuyAmount("");
-        toastSuccess("Заявка отправлена", "Счёт придёт файлом в переписку — статус в «Поддержке»");
+        toastSuccess("Заявка отправлена", "Счёт появится в разделе «Счета» — статус в «Поддержке»");
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
@@ -328,6 +365,36 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
         </Card>
       )}
 
+      {/* Счета */}
+      {invoices.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Счета</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {invoices.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                <div>
+                  <p className="text-sm font-medium">Счёт № {inv.number}</p>
+                  <p className="text-xs text-muted-foreground">
+                    от {new Date(inv.date).toLocaleDateString("ru-RU")} · оплатить до {new Date(inv.dueDate).toLocaleDateString("ru-RU")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className={INVOICE_STATUS_BADGE[inv.status] || ""}>
+                    {INVOICE_STATUS_LABELS[inv.status] || inv.status}
+                  </Badge>
+                  <span className="text-sm font-medium">{formatRub(inv.total)}</span>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openInvoice(inv.id)}>
+                    <FileText className="h-3 w-3" /> Показать
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Transactions History */}
       <Card>
         <CardHeader>
@@ -384,6 +451,23 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
           )}
         </CardContent>
       </Card>
+
+      {/* Печатный вид счёта */}
+      <Dialog open={!!invoiceOpen} onOpenChange={(o) => { if (!o) setInvoiceOpen(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Счёт</DialogTitle>
+            <DialogDescription>Распечатайте счёт для оплаты по реквизитам</DialogDescription>
+          </DialogHeader>
+          {invoiceData && requisites ? (
+            <InvoicePrint invoice={invoiceData} requisites={requisites} />
+          ) : (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

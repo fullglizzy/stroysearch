@@ -19,7 +19,7 @@ export function PageBanner({ url, alt, className }: PageBannerProps) {
 
   return (
     <div className={`relative mb-4 rounded-lg overflow-hidden ${className || ""}`}>
-      <img src={url} alt={alt} className="w-full h-auto max-h-32 object-cover" />
+      <img src={url} alt={alt} className="w-full h-auto max-h-32 object-cover" loading="lazy" decoding="async" />
       <button
         type="button"
         onClick={() => setHidden(true)}

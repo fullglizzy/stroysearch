@@ -1,7 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Mail, HelpCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
+import { SupportDialog } from "@/components/shared/SupportDialog";
 
 export function Footer() {
+  const [supportOpen, setSupportOpen] = useState(false);
+
   return (
     <footer className="border-t bg-secondary/30">
       <div className="container-page py-10">
@@ -27,7 +33,7 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation — названия совпадают с шапкой */}
           <div>
             <h4 className="font-semibold mb-3 text-sm">Разделы</h4>
             <ul className="space-y-2 text-sm">
@@ -38,22 +44,22 @@ export function Footer() {
               </li>
               <li>
                 <Link href="/suppliers" className="text-muted-foreground hover:text-menthol transition-colors">
-                  База поставщиков
+                  База поставщиков и заказчиков
                 </Link>
               </li>
               <li>
                 <Link href="/matrix" className="text-muted-foreground hover:text-menthol transition-colors">
-                  Матрица материалов
+                  Даешь аналог! Матрица материалов
                 </Link>
               </li>
               <li>
                 <Link href="/library" className="text-muted-foreground hover:text-menthol transition-colors">
-                  Библиотека
+                  Продуктовая библиотека
                 </Link>
               </li>
               <li>
                 <Link href="/conferences" className="text-muted-foreground hover:text-menthol transition-colors">
-                  Конференции
+                  Встречи и конференции
                 </Link>
               </li>
               <li>
@@ -86,10 +92,14 @@ export function Footer() {
             <h4 className="font-semibold mb-3 text-sm">Поддержка</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/login" className="text-muted-foreground hover:text-menthol transition-colors flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSupportOpen(true)}
+                  className="text-muted-foreground hover:text-menthol transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
                   <HelpCircle className="h-3.5 w-3.5" />
                   Задать вопрос
-                </Link>
+                </button>
               </li>
               <li>
                 <Link href="/register" className="text-muted-foreground hover:text-menthol transition-colors">
@@ -116,6 +126,9 @@ export function Footer() {
           </p>
         </div>
       </div>
+
+      {/* Модалка обращения в поддержку */}
+      <SupportDialog open={supportOpen} onOpenChange={setSupportOpen} />
     </footer>
   );
 }

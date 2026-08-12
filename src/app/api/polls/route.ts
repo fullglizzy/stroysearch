@@ -3,9 +3,17 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { pollSchema } from "@/lib/validators";
 
+const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
+
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
+    return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
+  }
+
+  // Создавать опросы (и назначать награду) могут только сотрудники
+  const userType = (session.user as any).type as string;
+  if (!ADMIN_TYPES.includes(userType)) {
     return NextResponse.json({ error: "Нет прав" }, { status: 403 });
   }
 

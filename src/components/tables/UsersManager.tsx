@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/shared/Pagination";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -45,6 +46,10 @@ interface UserRow {
 
 interface UsersManagerProps {
   users: UserRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  initialQuery: string;
 }
 
 const statusBadge: Record<string, string> = {
@@ -63,9 +68,10 @@ const typeLabel: Record<string, string> = {
   ROOT: "Root",
 };
 
-export function UsersManager({ users }: UsersManagerProps) {
+export function UsersManager({ users, total, page, totalPages, initialQuery }: UsersManagerProps) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialQuery);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [addCoinsOpen, setAddCoinsOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [coinAmount, setCoinAmount] = useState("");
@@ -73,17 +79,17 @@ export function UsersManager({ users }: UsersManagerProps) {
   const [coinError, setCoinError] = useState("");
   const [coinOperation, setCoinOperation] = useState<"add" | "subtract" | "set">("add");
 
-  const filtered = users.filter((u) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      u.username.toLowerCase().includes(s) ||
-      u.email.toLowerCase().includes(s) ||
-      (u.lastName?.toLowerCase().includes(s)) ||
-      (u.nick?.toLowerCase().includes(s)) ||
-      (u.inn?.includes(s))
-    );
-  });
+  // Поиск и пагинация живут в URL, данные отдаёт сервер
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (value) params.set("q", value); else params.delete("q");
+      params.delete("page");
+      router.replace(`/admin/users?${params.toString()}`, { scroll: false });
+    }, 300);
+  }
 
   async function handleAddCoins() {
     if (!selectedUser || !coinAmount) return;
@@ -122,12 +128,12 @@ export function UsersManager({ users }: UsersManagerProps) {
         <Input
           placeholder="Поиск по логину, email, фамилии..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {users.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Пользователи не найдены</p>
@@ -148,7 +154,7 @@ export function UsersManager({ users }: UsersManagerProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((user) => (
+            {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.username}</TableCell>
                 <TableCell>
@@ -262,6 +268,21 @@ export function UsersManager({ users }: UsersManagerProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} пользователей</span>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={(p) => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("page", String(p));
+              router.replace(`/admin/users?${params.toString()}`, { scroll: false });
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

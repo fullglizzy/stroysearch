@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
+import { Pagination } from "@/components/shared/Pagination";
 import {
   Dialog,
   DialogContent,
@@ -55,11 +56,14 @@ interface TreeItem {
 
 interface Props {
   conferences: ConfRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  showPast: boolean;
   treeItems: TreeItem[];
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
-  joinedConfIds: string[];
 }
 
 // Сообщения совпадают с серверной схемой conferenceSchema
@@ -109,10 +113,21 @@ const CONFERENCE_FORM_DEFAULTS: ConferenceFormValues = {
   connectionLink: "",
 };
 
-export function ConferencesPageClient({ conferences, treeItems, moderatorText, pageTitle, bannerUrl, joinedConfIds }: Props) {
+export function ConferencesPageClient({ conferences, total, page, totalPages, showPast, treeItems, moderatorText, pageTitle, bannerUrl }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
+
+  // Участие пользователя догружаем клиентом, чтобы страница могла кэшироваться
+  const [joinedConfIds, setJoinedConfIds] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/conferences/joined")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setJoinedConfIds(d.ids || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [session?.user]);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -122,6 +137,17 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, p
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [joinError, setJoinError] = useState("");
+
+  // Пагинация и архив живут в URL
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/conferences?${qs}` : "/conferences", { scroll: false });
+  }
 
   const {
     register,
@@ -216,6 +242,14 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, p
         <div>
           <h1 className="text-3xl font-bold">Конференции</h1>
           <p className="text-muted-foreground mt-1">Вебинары, лекции и презентации продуктов</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => updateQuery({ past: showPast ? null : "1", page: null })}
+          >
+            {showPast ? "Показать предстоящие" : "Показать прошедшие"}
+          </Button>
         </div>
         <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) { setCreateLogo(""); reset(CONFERENCE_FORM_DEFAULTS); } }}>
           <Button
@@ -362,7 +396,7 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, p
                   </Button>
                   {createLogo && (
                     <>
-                      <img src={createLogo} alt="Фото конференции" className="h-12 w-12 rounded-md border object-cover" />
+                      <img src={createLogo} alt="Фото конференции" className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
                       <Button type="button" variant="ghost" size="sm" onClick={() => setCreateLogo("")}>
                         <X className="h-4 w-4 mr-1" />
                         Убрать
@@ -499,6 +533,13 @@ export function ConferencesPageClient({ conferences, treeItems, moderatorText, p
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} конференций</span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>
       )}
 

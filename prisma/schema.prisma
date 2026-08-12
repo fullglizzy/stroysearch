@@ -171,6 +171,7 @@ model Company {
   updatedAt     DateTime        @updatedAt
 
   @@map("companies")
+  @@index([region])
 }
 
 model CompanyMetrics {
@@ -203,6 +204,8 @@ model Review {
   updatedAt       DateTime         @updatedAt
 
   @@map("reviews")
+  @@index([companyId])
+  @@index([targetId])
 }
 
 model ReviewCriteria {
@@ -238,6 +241,8 @@ model Product {
   deletedAt       DateTime?
 
   @@map("products")
+  @@index([deletedAt])
+  @@index([treeItemId])
 }
 
 // ─────────────────────────── БИБЛИОТЕКА ДОКУМЕНТОВ ───────────────────────────
@@ -262,6 +267,7 @@ model LibraryDocument {
   purchasedBy    DocumentPurchase[]
 
   @@map("library_documents")
+  @@index([isApproved, deletedAt])
 }
 
 model DocumentPurchase {
@@ -274,6 +280,7 @@ model DocumentPurchase {
 
   @@unique([documentId, userId])
   @@map("document_purchases")
+  @@index([userId])
 }
 
 // ─────────────────────────── КОНФЕРЕНЦИИ ───────────────────────────
@@ -301,6 +308,7 @@ model Conference {
   participants   ConferenceParticipant[]
 
   @@map("conferences")
+  @@index([status, date])
 }
 
 model ConferenceParticipant {
@@ -313,6 +321,7 @@ model ConferenceParticipant {
 
   @@unique([conferenceId, userId])
   @@map("conference_participants")
+  @@index([userId])
 }
 
 // ─────────────────────────── ОПРОСЫ ───────────────────────────
@@ -323,7 +332,7 @@ model Poll {
   treeItemId String?
   treeItem   ProductTreeItem? @relation(fields: [treeItemId], references: [id])
   pollType   String           @default("DICHOTOMOUS") // DICHOTOMOUS | MULTIPLE
-  coinReward Float            @default(0.1)
+  coinReward Decimal          @default(0.1)
   isActive   Boolean          @default(true)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -332,6 +341,7 @@ model Poll {
   votes      PollVote[]
 
   @@map("polls")
+  @@index([isActive])
 }
 
 model PollOption {
@@ -358,6 +368,7 @@ model PollVote {
 
   @@unique([pollId, optionId, userId])
   @@map("poll_votes")
+  @@index([userId])
 }
 
 // ─────────────────────────── МОНЕТНАЯ ЭКОНОМИКА ───────────────────────────
@@ -365,7 +376,7 @@ model PollVote {
 model Wallet {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance   Float    @default(0)
+  balance   Decimal  @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -377,25 +388,27 @@ model Transaction {
   userId       String
   user         User     @relation(fields: [userId], references: [id])
   type         String   // ADD_COMPANY | REVIEW | POLL_VOTE | DOCUMENT_SALE | ...
-  amount       Float
-  balanceAfter Float
+  amount       Decimal
+  balanceAfter Decimal
   description  String?
   metadata     String?  // JSON
   createdAt    DateTime @default(now())
 
   @@map("transactions")
+  @@index([userId, createdAt])
 }
 
 // ─────────────────────────── СУВЕНИРЫ / ПОДАРКИ ───────────────────────────
 
 model Gift {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   coinPrice Int
   limit     Int
   imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   claims    GiftClaim[]
 
@@ -417,11 +430,12 @@ model GiftClaim {
 
 model BillingConfig {
   id                  String   @id @default("default")
-  coinPriceRub        Float    @default(100)
-  viewPriceRub        Float    @default(100)
-  addCompanyCoins     Float    @default(1)
-  reviewCoins         Float    @default(1)
-  maxMonthlyLimit     Float    @default(1000)
+  coinPriceRub        Decimal  @default(100)
+  addCompanyCoins     Decimal  @default(1)
+  reviewCoins         Decimal  @default(1)
+  maxMonthlyLimit     Decimal  @default(1000)
+  vatRate             Decimal  @default(0) // ставка НДС для счетов, % (0 = без НДС)
+  invoiceBasis        String?             // основание в счёте, напр. «Договор №1 от 01.01.2026»
   updatedAt           DateTime @updatedAt
 
   bankName            String?
@@ -451,10 +465,10 @@ model Invoice {
   date      DateTime
   dueDate   DateTime
   status    String         @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
-  subtotal  Float
-  limit     Float
-  discount  Float          @default(0)
-  total     Float
+  subtotal  Decimal
+  limit     Decimal
+  discount  Decimal        @default(0)
+  total     Decimal
   items     InvoiceItem[]
   ticketId  String?        @unique
   ticket    SupportTicket? @relation(fields: [ticketId], references: [id])
@@ -472,8 +486,8 @@ model InvoiceItem {
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
   quantity    Int     @default(1)
-  unitPrice   Float
-  total       Float
+  unitPrice   Decimal
+  total       Decimal
 
   @@map("invoice_items")
 }
@@ -509,6 +523,7 @@ model SupportTicket {
   invoice        Invoice?
 
   @@map("support_tickets")
+  @@index([isResolved, updatedAt])
 }
 
 model SupportMessage {

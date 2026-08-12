@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
+import { Pagination } from "@/components/shared/Pagination";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { Coins, Vote, BarChart3, Loader2, AlertCircle, ChevronRight, PlusCircle } from "lucide-react";
 import { PageBanner } from "@/components/shared/PageBanner";
@@ -36,17 +37,29 @@ interface PollRow {
 
 interface Props {
   polls: PollRow[];
+  total: number;
+  page: number;
+  totalPages: number;
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
-  votedPollIds: string[];
 }
 
-export function PollsPageClient({ polls, moderatorText, pageTitle, bannerUrl, votedPollIds }: Props) {
+export function PollsPageClient({ polls, total, page, totalPages, moderatorText, pageTitle, bannerUrl }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
-  const [votedIds, setVotedIds] = useState<Set<string>>(new Set(votedPollIds));
+
+  // Голоса пользователя догружаем клиентом, чтобы страница могла кэшироваться
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/polls/voted")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setVotedIds(new Set(d.ids || [])); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [session?.user]);
   const [resultsPollIds, setResultsPollIds] = useState<Set<string>>(new Set());
   const [activePollId, setActivePollId] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
@@ -208,7 +221,7 @@ export function PollsPageClient({ polls, moderatorText, pageTitle, bannerUrl, vo
                 className="w-full text-left"
               >
                 <Card className="hover:border-menthol/50 transition-colors cursor-pointer">
-                  <CardContent className="flex items-center justify-between gap-3 py-4">
+                  <CardContent className="flex items-center justify-between gap-3 py-1">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium break-words">{poll.question}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -377,6 +390,21 @@ export function PollsPageClient({ polls, moderatorText, pageTitle, bannerUrl, vo
           })()}
         </DialogContent>
       </Dialog>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} опросов</span>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={(p) => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("page", String(p));
+              router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+            }}
+          />
+        </div>
+      )}
 
       {authDialog}
     </div>

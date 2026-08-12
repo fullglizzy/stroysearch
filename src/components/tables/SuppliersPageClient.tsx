@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -74,12 +74,23 @@ interface TreeItem {
 }
 
 interface Props {
-  companies: CompanyRow[];
+  rows: CompanyRow[];
+  total: number;
+  page: number;
+  pageSize: number;
   treeItems: TreeItem[];
   regions: string[];
   pageTitle: string | null;
   moderatorText: string | null;
   bannerUrl: string | null;
+  initialQuery: {
+    q: string;
+    type: "all" | "company" | "participant";
+    region: string;
+    classifier: string;
+    sort: "name" | "rating";
+    dir: "asc" | "desc";
+  };
 }
 
 const COMPANY_CRITERIA_LABELS = [
@@ -105,32 +116,6 @@ const PARTICIPANT_CRITERIA_LABELS = [
   "Работа в команде — способность сотрудничать, поддерживать коллег",
   "Соблюдение договорённостей — выполнение обязательств по срокам и условиям",
 ];
-
-// Приводим строку к «плоскому» виду: нижний регистр, только буквы и цифры.
-// Так «+7 (999) 123-45-67» и «999123» сравнимы между собой.
-function normalizeForSearch(value: string): string {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-}
-
-// Собираем все данные записи в один текст, чтобы строка поиска находила
-// почти по любому полю, не покрытому фильтрами (тип, регион, классификатор).
-function buildSearchText(row: CompanyRow, classifierById: Map<string, string>): string {
-  return normalizeForSearch(
-    [
-      row.name,
-      row.inn ?? "",
-      row.ownerNick ?? "",
-      row.phone ?? "",
-      row.email ?? "",
-      row.website ?? "",
-      row.region ?? "",
-      row.ownerRoles.map(roleLabel).join(" "),
-      row.classifierIds.map((id) => classifierById.get(id) ?? id).join(" "),
-      row.kind === "company" ? "поставщик" : "участник",
-      row.rating !== null ? String(row.rating) : "",
-    ].join(" "),
-  );
-}
 
 // Сообщения совпадают с серверной схемой addCompanySchema
 const addCompanyFormSchema = z.object({
@@ -175,7 +160,7 @@ const ADD_COMPANY_FORM_DEFAULTS: AddCompanyFormValues = {
   classifierIds: [],
 };
 
-export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, moderatorText, bannerUrl }: Props) {
+export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, regions, pageTitle, moderatorText, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
@@ -188,17 +173,39 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
     !!session?.user && (session.user as { status?: string }).status === "ACTIVE";
 
   const [revals, setRevals] = useState<Record<string, Record<string, boolean>>>({});
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all"); // all | company | participant
-  const [regionFilter, setRegionFilter] = useState<string[]>([]);
-  const [classifierFilter, setClassifierFilter] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"name" | "rating">("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+
+  // Локальное состояние только для инпута поиска (с дебаунсом в URL)
+  const [search, setSearch] = useState(initialQuery.q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const typeFilter = initialQuery.type;
+  const regionFilter = initialQuery.region.split(",").filter(Boolean);
+  const classifierFilter = initialQuery.classifier.split(",").filter(Boolean);
+  const sortBy = initialQuery.sort;
+  const sortDir = initialQuery.dir;
+
   const [addOpen, setAddOpen] = useState(false);
   const [addError, setAddError] = useState("");
   const [addLoading, setAddLoading] = useState(false);
+
+  // Все фильтры/пагинация живут в URL — сервер отдаёт только нужную страницу
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/suppliers?${qs}` : "/suppliers", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value, page: null });
+    }, 300);
+  }
 
   const {
     register,
@@ -245,71 +252,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
     setExpandedReviewId(null);
   }
 
-  // id узла классификатора → «путь + название» (для полнотекстового поиска)
-  const classifierSearchById = useMemo(
-    () => new Map(treeItems.map((t) => [t.id, `${t.fullNumberPath} ${t.name}`])),
-    [treeItems],
-  );
-
-  // Предвычисленный текст каждой записи для универсального поиска
-  const searchIndex = useMemo(
-    () => new Map(companies.map((c) => [c.id, buildSearchText(c, classifierSearchById)])),
-    [companies, classifierSearchById],
-  );
-
-  const filtered = useMemo(() => {
-    let result = companies;
-
-    // Поиск — универсальный: запись подходит, если все слова запроса
-    // встречаются в её сводном тексте (название, ИНН, контакты, сайт,
-    // роли, классификатор, рейтинг...)
-    if (search) {
-      const tokens = search
-        .toLowerCase()
-        .split(/[^\p{L}\p{N}]+/u)
-        .filter(Boolean);
-      result = result.filter((c) => {
-        const haystack = searchIndex.get(c.id) ?? "";
-        return tokens.every((t) => haystack.includes(t));
-      });
-    }
-
-    // Тип (компания/участник)
-    if (typeFilter === "company") {
-      result = result.filter((c) => c.kind === "company");
-    } else if (typeFilter === "participant") {
-      result = result.filter((c) => c.kind === "participant");
-    }
-
-    // Регион
-    if (regionFilter.length > 0) {
-      result = result.filter((c) => c.region && regionFilter.includes(c.region));
-    }
-
-    // Классификатор
-    if (classifierFilter.length > 0) {
-      result = result.filter((c) =>
-        c.classifierIds.some((id) => classifierFilter.includes(id)),
-      );
-    }
-
-    // Сортировка
-    result = [...result].sort((a, b) => {
-      if (sortBy === "name") {
-        const cmp = a.name.localeCompare(b.name, "ru");
-        return sortDir === "asc" ? cmp : -cmp;
-      } else {
-        const ra = a.rating ?? 0;
-        const rb = b.rating ?? 0;
-        return sortDir === "asc" ? ra - rb : rb - ra;
-      }
-    });
-
-    return result;
-  }, [companies, searchIndex, search, typeFilter, regionFilter, classifierFilter, sortBy, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Варианты классификатора из продуктового дерева
   const classifierOptions = useMemo(
@@ -338,7 +281,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
       }));
 
       // Метрика просмотров считается только для компаний
-      const row = companies.find((c) => c.id === companyId);
+      const row = rows.find((c) => c.id === companyId);
       if (row?.kind === "participant") return;
 
       try {
@@ -351,7 +294,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
         // silent
       }
     },
-    [companies],
+    [rows],
   );
 
   async function handleAddCompany(values: AddCompanyFormValues) {
@@ -617,21 +560,21 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
       {/* Баннер */}
       {bannerUrl && <PageBanner url={bannerUrl} alt="Баннер базы поставщиков" />}
 
-      {/* Search + Filters */}
+      {/* Search + Filters — состояние живёт в URL, данные отдаёт сервер */}
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Поиск: название, ИНН, ник, контакты, сайт, роли..."
+            placeholder="Поиск: название, ИНН, ник, контакты, сайт..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9"
           />
         </div>
         <Select
           value={typeFilter}
           items={{ all: "Все", company: "Компании", participant: "Участники" }}
-          onValueChange={(v) => { setTypeFilter(v ?? "all"); setPage(1); }}
+          onValueChange={(v) => updateQuery({ type: v && v !== "all" ? v : null, page: null })}
         >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Тип" />
@@ -645,7 +588,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
         <MultiSelect
           options={regionOptions}
           value={regionFilter}
-          onChange={(v) => { setRegionFilter(v); setPage(1); }}
+          onChange={(v) => updateQuery({ region: v.join(","), page: null })}
           placeholder="Регион"
           searchPlaceholder="Поиск региона..."
           className="w-[200px]"
@@ -653,7 +596,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
         <MultiSelect
           options={classifierOptions}
           value={classifierFilter}
-          onChange={(v) => { setClassifierFilter(v); setPage(1); }}
+          onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
           placeholder="Классификатор"
           searchPlaceholder="Поиск категории..."
           className="w-[220px]"
@@ -664,11 +607,9 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
           variant="outline"
           size="sm"
           className="h-10 px-3 gap-1"
-          onClick={() => {
-            setSortBy(sortBy === "name" ? "rating" : "name");
-            setSortDir("asc");
-            setPage(1);
-          }}
+          onClick={() =>
+            updateQuery({ sort: sortBy === "name" ? "rating" : "name", dir: "asc", page: null })
+          }
           title={`Сортировка: ${sortBy === "name" ? "по названию" : "по рейтингу"}`}
         >
           <ArrowUpDown className="h-4 w-4" />
@@ -678,7 +619,7 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
           variant="outline"
           size="sm"
           className="h-10 px-3 gap-1"
-          onClick={() => setSortDir((d) => d === "asc" ? "desc" : "asc")}
+          onClick={() => updateQuery({ dir: sortDir === "asc" ? "desc" : "asc", page: null })}
           title={sortDir === "asc" ? "По возрастанию" : "По убыванию"}
         >
           {sortDir === "asc" ? "↑" : "↓"}
@@ -704,14 +645,14 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginated.length === 0 ? (
+            {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   Записи не найдены
                 </TableCell>
               </TableRow>
             ) : (
-              paginated.map((company) => {
+              rows.map((company) => {
                 const key = company.id;
                 const rev = revals[key] || {};
 
@@ -913,8 +854,8 @@ export function SuppliersPageClient({ companies, treeItems, regions, pageTitle, 
       {/* Пагинация */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-          <span>Всего: {filtered.length} записей</span>
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          <span>Всего: {total} записей</span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>
       )}
 

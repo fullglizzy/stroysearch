@@ -22,12 +22,16 @@ export default async function AdminPage() {
   const totalDocuments = await prisma.libraryDocument.count();
   const totalPolls = await prisma.poll.count();
 
-  const supportTickets = await prisma.supportTicket.findMany({
-    include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
-  });
-  const supportUnread = supportTickets.filter((t) =>
-    t.messages.some((m) => !m.isStaff && (!t.adminLastReadAt || m.createdAt > t.adminLastReadAt)),
-  ).length;
+  // Счётчик непрочитанных обращений считаем одним SQL-запросом,
+  // а не загрузкой всех тикетов со всеми сообщениями
+  const unreadRows = await prisma.$queryRawUnsafe<{ cnt: number | bigint }[]>(`
+    SELECT COUNT(*) AS cnt FROM support_tickets t
+    WHERE EXISTS (
+      SELECT 1 FROM support_messages m
+      WHERE m."ticketId" = t.id AND m."isStaff" IS FALSE
+      AND (t."adminLastReadAt" IS NULL OR m."createdAt" > t."adminLastReadAt")
+    )`);
+  const supportUnread = Number(unreadRows[0]?.cnt ?? 0);
 
   return (
     <div className="container-page py-8">

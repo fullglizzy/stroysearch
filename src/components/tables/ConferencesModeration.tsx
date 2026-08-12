@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/shared/Pagination";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,7 +35,7 @@ interface ConfRow {
   treeItemName: string | null;
 }
 
-interface Props { conferences: ConfRow[]; }
+interface Props { conferences: ConfRow[]; total: number; page: number; totalPages: number; }
 
 const statusLabels: Record<string, string> = {
   PENDING: "Ожидает", APPROVED: "Одобрена", REJECTED: "Отклонена", CANCELLED: "Отменена",
@@ -44,7 +45,7 @@ const statusBadge: Record<string, string> = {
   REJECTED: "bg-red-100 text-red-700", CANCELLED: "bg-gray-100 text-gray-700",
 };
 
-export function ConferencesModeration({ conferences }: Props) {
+export function ConferencesModeration({ conferences, total, page, totalPages }: Props) {
   const router = useRouter();
   const [noteOpen, setNoteOpen] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -198,6 +199,21 @@ export function ConferencesModeration({ conferences }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} конференций</span>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={(p) => {
+              const params = new URLSearchParams(window.location.search);
+              params.set("page", String(p));
+              router.replace(`/admin/conferences?${params.toString()}`, { scroll: false });
+            }}
+          />
+        </div>
+      )}
     </>
   );
 }

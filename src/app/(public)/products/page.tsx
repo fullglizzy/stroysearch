@@ -6,7 +6,7 @@ import { ProductsPageClient } from "@/components/cards/ProductsPageClient";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { AlertCircle } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // страница кэшируется на 60 сек
 
 interface FlatItem {
   id: string;

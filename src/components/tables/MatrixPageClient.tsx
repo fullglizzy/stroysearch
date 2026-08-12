@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +31,20 @@ interface TreeItem { id: string; name: string; fullNumberPath: string; }
 
 interface Props {
   products: ProductRow[];
+  total: number;
+  capped: boolean;
   treeItems: TreeItem[];
   regions: string[];
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
+  initialQuery: {
+    q: string;
+    class: string;
+    region: string;
+    classifier: string;
+    sort: string;
+  };
 }
 
 const classLabels: Record<string, string> = {
@@ -49,9 +58,9 @@ const SORT_ITEMS: Record<string, string> = {
   name: "По названию",
 };
 
-export function MatrixPageClient({ products, treeItems, regions, moderatorText, pageTitle, bannerUrl }: Props) {
+export function MatrixPageClient({ products, total, capped, treeItems, regions, moderatorText, pageTitle, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
-  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Добавлять аналоги могут только компании и админы
   const userType = (session?.user as any)?.type as string;
@@ -59,16 +68,38 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
     !!session?.user &&
     (userType === "COMPANY" || ["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType));
 
-  const [search, setSearch] = useState("");
-  const initialClassifiers = (searchParams.get("classifier") || "").split(",").filter(Boolean);
-  const [classifiers, setClassifiers] = useState<string[]>(initialClassifiers);
-  const [productClass, setProductClass] = useState(searchParams.get("class") || "");
-  const [regionFilter, setRegionFilter] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"rating" | "price_asc" | "price_desc" | "name">("rating");
+  // Фильтры приходят из URL, сервер уже отфильтровал и отсортировал данные
+  const classifiers = initialQuery.classifier.split(",").filter(Boolean);
+  const productClass = initialQuery.class;
+  const regionFilter = initialQuery.region.split(",").filter(Boolean);
+  const sortBy = initialQuery.sort as "rating" | "price_asc" | "price_desc" | "name";
+
+  const [search, setSearch] = useState(initialQuery.q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [revals, setRevals] = useState<Record<string, Record<string, boolean>>>({});
   const [showFilters, setShowFilters] = useState(false);
   const scrollerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollerObservers = useRef<Map<string, ResizeObserver>>(new Map());
   const [scrollerState, setScrollerState] = useState<Record<string, { canLeft: boolean; canRight: boolean }>>({});
+
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/matrix?${qs}` : "/matrix", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value });
+    }, 300);
+  }
 
   function updateScrollerState(path: string, el: HTMLDivElement) {
     const canLeft = el.scrollLeft > 1;
@@ -84,6 +115,27 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
     scrollerRefs.current[path]?.scrollBy({ left: dir * 420, behavior: "smooth" });
   }
 
+  // Привязка скроллера: ResizeObserver пересчитывает стрелки при любом
+  // изменении размеров контента (загрузка картинок, ресайз, смена данных)
+  function attachScroller(path: string, el: HTMLDivElement | null) {
+    scrollerRefs.current[path] = el;
+    if (!el) return;
+    const prevObserver = scrollerObservers.current.get(path);
+    prevObserver?.disconnect();
+    const observer = new ResizeObserver(() => updateScrollerState(path, el));
+    observer.observe(el);
+    scrollerObservers.current.set(path, observer);
+    requestAnimationFrame(() => updateScrollerState(path, el));
+  }
+
+  useEffect(() => {
+    const observers = scrollerObservers.current;
+    return () => {
+      for (const observer of observers.values()) observer.disconnect();
+      observers.clear();
+    };
+  }, []);
+
   const currentClassifierName = useMemo(() => {
     if (classifiers.length !== 1) return null;
     const found = treeItems.find(t => t.fullNumberPath === classifiers[0]);
@@ -92,25 +144,15 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
 
   const activeFiltersCount = [classifiers.length > 0, productClass !== "", regionFilter.length > 0].filter(Boolean).length;
 
-  const filtered = useMemo(() => {
-    return products.filter((p) => {
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase())
-        && !p.companyName.toLowerCase().includes(search.toLowerCase())) return false;
-      if (classifiers.length > 0 && !classifiers.includes(p.treeItemPath)) return false;
-      if (productClass !== "" && !p.classes.includes(productClass)) return false;
-      if (regionFilter.length > 0 && (!p.region || !regionFilter.includes(p.region))) return false;
-      return true;
-    });
-  }, [products, search, classifiers, productClass, regionFilter]);
-
+  // Фильтрация и сортировка выполняются на сервере; здесь только группировка
   const grouped = useMemo(() => {
     const map = new Map<string, ProductRow[]>();
-    for (const p of filtered) {
+    for (const p of products) {
       const key = p.treeItemPath;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(p);
     }
-    // Сортировка внутри каждой категории (по умолчанию — по рейтингу)
+    // Сортировка внутри каждой категории (данные уже пришли отсортированными с сервера)
     for (const list of map.values()) {
       list.sort((a, b) => {
         if (sortBy === "price_asc") return (a.price ?? Infinity) - (b.price ?? Infinity);
@@ -120,19 +162,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
       });
     }
     return Array.from(map.entries());
-  }, [filtered, sortBy]);
-
-  // Пересчёт видимости стрелок при смене категорий/ресайзе
-  useEffect(() => {
-    const measure = () => {
-      for (const [path, el] of Object.entries(scrollerRefs.current)) {
-        if (el) updateScrollerState(path, el);
-      }
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [grouped]);
+  }, [products, sortBy]);
 
   const handleReveal = async (companyId: string, field: string) => {
     setRevals((prev) => ({
@@ -204,12 +234,12 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
       <div className="flex flex-wrap items-end gap-2 mb-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Поиск по товару или компании..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Поиск по товару или компании..." value={search} onChange={(e) => handleSearchChange(e.target.value)} className="pl-9" />
         </div>
         <Select
           value={sortBy}
           items={SORT_ITEMS}
-          onValueChange={(v) => setSortBy((v ?? "rating") as typeof sortBy)}
+          onValueChange={(v) => updateQuery({ sort: v ?? "rating" })}
         >
           <SelectTrigger className="w-[190px] justify-between">
             <SelectValue placeholder="Сортировка" />
@@ -225,7 +255,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
           <Filter className="h-4 w-4" /> Фильтры {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1 h-4">{activeFiltersCount}</Badge>}
         </Button>
         {(classifiers.length > 0 || productClass !== "" || regionFilter.length > 0) && (
-          <Button variant="ghost" size="sm" onClick={() => { setClassifiers([]); setProductClass(""); setRegionFilter([]); }} className="h-10 px-3 text-muted-foreground gap-1"><X className="h-3 w-3" /> Сбросить</Button>
+          <Button variant="ghost" size="sm" onClick={() => updateQuery({ classifier: null, class: null, region: null })} className="h-10 px-3 text-muted-foreground gap-1"><X className="h-3 w-3" /> Сбросить</Button>
         )}
       </div>
 
@@ -235,14 +265,14 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
           {classifiers.map((c) => {
             const item = treeItems.find((t) => t.fullNumberPath === c);
             return (
-              <Badge key={c} variant="secondary" className="gap-1 cursor-pointer" onClick={() => setClassifiers(classifiers.filter((v) => v !== c))}>
+              <Badge key={c} variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ classifier: classifiers.filter((v) => v !== c).join(",") })}>
                 {c}{item ? ` — ${item.name}` : ""} <X className="h-3 w-3" />
               </Badge>
             );
           })}
-          {productClass !== "" && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setProductClass("")}>{classLabels[productClass]} <X className="h-3 w-3" /></Badge>}
+          {productClass !== "" && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ class: null })}>{classLabels[productClass]} <X className="h-3 w-3" /></Badge>}
           {regionFilter.map((r) => (
-            <Badge key={r} variant="secondary" className="gap-1 cursor-pointer" onClick={() => setRegionFilter(regionFilter.filter((v) => v !== r))}>{r} <X className="h-3 w-3" /></Badge>
+            <Badge key={r} variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ region: regionFilter.filter((v) => v !== r).join(",") })}>{r} <X className="h-3 w-3" /></Badge>
           ))}
         </div>
       )}
@@ -257,7 +287,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
                 <MultiSelect
                   options={treeItems.map((t) => ({ value: t.fullNumberPath, label: `${t.fullNumberPath} — ${t.name}` }))}
                   value={classifiers}
-                  onChange={setClassifiers}
+                  onChange={(v) => updateQuery({ classifier: v.join(",") })}
                   placeholder="Все категории"
                   searchPlaceholder="Поиск категории..."
                   filter={matchClassifier}
@@ -270,7 +300,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
                 <MultiSelect
                   options={regions.map((r) => ({ value: r, label: r }))}
                   value={regionFilter}
-                  onChange={setRegionFilter}
+                  onChange={(v) => updateQuery({ region: v.join(",") })}
                   placeholder="Любой регион"
                   searchPlaceholder="Поиск региона..."
                 />
@@ -280,7 +310,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
                 <Select
                   value={productClass}
                   items={{ "": "Все классы", ...classLabels }}
-                  onValueChange={(v) => setProductClass(v || "")}
+                  onValueChange={(v) => updateQuery({ class: v || null })}
                 >
                   <SelectTrigger><SelectValue placeholder="Все классы" /></SelectTrigger>
                   <SelectContent>
@@ -295,12 +325,17 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
       )}
 
       {/* Results */}
-      {filtered.length === 0 ? (
+      {capped && (
+        <div className="bg-orange-accent/10 border border-orange-accent/30 rounded-lg p-3 mb-4 text-sm text-orange-accent">
+          Показаны первые {products.length} из {total} товаров. Уточните поиск или фильтры, чтобы сузить выдачу.
+        </div>
+      )}
+      {products.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <SlidersHorizontal className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Товары не найдены</p>
           <p className="text-sm mt-2">{activeFiltersCount > 0 ? "Измените или сбросьте фильтры" : "В этой категории пока нет товаров"}</p>
-          {classifiers.length > 0 && <Button variant="link" onClick={() => setClassifiers([])} className="mt-2">Показать все товары</Button>}
+          {classifiers.length > 0 && <Button variant="link" onClick={() => updateQuery({ classifier: null })} className="mt-2">Показать все товары</Button>}
         </div>
       ) : (
         <div className="space-y-8">
@@ -323,7 +358,7 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
                     </button>
                   )}
                   <div
-                    ref={(el) => { scrollerRefs.current[path] = el; }}
+                    ref={(el) => attachScroller(path, el)}
                     onScroll={(e) => updateScrollerState(path, e.currentTarget)}
                     className="flex gap-3 overflow-x-auto pb-2 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
                   >
@@ -342,8 +377,8 @@ export function MatrixPageClient({ products, treeItems, regions, moderatorText, 
                   )}
                 </div>
               ) : (
-                /* Одна категория — вертикальная сетка по 4 в строке */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                /* Одна категория — вертикальная сетка по 5 в строке */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {items.map((product) => renderProductCard(product))}
                   {canAddProduct && renderGiveCard()}
                 </div>

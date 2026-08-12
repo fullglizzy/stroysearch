@@ -1,49 +1,61 @@
 import { prisma } from "@/lib/prisma";
 import { getPageContent } from "@/server/admin/content";
-import { auth } from "@/lib/auth";
 import { ConferencesPageClient } from "@/components/tables/ConferencesPageClient";
 
-export const dynamic = "force-dynamic";
+// Страница кэшируется; персональные данные (в каких конференциях участвует
+// пользователь) догружаются клиентом через /api/conferences/joined
+export const revalidate = 60;
 
-export default async function ConferencesPage() {
+const PAGE_SIZE = 12;
+
+export default async function ConferencesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const get = (k: string) => {
+    const v = sp[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+
+  const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
+  const showPast = get("past") === "1";
+
   const pageContent = await getPageContent("conferences");
-  const session = await auth();
 
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true, fullNumberPath: true },
   });
 
-  const conferences = await prisma.conference.findMany({
-    where: { status: "APPROVED" },
-    include: {
-      organizer: {
-        select: {
-          username: true,
-          profile: { select: { nick: true, companyName: true } },
-        },
-      },
-      treeItem: { select: { fullNumberPath: true, name: true } },
-      _count: { select: { participants: true } },
-    },
-    orderBy: { date: "asc" },
-  });
+  // По умолчанию показываем только предстоящие; архив — отдельным переключателем
+  const where = {
+    status: "APPROVED",
+    ...(showPast ? { date: { lt: new Date() } } : { date: { gte: new Date() } }),
+  };
 
-  // Get user's joined conferences
-  let joinedConfIds: string[] = [];
-  if (session?.user) {
-    const userId = (session.user as any).id as string;
-    const parts = await prisma.conferenceParticipant.findMany({
-      where: { userId },
-      select: { conferenceId: true },
-    });
-    // Организатор считается участником своих конференций
-    const own = await prisma.conference.findMany({
-      where: { organizerId: userId },
-      select: { id: true },
-    });
-    joinedConfIds = [...parts.map((p) => p.conferenceId), ...own.map((c) => c.id)];
-  }
+  const [conferences, total] = await Promise.all([
+    prisma.conference.findMany({
+      where,
+      include: {
+        organizer: {
+          select: {
+            username: true,
+            profile: { select: { nick: true, companyName: true } },
+          },
+        },
+        treeItem: { select: { fullNumberPath: true, name: true } },
+        _count: { select: { participants: true } },
+      },
+      orderBy: { date: showPast ? "desc" : "asc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.conference.count({ where }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const rows = conferences.map((c) => ({
     id: c.id,
@@ -65,11 +77,14 @@ export default async function ConferencesPage() {
   return (
     <ConferencesPageClient
       conferences={rows}
+      total={total}
+      page={page}
+      totalPages={totalPages}
+      showPast={showPast}
       treeItems={treeItems}
       moderatorText={pageContent?.content || null}
       pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
-      joinedConfIds={joinedConfIds}
     />
   );
 }

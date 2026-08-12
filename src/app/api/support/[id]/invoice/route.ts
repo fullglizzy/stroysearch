@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { roundWalletBalance } from "@/lib/money";
 
-const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
+const ADMIN_TYPES = ["SUPER", "ROOT"];
 
 export async function POST(
   request: Request,
@@ -46,10 +47,14 @@ export async function POST(
     const coins = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
 
     const updated = await prisma.$transaction(async (tx) => {
-      const inv = await tx.invoice.update({
-        where: { id: invoice.id },
+      // Атомарная защита от двойного начисления: переход разрешён только из неоплаченного состояния
+      const inv = await tx.invoice.updateMany({
+        where: { id: invoice.id, status: { not: "PAID" } },
         data: { status: "PAID", paidAt: new Date(), sentAt: invoice.sentAt ?? new Date() },
       });
+      if (inv.count === 0) {
+        throw new Error("Счёт уже оплачен");
+      }
 
       const wallet = await tx.wallet.findUnique({ where: { userId: invoice.userId } });
       if (wallet) {
@@ -57,13 +62,14 @@ export async function POST(
           where: { userId: invoice.userId },
           data: { balance: { increment: coins } },
         });
+        await roundWalletBalance(tx, invoice.userId);
         await tx.transaction.create({
           data: {
             userId: invoice.userId,
             type: "INVOICE_PAID",
             amount: coins,
-            balanceAfter: wallet.balance + coins,
-            description: `Пополнение по счёту ${inv.number}`,
+            balanceAfter: wallet.balance.plus(coins).toDecimalPlaces(2),
+            description: `Пополнение по счёту ${invoice.number}`,
           },
         });
       }
@@ -73,7 +79,7 @@ export async function POST(
           ticketId: id,
           authorId: adminId,
           isStaff: true,
-          message: `Счёт №${inv.number} оплачен. Начислено ${coins} монет.`,
+          message: `Счёт №${invoice.number} оплачен. Начислено ${coins} монет.`,
         },
       });
       await tx.supportTicket.update({
@@ -86,12 +92,12 @@ export async function POST(
     return NextResponse.json({
       success: true,
       invoice: {
-        id: updated.invoice.id,
-        number: updated.invoice.number,
-        status: updated.invoice.status,
-        total: updated.invoice.total,
-        sentAt: updated.invoice.sentAt,
-        paidAt: updated.invoice.paidAt,
+        id: invoice.id,
+        number: invoice.number,
+        status: "PAID",
+        total: invoice.total,
+        sentAt: invoice.sentAt ?? new Date(),
+        paidAt: new Date(),
       },
       message: {
         id: updated.message.id,
@@ -102,7 +108,10 @@ export async function POST(
         attachments: [],
       },
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === "Счёт уже оплачен") {
+      return NextResponse.json({ error: "Счёт уже оплачен" }, { status: 400 });
+    }
     return NextResponse.json({ error: "Не удалось отметить оплату" }, { status: 500 });
   }
 }

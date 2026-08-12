@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reviewSchema } from "@/lib/validators";
+import { roundWalletBalance } from "@/lib/money";
 
 export async function GET(request: Request) {
   try {
@@ -114,6 +115,14 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+      // Если компания без владельца и добавлена этим же пользователем,
+      // целью оказался бы сам автор — такую награду не начисляем
+      if (target === userId) {
+        return NextResponse.json(
+          { error: "Нельзя оставить отзыв о компании, добавленной вами" },
+          { status: 400 },
+        );
+      }
       resolvedTargetId = target;
       resolvedCompanyId = company.id;
     } else {
@@ -176,7 +185,7 @@ export async function POST(request: Request) {
 
         // Award coins for review
         const billingConfig = await tx.billingConfig.findUnique({ where: { id: "default" } });
-        const coinReward = billingConfig?.reviewCoins ?? 1;
+        const coinReward = billingConfig?.reviewCoins ? billingConfig.reviewCoins.toNumber() : 1;
 
         const wallet = await tx.wallet.findUnique({ where: { userId } });
         if (wallet) {
@@ -184,12 +193,13 @@ export async function POST(request: Request) {
             where: { userId },
             data: { balance: { increment: coinReward } },
           });
+          await roundWalletBalance(tx, userId);
           await tx.transaction.create({
             data: {
               userId,
               type: "REVIEW",
               amount: coinReward,
-              balanceAfter: wallet.balance + coinReward,
+              balanceAfter: wallet.balance.plus(coinReward).toDecimalPlaces(2),
               description: `Начисление за отзыв`,
               metadata: JSON.stringify({ targetId: resolvedTargetId }),
             },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { roundWalletBalance } from "@/lib/money";
 
 const OPERATIONS = ["add", "subtract", "set"] as const;
 type Operation = (typeof OPERATIONS)[number];
@@ -16,6 +17,8 @@ export async function POST(request: Request) {
     if (!["SUPER", "ROOT"].includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
+    const adminId = (session.user as any).id as string;
+    const adminUsername = (session.user as any).username as string | undefined;
 
     let body: { userId?: unknown; amount?: unknown; operation?: unknown };
     try {
@@ -38,34 +41,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Неизвестная операция" }, { status: 400 });
     }
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId } });
-    const current = wallet?.balance ?? 0;
+    const { newBalance, delta } = await prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      const current = wallet ? wallet.balance.toNumber() : 0;
 
-    let newBalance: number;
-    let delta: number;
-
-    if (operation === "add") {
-      delta = amount;
-      newBalance = current + amount;
-    } else if (operation === "subtract") {
-      if (amount > current) {
-        return NextResponse.json(
-          { error: `Нельзя списать больше текущего баланса (${current})` },
-          { status: 400 },
-        );
+      if (operation === "add") {
+        await tx.wallet.upsert({
+          where: { userId },
+          update: { balance: { increment: amount } },
+          create: { userId, balance: amount },
+        });
+        await roundWalletBalance(tx, userId);
+        return { newBalance: Math.round((current + amount) * 100) / 100, delta: amount };
       }
-      delta = -amount;
-      newBalance = current - amount;
-    } else {
-      // set — устанавливаем точное значение
-      delta = amount - current;
-      newBalance = amount;
-    }
 
-    const updated = await prisma.wallet.upsert({
-      where: { userId },
-      update: { balance: newBalance },
-      create: { userId, balance: newBalance },
+      if (operation === "subtract") {
+        if (amount > current) {
+          throw new Error(`Нельзя списать больше текущего баланса (${current})`);
+        }
+        const res = await tx.wallet.updateMany({
+          where: { userId, balance: { gte: amount } },
+          data: { balance: { decrement: amount } },
+        });
+        if (res.count === 0) {
+          throw new Error(`Нельзя списать больше текущего баланса (${current})`);
+        }
+        await roundWalletBalance(tx, userId);
+        return { newBalance: Math.round((current - amount) * 100) / 100, delta: -amount };
+      }
+
+      // set — устанавливаем точное значение через дельту
+      const delta = amount - current;
+      if (delta > 0) {
+        await tx.wallet.upsert({
+          where: { userId },
+          update: { balance: { increment: delta } },
+          create: { userId, balance: amount },
+        });
+      } else if (delta < 0) {
+        const res = await tx.wallet.updateMany({
+          where: { userId, balance: { gte: -delta } },
+          data: { balance: { decrement: -delta } },
+        });
+        if (res.count === 0) {
+          throw new Error(`Нельзя установить баланс ниже текущего (${current})`);
+        }
+      }
+
+      await roundWalletBalance(tx, userId);
+      return { newBalance: Math.round(amount * 100) / 100, delta };
     });
 
     const description =
@@ -82,11 +106,15 @@ export async function POST(request: Request) {
         amount: delta,
         balanceAfter: newBalance,
         description,
+        metadata: JSON.stringify({ adminId, adminUsername: adminUsername ?? null }),
       },
     });
 
     return NextResponse.json({ success: true, balance: newBalance });
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Нельзя")) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     return NextResponse.json({ error: "Не удалось изменить баланс" }, { status: 500 });
   }
 }

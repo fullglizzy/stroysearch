@@ -28,8 +28,32 @@ export async function POST(request: Request) {
     }
 
     const billing = await prisma.billingConfig.findUnique({ where: { id: "default" } });
-    const coinPrice = billing?.coinPriceRub ?? 100;
+    const coinPrice = billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100;
     const total = Math.round(amount * coinPrice * 100) / 100;
+
+    // Контроль месячного лимита: учитываем все неотменённые счета текущего месяца
+    const monthLimit = billing?.maxMonthlyLimit ? billing.maxMonthlyLimit.toNumber() : 1000;
+    if (monthLimit > 0) {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const monthlyAgg = await prisma.invoice.aggregate({
+        where: {
+          userId,
+          date: { gte: monthStart },
+          status: { not: "CANCELLED" },
+        },
+        _sum: { total: true },
+      });
+      const already = monthlyAgg._sum.total ? monthlyAgg._sum.total.toNumber() : 0;
+      if (already + total > monthLimit) {
+        return NextResponse.json(
+          { error: `Превышен месячный лимит покупок (${monthLimit} ₽). Доступно: ${Math.max(0, monthLimit - already)} ₽` },
+          { status: 400 },
+        );
+      }
+    }
 
     const number = `INV-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
@@ -51,7 +75,7 @@ export async function POST(request: Request) {
           date: new Date(),
           dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
           subtotal: total,
-          limit: billing?.maxMonthlyLimit ?? 1000,
+          limit: monthLimit,
           total,
           ticketId: ticket.id,
           items: {

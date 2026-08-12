@@ -86,7 +86,7 @@ export function ProductCard({
                 className="shrink-0 w-16 h-16 rounded-md border overflow-hidden bg-secondary cursor-pointer hover:opacity-80 transition-opacity"
                 title="Открыть фото"
               >
-                <img src={data.imageUrl} alt={data.name} className="h-full w-full object-cover" />
+                <img src={data.imageUrl} alt={data.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
               </button>
             )}
             <div className="min-w-0 flex-1">

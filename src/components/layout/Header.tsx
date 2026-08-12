@@ -66,7 +66,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="container-page flex h-16 items-center justify-between">
+      {/* Хедер шире контента страниц, чтобы ссылки помещались в одну строку */}
+      <div className="mx-auto w-full max-w-[1900px] px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
         {/* Logo */}
         <Link href="/" aria-label="ЕЦПР — на главную" className="flex items-center gap-1 flex-shrink-0">
           <img
@@ -74,7 +75,7 @@ export function Header() {
             alt="ЕЦПР"
             // Справа в холсте SVG ~33% пустоты (425px из 1280): при h-16 это ~27px —
             // убираем их отрицательным отступом, чтобы текст был вплотную к рисунку
-            className="h-20 w-auto translate-y-[9.7%] -mr-[27px]"
+            className="h-24 w-auto translate-y-[9.7%] -mr-[40px]"
           />
           <span className="font-bold text-lg">
                 <span className="text-menthol">Е</span>
@@ -82,15 +83,15 @@ export function Header() {
               </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+        {/* Desktop Nav — одна строка; при нехватке места прокручивается, не переносится */}
+        <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navLinks.map((link) => {
             const isActive = pathname.startsWith(link.href);
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2.5 xl:px-3 py-2 text-sm font-medium whitespace-nowrap rounded-md transition-colors ${
                   isActive
                     ? "text-menthol bg-menthol/10"
                     : "text-foreground/80 hover:text-foreground hover:bg-secondary"

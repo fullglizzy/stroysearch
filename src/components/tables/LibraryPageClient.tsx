@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { GuestGuard } from "@/components/shared/GuestGuard";
+import { Pagination } from "@/components/shared/Pagination";
 import { Search, FileText, Download, Upload, Coins, CheckCircle, AlertCircle } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { PageBanner } from "@/components/shared/PageBanner";
@@ -42,21 +43,36 @@ interface TreeItem {
 
 interface Props {
   documents: DocRow[];
+  total: number;
+  page: number;
+  totalPages: number;
   treeItems: TreeItem[];
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
-  purchasedDocIds: string[];
+  initialQuery: { q: string; classifier: string };
 }
 
-export function LibraryPageClient({ documents, treeItems, moderatorText, pageTitle, bannerUrl, purchasedDocIds }: Props) {
+export function LibraryPageClient({ documents, total, page, totalPages, treeItems, moderatorText, pageTitle, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState("");
-  const initialClassifiers = searchParams.get("classifier")?.split(",").filter(Boolean) || [];
-  const [classifiers, setClassifiers] = useState<string[]>(initialClassifiers);
+
+  // Купленные документы догружаем клиентом, чтобы страница могла кэшироваться
+  const [purchasedDocIds, setPurchasedDocIds] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/library/purchased")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setPurchasedDocIds(d.ids || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [session?.user]);
+
+  const [search, setSearch] = useState(initialQuery.q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const classifiers = initialQuery.classifier.split(",").filter(Boolean);
+
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadCategory, setUploadCategory] = useState("");
   const [uploadError, setUploadError] = useState("");
@@ -66,11 +82,24 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, pageTit
   const [buyTarget, setBuyTarget] = useState<{ id: string; title: string; price: number } | null>(null);
   const [buyError, setBuyError] = useState("");
 
-  const filtered = documents.filter((d) => {
-    if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (classifiers.length > 0 && (!d.treeItemPath || !classifiers.includes(d.treeItemPath))) return false;
-    return true;
-  });
+  // Поиск/фильтры/пагинация живут в URL, данные отдаёт сервер
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/library?${qs}` : "/library", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value, page: null });
+    }, 300);
+  }
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -225,12 +254,12 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, pageTit
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Поиск по названию..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Поиск по названию..." value={search} onChange={(e) => handleSearchChange(e.target.value)} className="pl-9" />
             </div>
             <MultiSelect
               options={treeItems.map((t) => ({ value: t.fullNumberPath, label: `${t.fullNumberPath} — ${t.name}` }))}
               value={classifiers}
-              onChange={setClassifiers}
+              onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
               placeholder="Все категории"
               searchPlaceholder="Поиск категории..."
             />
@@ -238,14 +267,14 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, pageTit
         </CardContent>
       </Card>
 
-      {filtered.length === 0 ? (
+      {documents.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Документы не найдены</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((doc) => (
+          {documents.map((doc) => (
             <Card key={doc.id} className="hover:shadow-sm transition-shadow">
               <CardContent className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -285,6 +314,13 @@ export function LibraryPageClient({ documents, treeItems, moderatorText, pageTit
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Всего: {total} документов</span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>
       )}
 

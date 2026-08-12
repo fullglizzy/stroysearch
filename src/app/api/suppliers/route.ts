@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addCompanySchema } from "@/lib/validators";
 import { auth } from "@/lib/auth";
+import { roundWalletBalance } from "@/lib/money";
 
 export async function GET() {
   const companies = await prisma.company.findMany({
@@ -58,41 +59,47 @@ export async function POST(request: Request) {
       normalizedWebsite = `https://${normalizedWebsite}`;
     }
 
-    const company = await prisma.company.create({
-      data: {
-        inn,
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        website: normalizedWebsite,
-        region,
-        classifierIds: classifierIds.join(","),
-        addedById: userId,
-        metrics: { create: {} },
-      },
-    });
+    const company = await prisma.$transaction(async (tx) => {
+      const created = await tx.company.create({
+        data: {
+          inn,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          website: normalizedWebsite,
+          region,
+          classifierIds: classifierIds.join(","),
+          addedById: userId,
+          metrics: { create: {} },
+        },
+      });
 
-    // Award coins
-    const billingConfig = await prisma.billingConfig.findUnique({
-      where: { id: "default" },
-    });
-    const coinReward = billingConfig?.addCompanyCoins ?? 1;
+      // Награда за добавление — в той же транзакции, что и создание
+      const billingConfig = await tx.billingConfig.findUnique({
+        where: { id: "default" },
+      });
+      const coinReward = billingConfig?.addCompanyCoins ? billingConfig.addCompanyCoins.toNumber() : 1;
 
-    await prisma.wallet.update({
-      where: { userId },
-      data: { balance: { increment: coinReward } },
-    });
+      if (coinReward > 0) {
+        const wallet = await tx.wallet.upsert({
+          where: { userId },
+          update: { balance: { increment: coinReward } },
+          create: { userId, balance: coinReward },
+        });
+        await roundWalletBalance(tx, userId);
+        await tx.transaction.create({
+          data: {
+            userId,
+            type: "ADD_COMPANY",
+            amount: coinReward,
+            balanceAfter: wallet.balance.toDecimalPlaces(2),
+            description: `Добавление компании ${inn}`,
+            metadata: JSON.stringify({ companyId: created.id }),
+          },
+        });
+      }
 
-    await prisma.transaction.create({
-      data: {
-        userId,
-        type: "ADD_COMPANY",
-        amount: coinReward,
-        balanceAfter: (
-          await prisma.wallet.findUnique({ where: { userId } })
-        )!.balance,
-        description: `Добавление компании ${inn}`,
-      },
+      return created;
     });
 
     return NextResponse.json({ success: true, id: company.id });
