@@ -15,6 +15,7 @@ import {
   Settings,
   ArrowRight,
   Coins,
+  LifeBuoy,
 } from "lucide-react";
 
 interface AccountDashboardProps {
@@ -37,9 +38,10 @@ interface AccountDashboardProps {
       conferences: number;
     };
   };
+  supportUnread: number;
 }
 
-export function AccountDashboard({ user }: AccountDashboardProps) {
+export function AccountDashboard({ user, supportUnread }: AccountDashboardProps) {
   const displayName =
     user.profile?.firstName && user.profile?.lastName
       ? `${user.profile.lastName} ${user.profile.firstName}`
@@ -117,13 +119,6 @@ export function AccountDashboard({ user }: AccountDashboardProps) {
             color: "text-orange-accent",
           },
           {
-            href: "/account/conferences",
-            icon: Calendar,
-            title: "Мои конференции",
-            desc: "Создание, участие и организация конференций",
-            color: "text-menthol",
-          },
-          {
             href: "/account/library",
             icon: FileText,
             title: "Моя библиотека",
@@ -137,12 +132,27 @@ export function AccountDashboard({ user }: AccountDashboardProps) {
             desc: "Голосование и просмотр результатов",
             color: "text-menthol",
           },
+          {
+            href: "/account/support",
+            icon: LifeBuoy,
+            title: "Поддержка",
+            desc: "Обращения и переписка со службой поддержки",
+            color: "text-menthol",
+            badge: supportUnread,
+          },
         ].map((item) => (
           <Link key={item.href} href={item.href}>
             <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
               <CardContent>
                 <item.icon className={`h-8 w-8 ${item.color} mb-3`} />
-                <h3 className="font-semibold mb-1">{item.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold mb-1">{item.title}</h3>
+                  {item.badge ? (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-orange-accent text-white text-xs font-medium mb-1">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="text-sm text-muted-foreground">{item.desc}</p>
                 <ArrowRight className="h-4 w-4 text-muted-foreground mt-3" />
               </CardContent>

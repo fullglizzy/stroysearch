@@ -15,16 +15,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { SearchSelect } from "@/components/shared/SearchSelect";
 import {
   ChevronRight,
   ChevronDown,
@@ -408,6 +402,7 @@ function EditNodeDialog({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [parentId, setParentId] = useState(node.parentId || "__root__");
 
   // Список возможных родителей (исключая самого себя и потомков)
   const parentOptions = useMemo(() => {
@@ -494,19 +489,17 @@ function EditNodeDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-parent">Родительский раздел</Label>
-            <Select name="parentId" defaultValue={node.parentId || "__root__"}>
-              <SelectTrigger>
-                <SelectValue placeholder="Корень (без родителя)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__root__">🏠 Корень (без родителя)</SelectItem>
-                {parentOptions.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.fullNumberPath} — {item.name.slice(0, 50)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchSelect
+              name="parentId"
+              options={[
+                { value: "__root__", label: "🏠 Корень (без родителя)" },
+                ...parentOptions.map((item) => ({ value: item.id, label: `${item.fullNumberPath} — ${item.name}` })),
+              ]}
+              value={parentId}
+              onChange={setParentId}
+              placeholder="Корень (без родителя)"
+              searchPlaceholder="Поиск раздела..."
+            />
           </div>
           <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>
             {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Сохранение...</> : "Сохранить изменения"}

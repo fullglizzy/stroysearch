@@ -13,7 +13,7 @@ export default async function AdminLibraryPage() {
     where: { deletedAt: null },
     include: {
       user: { select: { username: true, profile: { select: { nick: true } } } },
-      treeItem: { select: { fullNumberPath: true } },
+      treeItem: { select: { fullNumberPath: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });

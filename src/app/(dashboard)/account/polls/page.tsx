@@ -39,13 +39,27 @@ export default async function AccountPollsPage() {
     })),
   }));
 
+  // Опросы, на которые пользователь уже проголосовал
+  const votes = await prisma.pollVote.findMany({
+    where: { userId },
+    select: { pollId: true },
+    distinct: ["pollId"],
+  });
+  const votedPollIds = votes.map((v) => v.pollId);
+
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Статистика и опросы</h1>
       <p className="text-muted-foreground mb-6">
         Голосуйте в опросах и получайте монеты за каждый ответ
       </p>
-      <PollsPageClient polls={pollRows} moderatorText={null} bannerUrl={null} />
+      <PollsPageClient
+        polls={pollRows}
+        moderatorText={null}
+        pageTitle={null}
+        bannerUrl={null}
+        votedPollIds={votedPollIds}
+      />
     </div>
   );
 }

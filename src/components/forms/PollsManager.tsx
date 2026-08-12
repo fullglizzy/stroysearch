@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Input } from "@/components/ui/input";
@@ -11,10 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { SearchSelect } from "@/components/shared/SearchSelect";
+import { FieldError } from "@/components/forms/fields";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Vote, Loader2, BarChart3 } from "lucide-react";
+import { Plus, Trash2, Vote, Loader2, BarChart3, X } from "lucide-react";
 
 interface PollData {
   id: string;
@@ -36,6 +41,44 @@ interface TreeItem {
 
 interface Props { polls: PollData[]; treeItems: TreeItem[]; }
 
+// Сообщения совпадают с серверной схемой pollSchema
+const pollFormSchema = z.object({
+  question: z.string().trim().min(1, "Вопрос обязателен"),
+  pollType: z.enum(["DICHOTOMOUS", "MULTIPLE"]),
+  treeItemId: z
+    .string()
+    .uuid("Некорректная категория")
+    .optional()
+    .or(z.literal("")),
+  coinReward: z
+    .string()
+    .trim()
+    .regex(/^\d+([.,]\d{1,2})?$/, "Некорректная награда")
+    .optional()
+    .or(z.literal("")),
+  options: z
+    .array(
+      z.object({
+        text: z
+          .string()
+          .trim()
+          .min(1, "Введите вариант ответа")
+          .max(255, "Вариант должен быть не более 255 символов"),
+      }),
+    )
+    .min(2, "Минимум 2 варианта ответа"),
+});
+
+type PollFormValues = z.infer<typeof pollFormSchema>;
+
+const POLL_FORM_DEFAULTS: PollFormValues = {
+  question: "",
+  pollType: "DICHOTOMOUS",
+  treeItemId: "",
+  coinReward: "0.1",
+  options: [{ text: "" }, { text: "" }],
+};
+
 export function PollsManager({ polls, treeItems }: Props) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
@@ -44,28 +87,52 @@ export function PollsManager({ polls, treeItems }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<PollFormValues>({
+    resolver: zodResolver(pollFormSchema),
+    // Валидируем после первого «касания» поля, а не сразу при наборе
+    mode: "onTouched",
+    defaultValues: POLL_FORM_DEFAULTS,
+  });
+
+  const {
+    fields: optionFields,
+    append,
+    remove,
+  } = useFieldArray({ control, name: "options" });
+
+  async function handleCreate(data: PollFormValues) {
     setLoading(true);
     setError("");
-    const fd = new FormData(e.currentTarget);
-    const options = [fd.get("opt1"), fd.get("opt2"), fd.get("opt3"), fd.get("opt4")].filter(Boolean);
 
     try {
       const res = await fetch("/api/polls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: fd.get("question"),
-          treeItemId: fd.get("treeItemId") || null,
-          pollType: fd.get("pollType") || "DICHOTOMOUS",
-          coinReward: parseFloat(fd.get("coinReward") as string) || 0.1,
-          options: options.map((text, i) => ({ text, sortOrder: i })),
+          question: data.question,
+          treeItemId: data.treeItemId || null,
+          pollType: data.pollType,
+          coinReward: data.coinReward ? parseFloat(data.coinReward.replace(",", ".")) : 0.1,
+          options: data.options.map((o, i) => ({ text: o.text, sortOrder: i })),
         }),
       });
-      if (res.ok) { setAddOpen(false); router.refresh(); }
-      else { const d = await res.json(); setError(d.error || "Ошибка"); }
-    } catch { setError("Ошибка соединения"); }
+      if (res.ok) {
+        setAddOpen(false);
+        reset(POLL_FORM_DEFAULTS);
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error || "Ошибка");
+      }
+    } catch {
+      setError("Ошибка соединения");
+    }
     setLoading(false);
   }
 
@@ -78,26 +145,137 @@ export function PollsManager({ polls, treeItems }: Props) {
     router.refresh();
   }
 
+  const optionsError = (errors.options as { message?: string } | undefined)?.message;
+
   return (
     <div className="space-y-6">
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog open={addOpen} onOpenChange={(v) => { setAddOpen(v); if (!v) reset(POLL_FORM_DEFAULTS); }}>
         <DialogTrigger>
           <Button className="bg-menthol hover:bg-menthol-dark gap-2"><Plus className="h-4 w-4" /> Создать опрос</Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Новый опрос</DialogTitle></DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <div className="space-y-2"><Label>Вопрос</Label><Input name="question" required /></div>
+          <form onSubmit={handleSubmit(handleCreate)} className="space-y-4" noValidate>
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-2.5">
+                <FieldError message={error} />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="question">Вопрос</Label>
+              <Input
+                id="question"
+                maxLength={255}
+                aria-invalid={!!errors.question}
+                aria-describedby={errors.question ? "question-error" : undefined}
+                {...register("question")}
+              />
+              {errors.question && <FieldError id="question-error" message={errors.question.message} />}
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2"><Label>Тип</Label><Select name="pollType" defaultValue="DICHOTOMOUS"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DICHOTOMOUS">Да/Нет</SelectItem><SelectItem value="MULTIPLE">Несколько</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label>Монет</Label><Input name="coinReward" type="number" min="0" step="0.1" defaultValue="0.1" /></div>
-              <div className="space-y-2"><Label>Категория</Label><Select name="treeItemId"><SelectTrigger><SelectValue placeholder="—" /></SelectTrigger><SelectContent><SelectItem value="">Без категории</SelectItem>{treeItems.slice(0,30).map(t => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2">
+                <Label>Тип</Label>
+                <Controller
+                  name="pollType"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      items={{ DICHOTOMOUS: "Да/Нет", MULTIPLE: "Несколько" }}
+                      onValueChange={(v) => field.onChange((v as PollFormValues["pollType"]) ?? "DICHOTOMOUS")}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DICHOTOMOUS" label="Да/Нет">Да/Нет</SelectItem>
+                        <SelectItem value="MULTIPLE" label="Несколько">Несколько</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="coinReward">Монет</Label>
+                <Input
+                  id="coinReward"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  aria-invalid={!!errors.coinReward}
+                  aria-describedby={errors.coinReward ? "coinReward-error" : undefined}
+                  {...register("coinReward")}
+                />
+                {errors.coinReward && (
+                  <FieldError id="coinReward-error" message={errors.coinReward.message} />
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Категория</Label>
+                <Controller
+                  name="treeItemId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchSelect
+                      options={[
+                        { value: "", label: "Без категории" },
+                        ...treeItems.map(t => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` })),
+                      ]}
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      placeholder="—"
+                      searchPlaceholder="Поиск категории..."
+                    />
+                  )}
+                />
+              </div>
             </div>
-            <div className="space-y-2"><Label>Варианты ответа</Label>
-              {[1,2,3,4].map(i => <Input key={i} name={`opt${i}`} placeholder={`Вариант ${i}`} className="mb-1" />)}
+
+            <div className="space-y-2">
+              <Label>Варианты ответа</Label>
+              {optionFields.map((field, i) => (
+                <div key={field.id} className="flex gap-2 mb-1">
+                  <Input
+                    placeholder={`Вариант ${i + 1}`}
+                    maxLength={255}
+                    aria-invalid={!!errors.options?.[i]?.text}
+                    {...register(`options.${i}.text` as const)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-red-500"
+                    onClick={() => remove(i)}
+                    disabled={optionFields.length <= 2}
+                    aria-label={`Удалить вариант ${i + 1}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  {errors.options?.[i]?.text && (
+                    <div className="col-span-2 -mt-1">
+                      <FieldError message={errors.options[i].text.message} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={() => append({ text: "" })}
+                disabled={optionFields.length >= 10}
+              >
+                <Plus className="h-3 w-3" />
+                Добавить вариант
+              </Button>
+              {optionsError && <FieldError id="options-error" message={optionsError} />}
             </div>
-            <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>{loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Создание...</> : "Создать"}</Button>
+
+            <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Создание...</> : "Создать"}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>

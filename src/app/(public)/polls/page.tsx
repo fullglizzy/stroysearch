@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { getPageContent } from "@/server/admin/content";
 import { PollsPageClient } from "@/components/tables/PollsPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function PollsPage() {
+  const session = await auth();
   const pageContent = await getPageContent("polls");
 
   const polls = await prisma.poll.findMany({
@@ -19,6 +21,18 @@ export default async function PollsPage() {
     },
     orderBy: { createdAt: "desc" },
   });
+
+  // Опросы, на которые пользователь уже проголосовал
+  let votedPollIds: string[] = [];
+  if (session?.user) {
+    const userId = (session.user as any).id as string;
+    const votes = await prisma.pollVote.findMany({
+      where: { userId },
+      select: { pollId: true },
+      distinct: ["pollId"],
+    });
+    votedPollIds = votes.map((v) => v.pollId);
+  }
 
   const rows = polls.map((p) => ({
     id: p.id,
@@ -40,7 +54,9 @@ export default async function PollsPage() {
     <PollsPageClient
       polls={rows}
       moderatorText={pageContent?.content || null}
+      pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
+      votedPollIds={votedPollIds}
     />
   );
 }

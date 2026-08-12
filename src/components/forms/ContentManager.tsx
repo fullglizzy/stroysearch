@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,13 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Upload } from "lucide-react";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 
 interface ContentManagerProps {
   pages: {
     id: string;
     pageKey: string;
+    title: string;
     content: string;
     bannerUrl: string | null;
   }[];
@@ -36,6 +37,9 @@ const pageLabels: Record<string, string> = {
 export function ContentManager({ pages }: ContentManagerProps) {
   const router = useRouter();
   const [activePage, setActivePage] = useState(pages[0]?.pageKey || "home");
+  const [title, setTitle] = useState(
+    pages.find((p) => p.pageKey === activePage)?.title || "",
+  );
   const [content, setContent] = useState(
     pages.find((p) => p.pageKey === activePage)?.content || "",
   );
@@ -44,9 +48,35 @@ export function ContentManager({ pages }: ContentManagerProps) {
   );
   const [loading, setLoading] = useState(false);
   const [contentError, setContentError] = useState("");
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleBannerUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toastWarning("Проверьте файл", "Баннер должен быть изображением (PNG, JPEG, WEBP, GIF)");
+      return;
+    }
+    setBannerUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setBannerUrl(data.fileUrl);
+        toastSuccess("Файл загружен", "Не забудьте сохранить страницу");
+      } else {
+        toastError("Ошибка загрузки", data.error || "Не удалось загрузить файл");
+      }
+    } catch {
+      toastError("Ошибка соединения");
+    }
+    setBannerUploading(false);
+  }
 
   function switchPage(key: string) {
     setActivePage(key);
+    setTitle(pages.find((p) => p.pageKey === key)?.title || "");
     setContent(pages.find((p) => p.pageKey === key)?.content || "");
     setBannerUrl(pages.find((p) => p.pageKey === key)?.bannerUrl || "");
     setContentError("");
@@ -68,6 +98,7 @@ export function ContentManager({ pages }: ContentManagerProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pageKey: activePage,
+          title,
           content,
           bannerUrl: bannerUrl || null,
         }),
@@ -104,6 +135,15 @@ export function ContentManager({ pages }: ContentManagerProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="title">Заголовок инфоблока</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Например: Важная информация"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="content">
               Текст страницы (HTML)
               {contentError && (
@@ -122,13 +162,52 @@ export function ContentManager({ pages }: ContentManagerProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="bannerUrl">URL баннера</Label>
+            <Label htmlFor="bannerUrl">Баннер страницы</Label>
             <Input
               id="bannerUrl"
               value={bannerUrl}
               onChange={(e) => setBannerUrl(e.target.value)}
-              placeholder="https://..."
+              placeholder="https://... или загрузите файл"
             />
+            <div className="flex items-center gap-2">
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleBannerUpload(file);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => bannerInputRef.current?.click()}
+                disabled={bannerUploading}
+              >
+                {bannerUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Загрузить файл
+              </Button>
+              {bannerUrl && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setBannerUrl("")}>
+                  Убрать
+                </Button>
+              )}
+            </div>
+            {bannerUrl && (
+              <img
+                src={bannerUrl}
+                alt="Превью баннера"
+                className="w-full max-h-32 object-cover rounded-lg border"
+              />
+            )}
           </div>
           <Button
             onClick={handleSave}

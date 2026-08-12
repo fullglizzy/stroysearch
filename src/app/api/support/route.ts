@@ -1,12 +1,63 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { supportTicketSchema } from "@/lib/validators";
 
+const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
+
+export async function GET(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
+    }
+
+    const userType = (session.user as any).type as string;
+    const isAdmin = ADMIN_TYPES.includes(userType);
+    const { searchParams } = new URL(request.url);
+    const all = searchParams.get("all") === "1";
+
+    if (all && !isAdmin) {
+      return NextResponse.json({ error: "Нет прав" }, { status: 403 });
+    }
+
+    const userId = (session.user as any).id as string;
+    const tickets = await prisma.supportTicket.findMany({
+      where: all ? {} : { userId },
+      include: {
+        messages: { select: { id: true, createdAt: true } },
+      },
+      orderBy: [{ isResolved: "asc" }, { updatedAt: "desc" }],
+    });
+
+    return NextResponse.json({
+      tickets: tickets.map((t) => ({
+        id: t.id,
+        subject: t.subject,
+        email: t.email,
+        isResolved: t.isResolved,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        replyCount: t.messages.length,
+      })),
+    });
+  } catch {
+    return NextResponse.json({ error: "Не удалось загрузить обращения" }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const parsed = supportTicketSchema.safeParse(body);
+    const session = await auth();
 
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Некорректный формат запроса" }, { status: 400 });
+    }
+
+    const parsed = supportTicketSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0].message },
@@ -14,20 +65,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Email берём из аккаунта (если авторизован); у гостей — пустая строка
     const ticket = await prisma.supportTicket.create({
       data: {
-        email: parsed.data.email,
+        email: session?.user?.email || "",
         subject: parsed.data.subject,
         message: parsed.data.message,
+        userId: session?.user ? (session.user as any).id : null,
       },
     });
 
     return NextResponse.json({ success: true, id: ticket.id });
-  } catch (error) {
-    console.error("Support ticket error:", error);
-    return NextResponse.json(
-      { error: "Внутренняя ошибка сервера" },
-      { status: 500 },
-    );
+  } catch {
+    return NextResponse.json({ error: "Не удалось отправить обращение" }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { getPageContent } from "@/server/admin/content";
+import { getRegions } from "@/server/admin/regions";
 import { MatrixPageClient } from "@/components/tables/MatrixPageClient";
 import { computeRating } from "@/lib/rating";
 
@@ -8,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 export default async function MatrixPage() {
   const pageContent = await getPageContent("matrix");
+
+  const regions = await getRegions();
 
   const treeItems = await prisma.productTreeItem.findMany({
     where: { deletedAt: null },
@@ -58,7 +61,9 @@ export default async function MatrixPage() {
       <MatrixPageClient
         products={rows}
         treeItems={treeItems}
+        regions={regions.map((r) => r.name)}
         moderatorText={pageContent?.content || null}
+        pageTitle={pageContent?.title || null}
         bannerUrl={pageContent?.bannerUrl || null}
       />
     </Suspense>

@@ -3,6 +3,8 @@ import { comparePath } from "@/lib/utils";
 import { ProductTree } from "@/components/tree/ProductTree";
 import { getPageContent } from "@/server/admin/content";
 import { ProductsPageClient } from "@/components/cards/ProductsPageClient";
+import { PageBanner } from "@/components/shared/PageBanner";
+import { AlertCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -46,24 +48,27 @@ export default async function ProductsPage() {
 
   return (
     <div className="container-page py-8">
-      <h1 className="text-3xl font-bold mb-2">Продуктовые решения</h1>
+      <h1 className="text-3xl font-bold">Продуктовые решения</h1>
+      <p className="text-muted-foreground mt-1 mb-6">
+        Иерархический классификатор строительных материалов и услуг
+      </p>
 
-      {/* Баннер №2 (ТЗ §5.1) */}
-      {pageContent?.bannerUrl && (
-        <div className="mb-6 rounded-lg overflow-hidden">
-          <img
-            src={pageContent.bannerUrl}
-            alt="Баннер продуктовых решений"
-            className="w-full h-auto max-h-48 object-cover"
-          />
+      {/* Info banner */}
+      {(pageContent?.title || pageContent?.content) && (
+        <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            {pageContent?.title && <p className="font-medium text-menthol">{pageContent.title}</p>}
+            {pageContent?.content && (
+              <div className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: pageContent.content }} />
+            )}
+          </div>
         </div>
       )}
 
-      {pageContent?.content && (
-        <div
-          className="prose prose-gray max-w-none text-muted-foreground mb-6"
-          dangerouslySetInnerHTML={{ __html: pageContent.content }}
-        />
+      {/* Баннер */}
+      {pageContent?.bannerUrl && (
+        <PageBanner url={pageContent.bannerUrl} alt="Баннер продуктовых решений" />
       )}
       <ProductsPageClient items={items} />
     </div>

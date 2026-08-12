@@ -20,7 +20,7 @@ interface DocRow {
   views: number;
   purchasesCount: number;
   user: { username: string; profile: { nick: string } | null };
-  treeItem: { fullNumberPath: string } | null;
+  treeItem: { fullNumberPath: string; name: string } | null;
 }
 
 interface Props { documents: DocRow[]; }
@@ -79,7 +79,7 @@ export function LibraryModeration({ documents }: Props) {
                   <FileText className="h-3 w-3 inline mr-1 text-menthol" />{d.title}
                 </TableCell>
                 <TableCell className="text-sm">{d.user.profile?.nick || d.user.username}</TableCell>
-                <TableCell className="font-mono text-xs">{d.treeItem?.fullNumberPath || "—"}</TableCell>
+                <TableCell className="text-xs">{d.treeItem ? `${d.treeItem.fullNumberPath} — ${d.treeItem.name}` : "—"}</TableCell>
                 <TableCell>{d.coinPrice} мон.</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className={d.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { pageKey, content, bannerUrl } = body;
+  const { pageKey, title, content, bannerUrl } = body;
 
   if (!pageKey) {
     return NextResponse.json({ error: "pageKey обязателен" }, { status: 400 });
@@ -22,8 +22,8 @@ export async function POST(request: Request) {
 
   const page = await prisma.pageContent.upsert({
     where: { pageKey },
-    update: { content, bannerUrl },
-    create: { pageKey, content, bannerUrl },
+    update: { title, content, bannerUrl },
+    create: { pageKey, title, content, bannerUrl },
   });
 
   return NextResponse.json({ success: true, page });

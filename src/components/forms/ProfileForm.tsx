@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -13,14 +13,53 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Save } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
+import { profileSchema } from "@/lib/validators";
+import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
+import { SearchSelect, type SearchSelectOption } from "@/components/shared/SearchSelect";
+import { MultiSelect, type MultiSelectOption } from "@/components/shared/MultiSelect";
+import { matchClassifier } from "@/lib/classifier";
 
+const ROLE_VALUES = ["PRODUCTOLOGIST", "TENDER_SPECIALIST", "DESIGNER", "COMPANY_OWNER", "OTHER"] as const;
+type Role = (typeof ROLE_VALUES)[number];
+
+const ROLE_OPTIONS: { value: Role; label: string }[] = [
+  { value: "PRODUCTOLOGIST", label: "Продуктолог" },
+  { value: "TENDER_SPECIALIST", label: "Тендерный специалист" },
+  { value: "DESIGNER", label: "Проектировщик" },
+  { value: "COMPANY_OWNER", label: "Владелец компании" },
+  { value: "OTHER", label: "Иное" },
+];
+
+// Правила телефона берём из общей схемы, чтобы сообщения совпадали с сервером
 const profileFormSchema = z.object({
-  lastName: z.string().max(255).optional(),
-  firstName: z.string().max(255).optional(),
-  middleName: z.string().max(255).optional(),
-  phone: z.string().max(63).optional(),
-  region: z.string().max(255).optional(),
-  classifierIds: z.string().optional(),
+  firstName: z
+    .string()
+    .trim()
+    .max(127, "Имя должно быть не более 127 символов")
+    .optional()
+    .or(z.literal("")),
+  lastName: z
+    .string()
+    .trim()
+    .max(127, "Фамилия должна быть не более 127 символов")
+    .optional()
+    .or(z.literal("")),
+  middleName: z
+    .string()
+    .trim()
+    .max(127, "Отчество должно быть не более 127 символов")
+    .optional()
+    .or(z.literal("")),
+  phone: profileSchema.shape.phone,
+  region: z
+    .string()
+    .trim()
+    .max(255, "Регион должен быть не более 255 символов")
+    .optional()
+    .or(z.literal("")),
+  classifierIds: z.array(z.string().uuid("Некорректный классификатор")),
+  roles: z.array(z.enum(ROLE_VALUES)),
+  isContactsHidden: z.boolean(),
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
@@ -39,43 +78,44 @@ interface ProfileFormProps {
   };
   username: string;
   nick: string | null;
+  regionOptions: SearchSelectOption[];
+  classifierOptions: MultiSelectOption[];
 }
 
-const ROLE_OPTIONS = [
-  { value: "PRODUCTOLOGIST", label: "Продуктолог" },
-  { value: "TENDER_SPECIALIST", label: "Тендерный специалист" },
-  { value: "DESIGNER", label: "Проектировщик" },
-  { value: "COMPANY_OWNER", label: "Владелец компании" },
-  { value: "OTHER", label: "Иное" },
-];
-
-export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
+export function ProfileForm({
+  initialData,
+  username,
+  nick,
+  regionOptions,
+  classifierOptions,
+}: ProfileFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [isContactsHidden, setIsContactsHidden] = useState(initialData.isContactsHidden);
 
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileFormSchema),
+    // Валидируем после первого «касания» поля, а не сразу при наборе
+    mode: "onTouched",
     defaultValues: {
-      lastName: initialData.lastName,
       firstName: initialData.firstName,
+      lastName: initialData.lastName,
       middleName: initialData.middleName,
       phone: initialData.phone,
       region: initialData.region,
-      classifierIds: initialData.classifierIds.join(", "),
+      classifierIds: initialData.classifierIds,
+      roles: initialData.roles.filter((r): r is Role => ROLE_VALUES.includes(r as Role)),
+      isContactsHidden: initialData.isContactsHidden,
     },
   });
 
   async function onSubmit(data: ProfileFormData) {
     setLoading(true);
-
-    const selectedRoles = ROLE_OPTIONS.filter(
-      (r) => (document.getElementById(`role_${r.value}`) as HTMLInputElement)?.checked,
-    ).map((r) => r.value);
 
     try {
       const res = await fetch("/api/users/me", {
@@ -87,11 +127,9 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
           middleName: data.middleName || undefined,
           phone: data.phone || undefined,
           region: data.region || undefined,
-          isContactsHidden,
-          roles: selectedRoles,
-          classifierIds: data.classifierIds
-            ? data.classifierIds.split(",").map((s) => s.trim()).filter(Boolean)
-            : [],
+          isContactsHidden: data.isContactsHidden,
+          roles: data.roles,
+          classifierIds: data.classifierIds,
         }),
       });
 
@@ -109,15 +147,15 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
       <Card>
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Логин (нельзя изменить)</Label>
             <Input value={username} disabled />
           </div>
           <div className="space-y-2">
-            <Label>Ник (нельзя изменить после регистрации — ТЗ §11.8)</Label>
+            <Label>Ник (нельзя изменить после регистрации)</Label>
             <Input value={nick || "—"} disabled />
           </div>
           <div className="space-y-2">
@@ -128,23 +166,77 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
       </Card>
 
       <Card>
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-4">
           <h3 className="font-semibold">Личная информация</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="lastName">Фамилия</Label>
-              <Input id="lastName" {...register("lastName")} />
+              <Input
+                id="lastName"
+                autoComplete="family-name"
+                maxLength={127}
+                disabled={loading}
+                aria-invalid={!!errors.lastName}
+                aria-describedby={errors.lastName ? "lastName-error" : undefined}
+                {...register("lastName", {
+                  setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                  },
+                  onBlur: (e) => {
+                    e.target.value = e.target.value.trim();
+                  },
+                })}
+              />
               {errors.lastName && (
-                <p className="text-xs text-destructive">{errors.lastName.message}</p>
+                <FieldError id="lastName-error" message={errors.lastName.message} />
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="firstName">Имя</Label>
-              <Input id="firstName" {...register("firstName")} />
+              <Input
+                id="firstName"
+                autoComplete="given-name"
+                maxLength={127}
+                disabled={loading}
+                aria-invalid={!!errors.firstName}
+                aria-describedby={errors.firstName ? "firstName-error" : undefined}
+                {...register("firstName", {
+                  setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                  },
+                  onBlur: (e) => {
+                    e.target.value = e.target.value.trim();
+                  },
+                })}
+              />
+              {errors.firstName && (
+                <FieldError id="firstName-error" message={errors.firstName.message} />
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="middleName">Отчество</Label>
-              <Input id="middleName" {...register("middleName")} />
+              <Input
+                id="middleName"
+                autoComplete="additional-name"
+                maxLength={127}
+                disabled={loading}
+                aria-invalid={!!errors.middleName}
+                aria-describedby={errors.middleName ? "middleName-error" : undefined}
+                {...register("middleName", {
+                  setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                  },
+                  onBlur: (e) => {
+                    e.target.value = e.target.value.trim();
+                  },
+                })}
+              />
+              {errors.middleName && (
+                <FieldError id="middleName-error" message={errors.middleName.message} />
+              )}
             </div>
           </div>
 
@@ -153,58 +245,127 @@ export function ProfileForm({ initialData, username, nick }: ProfileFormProps) {
               <Label htmlFor="phone">Телефон (+7 XXX XXX-XX-XX)</Label>
               <Input
                 id="phone"
-                {...register("phone")}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="+7 (999) 123-45-67"
+                maxLength={18}
+                disabled={loading}
+                aria-invalid={!!errors.phone}
+                aria-describedby={errors.phone ? "phone-error" : undefined}
+                {...register("phone", {
+                  setValueAs: (value: string) => formatRussianPhone(value),
+                  onChange: (e) => applyPhoneMask(e.target),
+                  onBlur: (e) => {
+                    const formatted = formatRussianPhone(e.target.value);
+                    e.target.value = formatted;
+                    setValue("phone", formatted, { shouldValidate: true, shouldDirty: true });
+                  },
+                })}
               />
-              {errors.phone && (
-                <p className="text-xs text-destructive">{errors.phone.message}</p>
-              )}
+              {errors.phone && <FieldError id="phone-error" message={errors.phone.message} />}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="region">Регион</Label>
-              <Input id="region" {...register("region")} />
+              <Label>Регион</Label>
+              <Controller
+                name="region"
+                control={control}
+                render={({ field }) => (
+                  <SearchSelect
+                    options={regionOptions}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Выберите регион"
+                    searchPlaceholder="Поиск региона..."
+                    disabled={loading}
+                    ariaInvalid={!!errors.region}
+                  />
+                )}
+              />
+              {errors.region && <FieldError id="region-error" message={errors.region.message} />}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="classifierIds">
-              Классификаторы (через запятую, например: 1, 3.2, 5.1.1)
-            </Label>
-            <Input id="classifierIds" {...register("classifierIds")} />
+            <Label>Классификаторы</Label>
+            <Controller
+              name="classifierIds"
+              control={control}
+              render={({ field }) => (
+                <MultiSelect
+                  options={classifierOptions}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  placeholder="Выберите категории классификатора"
+                  searchPlaceholder="Поиск по классификатору..."
+                  filter={matchClassifier}
+                  hideSelectedLabels
+                  disabled={loading}
+                  ariaInvalid={!!errors.classifierIds}
+                />
+              )}
+            />
+            {errors.classifierIds && (
+              <FieldError id="classifierIds-error" message={errors.classifierIds.message} />
+            )}
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-4">
           <h3 className="font-semibold">Роли</h3>
           <div className="space-y-3">
-            {ROLE_OPTIONS.map((role) => (
-              <div key={role.value} className="flex items-center gap-2">
-                <Checkbox
-                  id={`role_${role.value}`}
-                  name={`role_${role.value}`}
-                  defaultChecked={initialData.roles.includes(role.value)}
-                />
-                <Label htmlFor={`role_${role.value}`} className="cursor-pointer">
-                  {role.label}
-                </Label>
-              </div>
-            ))}
+            <Controller
+              name="roles"
+              control={control}
+              render={({ field }) => (
+                <>
+                  {ROLE_OPTIONS.map((role) => {
+                    const checked = field.value.includes(role.value);
+                    return (
+                      <div key={role.value} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`role_${role.value}`}
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            const next = v === true
+                              ? [...field.value, role.value]
+                              : field.value.filter((r) => r !== role.value);
+                            field.onChange(next);
+                          }}
+                          disabled={loading}
+                        />
+                        <Label htmlFor={`role_${role.value}`} className="cursor-pointer">
+                          {role.label}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent>
           <div className="flex items-center justify-between">
             <Label htmlFor="isContactsHidden">
               Скрыть мои персональные данные от всех
             </Label>
-            <Switch
-              id="isContactsHidden"
-              checked={isContactsHidden}
-              onCheckedChange={setIsContactsHidden}
+            <Controller
+              name="isContactsHidden"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="isContactsHidden"
+                  checked={field.value}
+                  onCheckedChange={(checked) => field.onChange(checked === true)}
+                  disabled={loading}
+                />
+              )}
             />
           </div>
         </CardContent>

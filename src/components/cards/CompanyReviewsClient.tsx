@@ -21,7 +21,7 @@ export function CompanyReviewsClient({ receivedReviews, givenReviews, avgRating 
           <CardContent>
             <div className="flex items-center gap-2">
               <StarRating rating={avgRating ?? 0} size="md" />
-              <span className="text-xl font-bold">{avgRating !== null ? `${avgRating}/100` : "—"}</span>
+              <span className="text-xl font-bold">{avgRating !== null ? `${avgRating}` : "—"}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{receivedReviews.length} отзывов</p>
           </CardContent>
@@ -58,7 +58,7 @@ export function CompanyReviewsClient({ receivedReviews, givenReviews, avgRating 
                     </span>
                     <div className="flex items-center gap-1">
                       <StarRating rating={r.weightedAverage} size="sm" />
-                      <span className="text-xs text-muted-foreground">{r.weightedAverage}/100</span>
+                      <span className="text-xs text-muted-foreground">{r.weightedAverage.toFixed(1)}</span>
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground">{r.comment}</p>

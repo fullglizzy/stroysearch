@@ -9,6 +9,11 @@ export default async function AdminFinancesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const userType = (session.user as any).type as string;
+  if (!["SUPER", "ROOT"].includes(userType)) {
+    redirect("/account");
+  }
+
   const config = await prisma.billingConfig.findUnique({ where: { id: "default" } });
   const gifts = await prisma.gift.findMany({ orderBy: { coinPrice: "asc" } });
 

@@ -1,12 +1,12 @@
 import { Star } from "lucide-react";
 
 interface StarRatingProps {
-  rating: number; // 0-100
+  rating: number; // 0-5
   size?: "sm" | "md" | "lg";
 }
 
 export function StarRating({ rating, size = "md" }: StarRatingProps) {
-  const stars = Math.round(rating / 20); // Convert 0-100 to 0-5 stars
+  const stars = Math.round(rating); // 0-5 звёзд
   const sizeClass = size === "sm" ? "h-3 w-3" : size === "lg" ? "h-5 w-5" : "h-4 w-4";
 
   return (

@@ -10,10 +10,11 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchSelect } from "@/components/shared/SearchSelect";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileText, Upload, Download, Eye, Trash2, Coins, UploadCloud } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toastSuccess } from "@/lib/toast";
 
 interface DocRow {
   id: string; title: string; coinPrice: number; fileUrl: string;
@@ -38,6 +39,7 @@ interface Props {
 export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
@@ -83,12 +85,20 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
         body: JSON.stringify({
           title: fd.get("title"),
           treeItemId: fd.get("treeItemId") || null,
-          coinPrice: parseInt(fd.get("coinPrice") as string) || 5,
+          // 0 = бесплатно, поэтому нельзя использовать `|| 5`
+          coinPrice: (() => {
+            const price = parseInt(fd.get("coinPrice") as string, 10);
+            return Number.isFinite(price) ? Math.max(0, price) : 5;
+          })(),
           fileUrl,
           fileSize,
         }),
       });
-      if (res.ok) { setOpen(false); router.refresh(); }
+      if (res.ok) {
+        setOpen(false);
+        toastSuccess("Документ загружен", "Документ отправлен на модерацию");
+        router.refresh();
+      }
       else { const d = await res.json(); setError(d.error || "Ошибка"); }
     } catch { setError("Ошибка соединения"); }
     setLoading(false);
@@ -106,7 +116,7 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
   return (
     <div className="space-y-8">
       {/* Upload button */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setCategory(""); }}>
         <DialogTrigger>
           <Button className="bg-menthol hover:bg-menthol-dark gap-2"><Upload className="h-4 w-4" /> Загрузить документ</Button>
         </DialogTrigger>
@@ -120,15 +130,19 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
             <div className="space-y-2"><Label htmlFor="ml-title">Название</Label><Input id="ml-title" name="title" required /></div>
             <div className="space-y-2">
               <Label htmlFor="ml-classifier">Классификатор</Label>
-              <Select name="treeItemId">
-                <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Без категории</SelectItem>
-                  {treeItems.map((t) => <SelectItem key={t.id} value={t.id}>{t.fullNumberPath} — {t.name.slice(0, 40)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchSelect
+                name="treeItemId"
+                options={[
+                  { value: "", label: "Без категории" },
+                  ...treeItems.map(t => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` })),
+                ]}
+                value={category}
+                onChange={setCategory}
+                placeholder="Выберите категорию"
+                searchPlaceholder="Поиск категории..."
+              />
             </div>
-            <div className="space-y-2"><Label htmlFor="ml-price">Цена (монет)</Label><Input id="ml-price" name="coinPrice" type="number" min={1} max={100} defaultValue={5} /></div>
+            <div className="space-y-2"><Label htmlFor="ml-price">Цена (монет, 0 = бесплатно)</Label><Input id="ml-price" name="coinPrice" type="number" min={0} max={100} defaultValue={5} /></div>
             <div className="space-y-2"><Label htmlFor="ml-file">PDF файл (до 10 МБ)</Label><Input id="ml-file" name="file" type="file" accept=".pdf,application/pdf" required /></div>
             <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>{loading ? "Загрузка..." : "Загрузить"}</Button>
           </form>
@@ -157,7 +171,11 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {doc.views}</span>
                       <span className="flex items-center gap-1"><Download className="h-3 w-3" /> {doc.purchasesCount}</span>
-                      <Badge variant="secondary" className="text-[10px] gap-1"><Coins className="h-2 w-2" />{doc.coinPrice}</Badge>
+                      {doc.coinPrice > 0 ? (
+                        <Badge variant="secondary" className="text-[10px] gap-1"><Coins className="h-2 w-2" />{doc.coinPrice}</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-menthol">Бесплатно</Badge>
+                      )}
                       <span>{formatSize(doc.fileSize)}</span>
                     </div>
                   </div>

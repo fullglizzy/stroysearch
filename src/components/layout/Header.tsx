@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,22 +15,45 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { SupportDialog } from "@/components/shared/SupportDialog";
 import { cn } from "@/lib/utils";
-import { Menu, X, User, Building2, Shield, LogOut } from "lucide-react";
+import { Menu, X, User, Building2, Shield, LogOut, HelpCircle } from "lucide-react";
 
 const navLinks = [
   { href: "/products", label: "Продуктовые решения" },
-  { href: "/suppliers", label: "Поставщики" },
-  { href: "/matrix", label: "Матрица" },
-  { href: "/library", label: "Библиотека" },
-  { href: "/conferences", label: "Конференции" },
-  { href: "/polls", label: "Опросы" },
+  { href: "/suppliers", label: "База поставщиков и заказчиков" },
+  { href: "/matrix", label: "Даешь аналог! Матрица материалов" },
+  { href: "/library", label: "Продуктовая библиотека" },
+  { href: "/conferences", label: "Встречи и конференции" },
+  { href: "/polls", label: "Статистика и опросы" },
 ];
 
 export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportUnread, setSupportUnread] = useState(0);
+
+  // Счётчик непрочитанных обращений
+  useEffect(() => {
+    if (!session?.user) {
+      setSupportUnread(0);
+      return;
+    }
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/support/unread")
+        .then((r) => r.json())
+        .then((d) => { if (!cancelled) setSupportUnread(d.count || 0); })
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [session?.user]);
 
   const userType = (session?.user as any)?.type as string;
 
@@ -45,9 +68,18 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container-page flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl flex-shrink-0">
-          <span className="text-menthol">Е</span>
-          <span className="text-foreground">ЦПР</span>
+        <Link href="/" aria-label="ЕЦПР — на главную" className="flex items-center gap-1 flex-shrink-0">
+          <img
+            src="/logo/logo.svg"
+            alt="ЕЦПР"
+            // Справа в холсте SVG ~33% пустоты (425px из 1280): при h-16 это ~27px —
+            // убираем их отрицательным отступом, чтобы текст был вплотную к рисунку
+            className="h-20 w-auto translate-y-[9.7%] -mr-[27px]"
+          />
+          <span className="font-bold text-lg">
+                <span className="text-menthol">Е</span>
+                <span className="text-foreground">ЦПР</span>
+              </span>
         </Link>
 
         {/* Desktop Nav */}
@@ -61,7 +93,7 @@ export function Header() {
                 className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                   isActive
                     ? "text-menthol bg-menthol/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    : "text-foreground/80 hover:text-foreground hover:bg-secondary"
                 }`}
               >
                 {link.label}
@@ -101,14 +133,23 @@ export function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <Link href={`${dashboardHref}/profile`} className="w-full">
-                    Профиль
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
                   <Link href={`${dashboardHref}/finances`} className="w-full">
                     Финансы
                   </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link href={`${dashboardHref}/support`} className="w-full flex items-center justify-between">
+                    <span>Мои обращения</span>
+                    {supportUnread > 0 && (
+                      <span className="ml-2 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-orange-accent text-white text-[10px] font-medium">
+                        {supportUnread}
+                      </span>
+                    )}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSupportOpen(true)}>
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Поддержка
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -171,6 +212,12 @@ export function Header() {
           </div>
         </nav>
       )}
+
+      {/* Диалог поддержки (дублирует кнопку с главной страницы) */}
+      <SupportDialog
+        open={supportOpen}
+        onOpenChange={setSupportOpen}
+      />
     </header>
   );
 }

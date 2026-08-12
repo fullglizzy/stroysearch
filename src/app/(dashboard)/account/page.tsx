@@ -33,6 +33,14 @@ export default async function AccountPage() {
 
   const walletBalance = user.wallet?.balance ?? 0;
 
+  const supportTickets = await prisma.supportTicket.findMany({
+    where: { userId },
+    include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
+  });
+  const supportUnread = supportTickets.filter((t) =>
+    t.messages.some((m) => m.isStaff && (!t.userLastReadAt || m.createdAt > t.userLastReadAt)),
+  ).length;
+
   return (
     <AccountDashboard
       user={{
@@ -56,6 +64,7 @@ export default async function AccountPage() {
           conferences: user._count.conferences,
         },
       }}
+      supportUnread={supportUnread}
     />
   );
 }

@@ -45,7 +45,7 @@ async function getReviewData(userId: string) {
 
   const avgRating =
     receivedReviews.length > 0
-      ? Math.round(receivedReviews.reduce((s, r) => s + r.weightedAverage, 0) / receivedReviews.length)
+      ? Math.round(receivedReviews.reduce((s, r) => s + r.weightedAverage, 0) / receivedReviews.length * 10) / 10
       : null;
 
   return { receivedReviews, givenReviews, companies, avgRating };
@@ -56,6 +56,7 @@ export default async function AccountReviewsPage() {
   if (!session?.user) redirect("/login");
 
   const userId = (session.user as any).id as string;
+  const isActive = (session.user as any).status === "ACTIVE";
   const { receivedReviews, givenReviews, companies, avgRating } = await getReviewData(userId);
 
   return (
@@ -72,7 +73,7 @@ export default async function AccountReviewsPage() {
           <CardContent>
             <div className="flex items-center gap-2">
               <StarRating rating={avgRating ?? 0} size="md" />
-              <span className="text-xl font-bold">{avgRating !== null ? `${avgRating}/100` : "—"}</span>
+              <span className="text-xl font-bold">{avgRating !== null ? `${avgRating}` : "—"}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{receivedReviews.length} отзывов получено</p>
           </CardContent>
@@ -119,7 +120,15 @@ export default async function AccountReviewsPage() {
         </TabsContent>
 
         <TabsContent value="add" className="mt-4">
-          <AddReviewSection companies={companies} />
+          {isActive ? (
+            <AddReviewSection companies={companies} />
+          ) : (
+            <Alert variant="destructive">
+              <AlertDescription>
+                Ваш аккаунт не активен — оставлять отзывы нельзя.
+              </AlertDescription>
+            </Alert>
+          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -158,7 +167,7 @@ function ReviewCard({
           </div>
           <div className="flex items-center gap-1">
             <StarRating rating={review.weightedAverage} size="sm" />
-            <span className="text-xs text-muted-foreground">{review.weightedAverage}/100</span>
+            <span className="text-xs text-muted-foreground">{review.weightedAverage.toFixed(1)}</span>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">{review.comment}</p>

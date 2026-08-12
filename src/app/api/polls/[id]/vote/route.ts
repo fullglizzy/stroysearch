@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { SessionUser } from "@/types";
 
 export async function POST(
   request: Request,
@@ -11,7 +12,7 @@ export async function POST(
     return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
   }
 
-  const userId = (session.user as any).id;
+  const userId = (session.user as SessionUser).id;
   const { id: pollId } = await params;
   const body = await request.json();
   const { optionIds } = body;
@@ -26,8 +27,8 @@ export async function POST(
   }
 
   // Check if already voted
-  const existing = await prisma.pollVote.findUnique({
-    where: { pollId_userId: { pollId, userId } },
+  const existing = await prisma.pollVote.findFirst({
+    where: { pollId, userId },
   });
   if (existing) {
     return NextResponse.json({ error: "Вы уже проголосовали" }, { status: 400 });
@@ -61,5 +62,17 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ success: true });
+  // Актуальные результаты для немедленного обновления UI
+  const options = await prisma.pollOption.findMany({
+    where: { pollId },
+    include: { _count: { select: { votes: true } } },
+    orderBy: { sortOrder: "asc" },
+  });
+  const totalVotes = await prisma.pollVote.count({ where: { pollId } });
+
+  return NextResponse.json({
+    success: true,
+    totalVotes,
+    options: options.map((o) => ({ id: o.id, voteCount: o._count.votes })),
+  });
 }

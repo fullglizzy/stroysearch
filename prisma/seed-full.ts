@@ -3,6 +3,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "@node-rs/argon2";
+import { REGIONS } from "../src/lib/regions";
 
 const prisma = new PrismaClient();
 
@@ -36,8 +37,20 @@ async function main() {
   await prisma.supportTicket.deleteMany();
   await prisma.pageContent.deleteMany();
   await prisma.billingConfig.deleteMany();
+  await prisma.region.deleteMany();
   await prisma.user.deleteMany();
   console.log("  🧹 Очищено");
+
+  // ═══════════════════════════════════════════
+  // 0. СПРАВОЧНИК РЕГИОНОВ
+  // ═══════════════════════════════════════════
+  const regionNames = REGIONS.filter((r) => r !== "Все регионы");
+  for (let i = 0; i < regionNames.length; i++) {
+    await prisma.region.create({
+      data: { name: regionNames[i], sortOrder: i },
+    });
+  }
+  console.log(`  📍 Регионы: ${regionNames.length}`);
 
   // ═══════════════════════════════════════════
   // 1. BILLING CONFIG
@@ -584,20 +597,20 @@ async function main() {
   }
 
   const users: UserSeed[] = [
-    { username: "root", email: "root@ecpr.ru", type: "ROOT", firstName: "Кирилл", lastName: "Кокорев", nick: "kokorev", region: "Москва", phone: "+7 (916) 111-11-11", isAdmin: true, adminType: "ROOT", balance: 0 },
-    { username: "moderator", email: "moder@ecpr.ru", type: "MODERATOR", firstName: "Анна", lastName: "Смирнова", nick: "moderator_anna", region: "Санкт-Петербург", phone: "+7 (921) 222-22-22", isAdmin: true, adminType: "MODERATOR", balance: 50 },
-    { username: "editor", email: "editor@ecpr.ru", type: "EDITOR", firstName: "Дмитрий", lastName: "Волков", nick: "editor_dmitry", region: "Москва", isAdmin: true, adminType: "EDITOR", balance: 30 },
-    { username: "stroy_boss", email: "boss@stroytech.ru", type: "COMPANY", firstName: "Алексей", lastName: "Громов", nick: "gromov_stroy", region: "Москва", phone: "+7 (495) 333-33-33", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25 },
-    { username: "keram_facade", email: "info@keramfacade.ru", type: "COMPANY", firstName: "Сергей", lastName: "Кузнецов", nick: "keram_servis", region: "Москва", phone: "+7 (495) 555-55-55", inn: "7723456688", companyName: "ООО «КерамФасад»", balance: 40 },
-    { username: "ural_steel", email: "sales@uralsteel.ru", type: "COMPANY", firstName: "Павел", lastName: "Морозов", nick: "ural_steel", region: "Екатеринбург", phone: "+7 (343) 777-77-77", inn: "6677463232", companyName: "ООО «УралКрепСтрой»", balance: 15 },
-    { username: "arch_moscow", email: "arch@arhmos.ru", type: "COMPANY", firstName: "Елена", lastName: "Ветрова", nick: "arch_moscow", region: "Москва", phone: "+7 (495) 888-88-88", inn: "7723474343", companyName: "ООО «АрхФасад»", balance: 35 },
-    { username: "steel_doors", email: "info@steeldoors.ru", type: "COMPANY", firstName: "Игорь", lastName: "Стальной", nick: "steel_doors", region: "Новосибирск", phone: "+7 (383) 999-99-99", inn: "5407456677", companyName: "ООО «СтальДверь»", balance: 20 },
-    { username: "rem_facade", email: "rem@facade-spb.ru", type: "COMPANY", firstName: "Ольга", lastName: "Невская", nick: "rem_facade_spb", region: "Санкт-Петербург", phone: "+7 (812) 444-44-44", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18 },
-    { username: "petrov_engineer", email: "petrov@mail.ru", type: "COMMON", firstName: "Николай", lastName: "Петров", nick: "petrov_nik", region: "Москва", roles: ["DESIGNER", "TENDER_SPECIALIST"], balance: 12 },
-    { username: "sidorova_anna", email: "sidorova@mail.ru", type: "COMMON", firstName: "Анна", lastName: "Сидорова", nick: "sidorova_anna", region: "Казань", roles: ["PRODUCTOLOGIST"], balance: 8 },
-    { username: "ivanov_tech", email: "ivanov@tech.ru", type: "COMMON", firstName: "Михаил", lastName: "Иванов", nick: "ivanov_mike", region: "Екатеринбург", roles: ["DESIGNER"], balance: 5 },
-    { username: "smirnov_pro", email: "smirnov@pro.ru", type: "COMMON", firstName: "Андрей", lastName: "Смирнов", nick: "smirnov_andrey", region: "Новосибирск", roles: ["TENDER_SPECIALIST", "COMPANY_OWNER"], balance: 15 },
-    { username: "guest_test", email: "guest@test.ru", type: "COMMON", firstName: "Тестовый", lastName: "Гость", nick: "guest_user", region: "Москва", balance: 1 },
+    { username: "root", email: "root@ecpr.ru", type: "ROOT", firstName: "Кирилл", lastName: "Кокорев", nick: "kokorev", region: "г. Москва", phone: "+7 (916) 111-11-11", isAdmin: true, adminType: "ROOT", balance: 0 },
+    { username: "moderator", email: "moder@ecpr.ru", type: "MODERATOR", firstName: "Анна", lastName: "Смирнова", nick: "moderator_anna", region: "г. Санкт-Петербург", phone: "+7 (921) 222-22-22", isAdmin: true, adminType: "MODERATOR", balance: 50 },
+    { username: "editor", email: "editor@ecpr.ru", type: "EDITOR", firstName: "Дмитрий", lastName: "Волков", nick: "editor_dmitry", region: "г. Москва", isAdmin: true, adminType: "EDITOR", balance: 30 },
+    { username: "stroy_boss", email: "boss@stroytech.ru", type: "COMPANY", firstName: "Алексей", lastName: "Громов", nick: "gromov_stroy", region: "г. Москва", phone: "+7 (495) 333-33-33", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25 },
+    { username: "keram_facade", email: "info@keramfacade.ru", type: "COMPANY", firstName: "Сергей", lastName: "Кузнецов", nick: "keram_servis", region: "г. Москва", phone: "+7 (495) 555-55-55", inn: "7723456688", companyName: "ООО «КерамФасад»", balance: 40 },
+    { username: "ural_steel", email: "sales@uralsteel.ru", type: "COMPANY", firstName: "Павел", lastName: "Морозов", nick: "ural_steel", region: "Свердловская область", phone: "+7 (343) 777-77-77", inn: "6677463232", companyName: "ООО «УралКрепСтрой»", balance: 15 },
+    { username: "arch_moscow", email: "arch@arhmos.ru", type: "COMPANY", firstName: "Елена", lastName: "Ветрова", nick: "arch_moscow", region: "г. Москва", phone: "+7 (495) 888-88-88", inn: "7723474343", companyName: "ООО «АрхФасад»", balance: 35 },
+    { username: "steel_doors", email: "info@steeldoors.ru", type: "COMPANY", firstName: "Игорь", lastName: "Стальной", nick: "steel_doors", region: "Новосибирская область", phone: "+7 (383) 999-99-99", inn: "5407456677", companyName: "ООО «СтальДверь»", balance: 20 },
+    { username: "rem_facade", email: "rem@facade-spb.ru", type: "COMPANY", firstName: "Ольга", lastName: "Невская", nick: "rem_facade_spb", region: "г. Санкт-Петербург", phone: "+7 (812) 444-44-44", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18 },
+    { username: "petrov_engineer", email: "petrov@mail.ru", type: "COMMON", firstName: "Николай", lastName: "Петров", nick: "petrov_nik", region: "г. Москва", roles: ["DESIGNER", "TENDER_SPECIALIST"], balance: 12 },
+    { username: "sidorova_anna", email: "sidorova@mail.ru", type: "COMMON", firstName: "Анна", lastName: "Сидорова", nick: "sidorova_anna", region: "Республика Татарстан", roles: ["PRODUCTOLOGIST"], balance: 8 },
+    { username: "ivanov_tech", email: "ivanov@tech.ru", type: "COMMON", firstName: "Михаил", lastName: "Иванов", nick: "ivanov_mike", region: "Свердловская область", roles: ["DESIGNER"], balance: 5 },
+    { username: "smirnov_pro", email: "smirnov@pro.ru", type: "COMMON", firstName: "Андрей", lastName: "Смирнов", nick: "smirnov_andrey", region: "Новосибирская область", roles: ["TENDER_SPECIALIST", "COMPANY_OWNER"], balance: 15 },
+    { username: "guest_test", email: "guest@test.ru", type: "COMMON", firstName: "Тестовый", lastName: "Гость", nick: "guest_user", region: "г. Москва", balance: 1 },
   ];
 
   const userIdMap = new Map<string, string>();
@@ -651,7 +664,10 @@ async function main() {
         region: cu.region,
         ownerUserId: userIdMap.get(cu.username)!,
         website: `https://${cu.nick.replace(/_/g, "")}.ru`,
-        classifierIds: ["4.1.2", "4.1.2.2", "4.1.2.2.1"].join(","),
+        classifierIds: ["4.1.2", "4.1.2.2", "4.1.2.2.1"]
+          .map((p) => treeIdMap.get(p))
+          .filter(Boolean)
+          .join(","),
         metrics: {
           create: {
             phoneViews: Math.floor(Math.random() * 50) + 5,
@@ -674,9 +690,12 @@ async function main() {
       name: "ООО «НовСтрой»",
       email: "novstroy@mail.ru",
       phone: "+7 (495) 123-45-68",
-      region: "Москва",
+      region: "г. Москва",
       addedById: userIdMap.get("petrov_engineer")!,
-      classifierIds: "4.1.2,4.3",
+      classifierIds: ["4.1.2", "4.3"]
+        .map((p) => treeIdMap.get(p))
+        .filter(Boolean)
+        .join(","),
       metrics: { create: { phoneViews: 8, emailViews: 4 } },
     },
   });
@@ -686,21 +705,21 @@ async function main() {
   // 5. PRODUCTS (Matrix)
   // ═══════════════════════════════════════════
   const productData = [
-    { company: "keram_facade", treePath: "4.1.2.2", name: "Клинкерная плитка KeramPro 250x65", classes: ["STANDARD","COMFORT"], region: "Москва", unit: "шт", price: 2300, characteristics: ["Размер: 250x65 мм","Морозостойкость: F100","Водопоглощение: <3%"] },
-    { company: "keram_facade", treePath: "4.1.2.1", name: "Керамогранит KeramGranit 600x600", classes: ["COMFORT","BUSINESS"], region: "Москва", unit: "м²", price: 1850, characteristics: ["Размер: 600x600 мм","Толщина: 10 мм","Износостойкость: PEI 4"] },
-    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер RommerS 240x71", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Санкт-Петербург", unit: "шт", price: 2700, characteristics: ["Размер: 240x71 мм","Морозостойкость: F150","Производство: Германия"] },
-    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер эконом RommerS 200x60", classes: ["STANDARD"], region: "Санкт-Петербург", unit: "шт", price: 1600, characteristics: ["Размер: 200x60 мм","Морозостойкость: F75"] },
-    { company: "arch_moscow", treePath: "4.1.2.3", name: "Бетонная плитка ArchStone 400x400", classes: ["BUSINESS","PREMIUM"], region: "Москва", unit: "м²", price: 4200, characteristics: ["Размер: 400x400 мм","Толщина: 20 мм","Ручная работа"] },
-    { company: "arch_moscow", treePath: "4.1.1", name: "Штукатурка фасадная ArchTex", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Москва", unit: "кг", price: 350, characteristics: ["Расход: 3-4 кг/м²","Цвет: белый под окраску"] },
-    { company: "stroy_boss", treePath: "3.4.1", name: "Газобетонный блок D500 600x300x200", classes: ["STANDARD","COMFORT"], region: "Москва", unit: "шт", price: 180, characteristics: ["Плотность: D500","Размер: 600x300x200 мм","Прочность: B3.5"] },
-    { company: "stroy_boss", treePath: "3.4.4", name: "Кирпич полнотелый М150", classes: ["STANDARD"], region: "Москва", unit: "шт", price: 25, characteristics: ["Размер: 250x120x65 мм","Прочность: М150","Морозостойкость: F50"] },
-    { company: "ural_steel", treePath: "2.6.2.1", name: "Балка двутавровая 20Б1 С245", classes: ["STANDARD","COMFORT"], region: "Екатеринбург", unit: "т", price: 68000, characteristics: ["Профиль: 20Б1","Сталь: С245","Длина: 12 м"] },
-    { company: "ural_steel", treePath: "2.6.2.1", name: "Швеллер 20П С345", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Екатеринбург", unit: "т", price: 72000, characteristics: ["Профиль: 20П","Сталь: С345","Длина: 12 м"] },
-    { company: "steel_doors", treePath: "6.4", name: "Дверь входная Стальная-Премиум", classes: ["COMFORT","BUSINESS"], region: "Новосибирск", unit: "шт", price: 45000, characteristics: ["Толщина металла: 1.5 мм","Замки: 3 класса","Утепление: минвата"] },
-    { company: "steel_doors", treePath: "6.1", name: "Дверь входная МОП Стальная-Стандарт", classes: ["STANDARD"], region: "Новосибирск", unit: "шт", price: 28000, characteristics: ["Толщина металла: 1.2 мм","Замки: 2 класса","Доводчик в комплекте"] },
-    { company: "keram_facade", treePath: "4.1.2.2.2", name: "Кирпич клинкерный KeramBrick NF", classes: ["COMFORT","BUSINESS"], region: "Москва", unit: "шт", price: 95, characteristics: ["Формат: NF","Пустотность: полнотелый","Морозостойкость: F200"] },
-    { company: "arch_moscow", treePath: "4.3", name: "Молдинг фасадный ArchDecor 60мм", classes: ["BUSINESS","PREMIUM"], region: "Москва", unit: "п.м", price: 1200, characteristics: ["Ширина: 60 мм","Материал: полиуретан"] },
-    { company: "stroy_boss", treePath: "7.3.2.3.1", name: "Конвектор внутрипольный StroyTherm 200", classes: ["COMFORT","BUSINESS"], region: "Москва", unit: "шт", price: 18500, characteristics: ["Длина: 2000 мм","Теплоотдача: 2.5 кВт","Вентилятор: тангенциальный"] },
+    { company: "keram_facade", treePath: "4.1.2.2", name: "Клинкерная плитка KeramPro 250x65", classes: ["STANDARD","COMFORT"], region: "г. Москва", unit: "шт", price: 2300, characteristics: ["Размер: 250x65 мм","Морозостойкость: F100","Водопоглощение: <3%"] },
+    { company: "keram_facade", treePath: "4.1.2.1", name: "Керамогранит KeramGranit 600x600", classes: ["COMFORT","BUSINESS"], region: "г. Москва", unit: "м²", price: 1850, characteristics: ["Размер: 600x600 мм","Толщина: 10 мм","Износостойкость: PEI 4"] },
+    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер RommerS 240x71", classes: ["STANDARD","COMFORT","BUSINESS"], region: "г. Санкт-Петербург", unit: "шт", price: 2700, characteristics: ["Размер: 240x71 мм","Морозостойкость: F150","Производство: Германия"] },
+    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер эконом RommerS 200x60", classes: ["STANDARD"], region: "г. Санкт-Петербург", unit: "шт", price: 1600, characteristics: ["Размер: 200x60 мм","Морозостойкость: F75"] },
+    { company: "arch_moscow", treePath: "4.1.2.3", name: "Бетонная плитка ArchStone 400x400", classes: ["BUSINESS","PREMIUM"], region: "г. Москва", unit: "м²", price: 4200, characteristics: ["Размер: 400x400 мм","Толщина: 20 мм","Ручная работа"] },
+    { company: "arch_moscow", treePath: "4.1.1", name: "Штукатурка фасадная ArchTex", classes: ["STANDARD","COMFORT","BUSINESS"], region: "г. Москва", unit: "кг", price: 350, characteristics: ["Расход: 3-4 кг/м²","Цвет: белый под окраску"] },
+    { company: "stroy_boss", treePath: "3.4.1", name: "Газобетонный блок D500 600x300x200", classes: ["STANDARD","COMFORT"], region: "г. Москва", unit: "шт", price: 180, characteristics: ["Плотность: D500","Размер: 600x300x200 мм","Прочность: B3.5"] },
+    { company: "stroy_boss", treePath: "3.4.4", name: "Кирпич полнотелый М150", classes: ["STANDARD"], region: "г. Москва", unit: "шт", price: 25, characteristics: ["Размер: 250x120x65 мм","Прочность: М150","Морозостойкость: F50"] },
+    { company: "ural_steel", treePath: "2.6.2.1", name: "Балка двутавровая 20Б1 С245", classes: ["STANDARD","COMFORT"], region: "Свердловская область", unit: "т", price: 68000, characteristics: ["Профиль: 20Б1","Сталь: С245","Длина: 12 м"] },
+    { company: "ural_steel", treePath: "2.6.2.1", name: "Швеллер 20П С345", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Свердловская область", unit: "т", price: 72000, characteristics: ["Профиль: 20П","Сталь: С345","Длина: 12 м"] },
+    { company: "steel_doors", treePath: "6.4", name: "Дверь входная Стальная-Премиум", classes: ["COMFORT","BUSINESS"], region: "Новосибирская область", unit: "шт", price: 45000, characteristics: ["Толщина металла: 1.5 мм","Замки: 3 класса","Утепление: минвата"] },
+    { company: "steel_doors", treePath: "6.1", name: "Дверь входная МОП Стальная-Стандарт", classes: ["STANDARD"], region: "Новосибирская область", unit: "шт", price: 28000, characteristics: ["Толщина металла: 1.2 мм","Замки: 2 класса","Доводчик в комплекте"] },
+    { company: "keram_facade", treePath: "4.1.2.2.2", name: "Кирпич клинкерный KeramBrick NF", classes: ["COMFORT","BUSINESS"], region: "г. Москва", unit: "шт", price: 95, characteristics: ["Формат: NF","Пустотность: полнотелый","Морозостойкость: F200"] },
+    { company: "arch_moscow", treePath: "4.3", name: "Молдинг фасадный ArchDecor 60мм", classes: ["BUSINESS","PREMIUM"], region: "г. Москва", unit: "п.м", price: 1200, characteristics: ["Ширина: 60 мм","Материал: полиуретан"] },
+    { company: "stroy_boss", treePath: "7.3.2.3.1", name: "Конвектор внутрипольный StroyTherm 200", classes: ["COMFORT","BUSINESS"], region: "г. Москва", unit: "шт", price: 18500, characteristics: ["Длина: 2000 мм","Теплоотдача: 2.5 кВт","Вентилятор: тангенциальный"] },
   ];
 
   for (const p of productData) {
@@ -732,7 +751,7 @@ async function main() {
     { author: "petrov_engineer", target: "keram_facade", company: "keram_facade", scores: [5,4,5,4,4,5,4,4,5], comment: "Отличное качество клинкерной плитки! Работали с КерамФасадом на объекте ЖК «Солнечный» — поставка точно в срок, материал высокого качества. Менеджеры всегда на связи, оперативно решают вопросы. Рекомендую к сотрудничеству." },
     { author: "sidorova_anna", target: "keram_facade", company: "keram_facade", scores: [4,5,4,4,5,4,5,4,4], comment: "Хорошая компания, качественная продукция. Единственный минус — иногда задерживают отгрузку на 1-2 дня, но в целом работаем стабильно. Цены рыночные, качество соответствует заявленному." },
     { author: "ivanov_tech", target: "rem_facade", company: "rem_facade", scores: [5,5,5,5,5,5,5,5,5], comment: "Лучший поставщик клинкера в СПб! Работаем с ними уже 3 года на разных объектах. Качество всегда на высоте, логистика отлажена, цены конкурентные. Особая благодарность менеджеру Ольге за профессионализм!" },
-    { author: "smirnov_pro", target: "ural_steel", company: "ural_steel", scores: [4,4,3,4,4,4,3,5,3], comment: "Неплохой поставщик металлопроката. Качество стали хорошее,但有 раз была задержка поставки на неделю. Цены средние по рынку, но для крупных заказов дают хорошие скидки. Работаем дальше." },
+    { author: "smirnov_pro", target: "ural_steel", company: "ural_steel", scores: [4,4,3,4,4,4,3,5,3], comment: "Неплохой поставщик металлопроката. Качество стали хорошее, но один раз была задержка поставки на неделю. Цены средние по рынку, но для крупных заказов дают хорошие скидки. Работаем дальше." },
     { author: "petrov_engineer", target: "stroy_boss", company: "stroy_boss", scores: [5,4,5,4,5,4,4,4,5], comment: "СтройТехнологии — надёжный партнёр по строительным материалам. Газобетонные блоки всегда в наличии, качество стабильное. Доставка по Москве и области без задержек. Рекомендую." },
     { author: "sidorova_anna", target: "steel_doors", company: "steel_doors", scores: [4,4,4,4,3,4,4,5,4], comment: "Двери хорошего качества, установили в подъездах ЖК «Весенний». Монтаж выполнен в срок, двери надёжные. По цене — чуть выше среднего, но качество оправдывает. Продолжаем сотрудничество." },
     { author: "ivanov_tech", target: "arch_moscow", company: "arch_moscow", scores: [5,5,5,4,5,5,5,5,5], comment: "Великолепная бетонная плитка ручной работы! Использовали в интерьере общественных зон премиум-класса. Результат превзошёл ожидания. Команда АрхФасад — настоящие профессионалы своего дела." },
@@ -865,8 +884,8 @@ async function main() {
       pollType: "DICHOTOMOUS",
       coinReward: 0.1,
       treePath: "2.6",
-      options: ["Да, на всех проектах", "Да, на крупных проектах", "Нет, не используем"],
-      votes: [4, 3, 2],
+      options: ["Да, используем BIM", "Нет, не используем"],
+      votes: [5, 4],
     },
     {
       question: "Какой фасадный материал предпочитаете для ЖК бизнес-класса?",
@@ -881,8 +900,8 @@ async function main() {
       pollType: "DICHOTOMOUS",
       coinReward: 0.15,
       treePath: null,
-      options: ["Да, готов делиться", "Да, за монеты", "Пока не готов"],
-      votes: [6, 3, 3],
+      options: ["Да, готов делиться", "Нет, пока не готов"],
+      votes: [6, 4],
     },
     {
       question: "Что важнее при выборе поставщика?",
@@ -1014,6 +1033,9 @@ async function main() {
     library: `<h2>Библиотека технических заданий</h2><p>Загружайте свои документы и приобретайте документы коллег за монеты программы лояльности.</p>`,
     conferences: `<h2>Конференции</h2><p>Отраслевые конференции, вебинары и лекции. Презентуйте свой продукт, делитесь опытом.</p>`,
     polls: `<h2>Статистика и опросы</h2><p>Голосуйте в отраслевых опросах, получайте монеты за участие.</p>`,
+    account: `<h2>Личный кабинет участника</h2><p>Управляйте своим профилем, финансами, отзывами, конференциями и документами.</p>`,
+    company: `<h2>Личный кабинет компании</h2><p>Управляйте профилем компании, товарами и услугами, финансами, отзывами и конференциями.</p>`,
+    admin: `<h2>Панель управления</h2><p>Управление контентом платформы, пользователями, модерация конференций и библиотеки, биллинг и финансы.</p>`,
   };
 
   for (const [key, content] of Object.entries(pages)) {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,41 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, Mail, Globe, Loader2, Save } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
+import { profileSchema } from "@/lib/validators";
+import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
+import { SearchSelect, type SearchSelectOption } from "@/components/shared/SearchSelect";
+import { MultiSelect, type MultiSelectOption } from "@/components/shared/MultiSelect";
+import { matchClassifier } from "@/lib/classifier";
 
+// Правила КПП и телефона берём из общей схемы, чтобы сообщения совпадали с сервером
 const companyProfileSchema = z.object({
-  companyName: z.string().max(255).optional(),
-  kpp: z
+  companyName: z
     .string()
-    .regex(/^\d{9}$/, "КПП должен состоять из 9 цифр")
+    .trim()
+    .max(255, "Название должно быть не более 255 символов")
     .optional()
     .or(z.literal("")),
-  directorName: z.string().max(255).optional(),
-  legalAddress: z.string().max(500).optional(),
-  phone: z.string().max(63).optional(),
-  region: z.string().max(255).optional(),
-  classifierIds: z.string().optional(),
+  kpp: profileSchema.shape.kpp,
+  directorName: z
+    .string()
+    .trim()
+    .max(255, "ФИО директора должно быть не более 255 символов")
+    .optional()
+    .or(z.literal("")),
+  legalAddress: z
+    .string()
+    .trim()
+    .max(511, "Адрес должен быть не более 511 символов")
+    .optional()
+    .or(z.literal("")),
+  phone: profileSchema.shape.phone,
+  region: z
+    .string()
+    .trim()
+    .max(255, "Регион должен быть не более 255 символов")
+    .optional()
+    .or(z.literal("")),
+  classifierIds: z.array(z.string().uuid("Некорректный классификатор")),
 });
 
 type CompanyProfileData = z.infer<typeof companyProfileSchema>;
@@ -42,18 +64,30 @@ interface CompanyProfileFormProps {
   };
   username: string;
   metrics: { phoneViews: number; emailViews: number; websiteViews: number } | null;
+  regionOptions: SearchSelectOption[];
+  classifierOptions: MultiSelectOption[];
 }
 
-export function CompanyProfileForm({ initialData, username, metrics }: CompanyProfileFormProps) {
+export function CompanyProfileForm({
+  initialData,
+  username,
+  metrics,
+  regionOptions,
+  classifierOptions,
+}: CompanyProfileFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<CompanyProfileData>({
     resolver: zodResolver(companyProfileSchema),
+    // Валидируем после первого «касания» поля, а не сразу при наборе
+    mode: "onTouched",
     defaultValues: {
       companyName: initialData.companyName,
       kpp: initialData.kpp,
@@ -61,7 +95,7 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
       legalAddress: initialData.legalAddress,
       phone: initialData.phone,
       region: initialData.region,
-      classifierIds: initialData.classifierIds.join(", "),
+      classifierIds: initialData.classifierIds,
     },
   });
 
@@ -75,9 +109,7 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
         body: JSON.stringify({
           phone: data.phone || undefined,
           region: data.region || undefined,
-          classifierIds: data.classifierIds
-            ? data.classifierIds.split(",").map((s) => s.trim()).filter(Boolean)
-            : [],
+          classifierIds: data.classifierIds,
           companyName: data.companyName || undefined,
           kpp: data.kpp || undefined,
           legalAddress: data.legalAddress || undefined,
@@ -99,7 +131,7 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
       {/* Метрики просмотров (ТЗ §12.8) */}
       {metrics && (
         <Card>
@@ -136,30 +168,93 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
           </div>
           <div className="space-y-2">
             <Label htmlFor="companyName">Название компании</Label>
-            <Input id="companyName" {...register("companyName")} />
+            <Input
+              id="companyName"
+              autoComplete="organization"
+              maxLength={255}
+              disabled={loading}
+              aria-invalid={!!errors.companyName}
+              aria-describedby={errors.companyName ? "companyName-error" : undefined}
+              {...register("companyName", {
+                setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                },
+                onBlur: (e) => {
+                  e.target.value = e.target.value.trim();
+                },
+              })}
+            />
+            {errors.companyName && (
+              <FieldError id="companyName-error" message={errors.companyName.message} />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="kpp">КПП (9 цифр)</Label>
               <Input
                 id="kpp"
-                {...register("kpp")}
+                type="text"
+                inputMode="numeric"
                 placeholder="XXXXXXXXX"
                 maxLength={9}
-                className={errors.kpp ? "border-destructive" : ""}
+                disabled={loading}
+                aria-invalid={!!errors.kpp}
+                aria-describedby={errors.kpp ? "kpp-error" : undefined}
+                {...register("kpp", {
+                  setValueAs: (value: string) => value.replace(/\D/g, "").slice(0, 9),
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 9);
+                  },
+                })}
               />
-              {errors.kpp && (
-                <p className="text-xs text-destructive">{errors.kpp.message}</p>
-              )}
+              {errors.kpp && <FieldError id="kpp-error" message={errors.kpp.message} />}
             </div>
             <div className="space-y-2">
               <Label htmlFor="directorName">Директор</Label>
-              <Input id="directorName" {...register("directorName")} />
+              <Input
+                id="directorName"
+                maxLength={255}
+                disabled={loading}
+                aria-invalid={!!errors.directorName}
+                aria-describedby={errors.directorName ? "directorName-error" : undefined}
+                {...register("directorName", {
+                  setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                  onChange: (e) => {
+                    e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                  },
+                  onBlur: (e) => {
+                    e.target.value = e.target.value.trim();
+                  },
+                })}
+              />
+              {errors.directorName && (
+                <FieldError id="directorName-error" message={errors.directorName.message} />
+              )}
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="legalAddress">Юридический адрес</Label>
-            <Input id="legalAddress" {...register("legalAddress")} />
+            <Input
+              id="legalAddress"
+              autoComplete="street-address"
+              maxLength={511}
+              disabled={loading}
+              aria-invalid={!!errors.legalAddress}
+              aria-describedby={errors.legalAddress ? "legalAddress-error" : undefined}
+              {...register("legalAddress", {
+                setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/\s{2,}/g, " ");
+                },
+                onBlur: (e) => {
+                  e.target.value = e.target.value.trim();
+                },
+              })}
+            />
+            {errors.legalAddress && (
+              <FieldError id="legalAddress-error" message={errors.legalAddress.message} />
+            )}
           </div>
         </CardContent>
       </Card>
@@ -169,7 +264,27 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="phone">Телефон (+7 XXX XXX-XX-XX)</Label>
-            <Input id="phone" {...register("phone")} placeholder="+7 (999) 123-45-67" />
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+7 (999) 123-45-67"
+              maxLength={18}
+              disabled={loading}
+              aria-invalid={!!errors.phone}
+              aria-describedby={errors.phone ? "phone-error" : undefined}
+              {...register("phone", {
+                setValueAs: (value: string) => formatRussianPhone(value),
+                onChange: (e) => applyPhoneMask(e.target),
+                onBlur: (e) => {
+                  const formatted = formatRussianPhone(e.target.value);
+                  e.target.value = formatted;
+                  setValue("phone", formatted, { shouldValidate: true, shouldDirty: true });
+                },
+              })}
+            />
+            {errors.phone && <FieldError id="phone-error" message={errors.phone.message} />}
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
@@ -182,14 +297,46 @@ export function CompanyProfileForm({ initialData, username, metrics }: CompanyPr
         <CardHeader><CardTitle className="text-base">Классификация</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="region">Регион</Label>
-            <Input id="region" {...register("region")} />
+            <Label>Регион</Label>
+            <Controller
+              name="region"
+              control={control}
+              render={({ field }) => (
+                <SearchSelect
+                  options={regionOptions}
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Выберите регион"
+                  searchPlaceholder="Поиск региона..."
+                  disabled={loading}
+                  ariaInvalid={!!errors.region}
+                />
+              )}
+            />
+            {errors.region && <FieldError id="region-error" message={errors.region.message} />}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="classifierIds">
-              Классификаторы (через запятую, например: 1, 3.2, 5.1.1)
-            </Label>
-            <Input id="classifierIds" {...register("classifierIds")} />
+            <Label>Классификаторы</Label>
+            <Controller
+              name="classifierIds"
+              control={control}
+              render={({ field }) => (
+                <MultiSelect
+                  options={classifierOptions}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  placeholder="Выберите категории классификатора"
+                  searchPlaceholder="Поиск по классификатору..."
+                  filter={matchClassifier}
+                  hideSelectedLabels
+                  disabled={loading}
+                  ariaInvalid={!!errors.classifierIds}
+                />
+              )}
+            />
+            {errors.classifierIds && (
+              <FieldError id="classifierIds-error" message={errors.classifierIds.message} />
+            )}
           </div>
         </CardContent>
       </Card>

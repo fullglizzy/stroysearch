@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExpandableText } from "@/components/shared/ExpandableText";
 import { Calendar, Clock, Users, Eye, Coins, ExternalLink } from "lucide-react";
 
 async function getConferencesData(userId: string) {
@@ -46,7 +47,7 @@ export default async function AccountConferencesPage() {
           <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {conf._count.participants}</span>
           <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {conf.views}</span>
         </div>
-        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{conf.description}</p>
+        <ExpandableText text={conf.description} />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {conf.coinPrice > 0 ? (

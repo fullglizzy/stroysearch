@@ -70,19 +70,27 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
       });
 
       if (res.ok) {
-        toastSuccess("Отзыв опубликован!", "+1 монета начислена на ваш счёт");
+        const d = await res.json().catch(() => ({}));
+        if (d.updated) {
+          toastSuccess("Отзыв обновлён!", "Ваши изменения сохранены");
+        } else {
+          toastSuccess("Отзыв опубликован!", "+1 монета начислена на ваш счёт");
+        }
         router.refresh();
         setComment("");
         setScores(Array(9).fill(0));
         setFieldErrors({});
+      } else if (res.status === 401) {
+        toastError("Требуется авторизация", "Войдите в аккаунт, чтобы оставить отзыв");
       } else {
         const d = await res.json().catch(() => ({}));
         toastError("Ошибка", d.error || "Не удалось опубликовать отзыв");
       }
     } catch {
-      toastError("Ошибка соединения", "Проверьте подключение к интернету");
+      toastError("Ошибка соединения", "Проверьте подключение к интернету и попробуйте снова");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (

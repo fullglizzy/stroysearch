@@ -15,9 +15,6 @@ import { Loader2, Crown, Shield, Pencil, Building2, User } from "lucide-react";
 
 const quickLogins = [
   { label: "Владелец", username: "root", icon: Crown, role: "ROOT", color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
-  { label: "Модератор", username: "moderator", icon: Shield, role: "MODERATOR", color: "bg-blue-100 text-blue-700 hover:bg-blue-200" },
-  { label: "Редактор", username: "editor", icon: Pencil, role: "EDITOR", color: "bg-indigo-100 text-indigo-700 hover:bg-indigo-200" },
-  { label: "СтройТех", username: "stroy_boss", icon: Building2, role: "КОМПАНИЯ", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
   { label: "КерамФасад", username: "keram_facade", icon: Building2, role: "КОМПАНИЯ", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
   { label: "Проектировщик", username: "petrov_engineer", icon: User, role: "УЧАСТНИК", color: "bg-green-100 text-green-700 hover:bg-green-200" },
 ];
@@ -135,9 +132,6 @@ export default function LoginPage() {
             {/* Quick login buttons */}
             <div className="pt-2">
               <Separator className="mb-3" />
-              <p className="text-xs text-muted-foreground text-center mb-3">
-                Быстрый вход (тестовые аккаунты, пароль: 12345678)
-              </p>
               <div className="grid grid-cols-2 gap-1.5">
                 {quickLogins.map((q) => {
                   const Icon = q.icon;
@@ -164,7 +158,7 @@ export default function LoginPage() {
               <p>
                 Нет аккаунта?{" "}
                 <Link href="/register" className="text-menthol hover:underline">
-                  Зарегистрироваться
+                  Зарегистрироваться как участник
                 </Link>
               </p>
               <p className="mt-1">
@@ -172,7 +166,7 @@ export default function LoginPage() {
                   href="/register/company"
                   className="text-menthol hover:underline"
                 >
-                  Зарегистрировать компанию
+                  Зарегистрироваться как компания
                 </Link>
               </p>
             </div>

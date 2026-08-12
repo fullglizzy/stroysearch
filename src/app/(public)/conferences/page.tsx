@@ -23,7 +23,7 @@ export default async function ConferencesPage() {
           profile: { select: { nick: true, companyName: true } },
         },
       },
-      treeItem: { select: { fullNumberPath: true } },
+      treeItem: { select: { fullNumberPath: true, name: true } },
       _count: { select: { participants: true } },
     },
     orderBy: { date: "asc" },
@@ -37,7 +37,12 @@ export default async function ConferencesPage() {
       where: { userId },
       select: { conferenceId: true },
     });
-    joinedConfIds = parts.map((p) => p.conferenceId);
+    // Организатор считается участником своих конференций
+    const own = await prisma.conference.findMany({
+      where: { organizerId: userId },
+      select: { id: true },
+    });
+    joinedConfIds = [...parts.map((p) => p.conferenceId), ...own.map((c) => c.id)];
   }
 
   const rows = conferences.map((c) => ({
@@ -49,6 +54,7 @@ export default async function ConferencesPage() {
     time: c.time,
     description: c.description,
     treeItemPath: c.treeItem?.fullNumberPath || null,
+    treeItemName: c.treeItem?.name || null,
     coinPrice: c.coinPrice,
     isPublic: c.isPublic,
     connectionLink: c.connectionLink,
@@ -61,6 +67,7 @@ export default async function ConferencesPage() {
       conferences={rows}
       treeItems={treeItems}
       moderatorText={pageContent?.content || null}
+      pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
       joinedConfIds={joinedConfIds}
     />

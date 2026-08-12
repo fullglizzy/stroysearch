@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Search, Coins, Loader2, Users } from "lucide-react";
 
 interface UserRow {
@@ -70,6 +71,7 @@ export function UsersManager({ users }: UsersManagerProps) {
   const [coinAmount, setCoinAmount] = useState("");
   const [coinLoading, setCoinLoading] = useState(false);
   const [coinError, setCoinError] = useState("");
+  const [coinOperation, setCoinOperation] = useState<"add" | "subtract" | "set">("add");
 
   const filtered = users.filter((u) => {
     if (!search) return true;
@@ -95,11 +97,13 @@ export function UsersManager({ users }: UsersManagerProps) {
         body: JSON.stringify({
           userId: selectedUser.id,
           amount: parseFloat(coinAmount),
+          operation: coinOperation,
         }),
       });
 
       if (res.ok) {
         setAddCoinsOpen(false);
+        setCoinOperation("add");
         router.refresh();
       } else {
         const data = await res.json();
@@ -173,6 +177,7 @@ export function UsersManager({ users }: UsersManagerProps) {
                     onClick={() => {
                       setSelectedUser(user);
                       setCoinAmount("");
+                      setCoinOperation("add");
                       setAddCoinsOpen(true);
                     }}
                   >
@@ -190,7 +195,13 @@ export function UsersManager({ users }: UsersManagerProps) {
       <Dialog open={addCoinsOpen} onOpenChange={setAddCoinsOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Зачислить монеты</DialogTitle>
+            <DialogTitle>
+              {coinOperation === "add"
+                ? "Зачислить монеты"
+                : coinOperation === "subtract"
+                  ? "Списать монеты"
+                  : "Установить баланс"}
+            </DialogTitle>
             <DialogDescription>
               Пользователь: {selectedUser?.username} (баланс:{" "}
               {selectedUser?.balance.toFixed(1)})
@@ -202,8 +213,28 @@ export function UsersManager({ users }: UsersManagerProps) {
                 <AlertDescription>{coinError}</AlertDescription>
               </Alert>
             )}
+            <RadioGroup
+              value={coinOperation}
+              onValueChange={(v) => setCoinOperation(v as "add" | "subtract" | "set")}
+              className="flex gap-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="add" id="op-add" />
+                <Label htmlFor="op-add" className="cursor-pointer">Зачислить</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="subtract" id="op-sub" />
+                <Label htmlFor="op-sub" className="cursor-pointer">Списать</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="set" id="op-set" />
+                <Label htmlFor="op-set" className="cursor-pointer">Установить</Label>
+              </div>
+            </RadioGroup>
             <div className="space-y-2">
-              <Label htmlFor="coinAmount">Количество монет</Label>
+              <Label htmlFor="coinAmount">
+                {coinOperation === "set" ? "Новый баланс (монет)" : "Количество монет"}
+              </Label>
               <Input
                 id="coinAmount"
                 type="number"
@@ -220,7 +251,13 @@ export function UsersManager({ users }: UsersManagerProps) {
               disabled={coinLoading || !coinAmount}
             >
               {coinLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {coinLoading ? "Зачисление..." : "Зачислить"}
+              {coinLoading
+                ? "Выполняется..."
+                : coinOperation === "add"
+                  ? "Зачислить"
+                  : coinOperation === "subtract"
+                    ? "Списать"
+                    : "Установить"}
             </Button>
           </div>
         </DialogContent>

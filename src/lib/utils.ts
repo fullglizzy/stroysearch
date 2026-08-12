@@ -20,3 +20,27 @@ export function comparePath(a: string, b: string): number {
   }
   return 0;
 }
+
+/**
+ * Форматирует размер файла в человекочитаемый вид: 512 КБ, 1.5 МБ
+ */
+export function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 КБ";
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} КБ`;
+  return `${(kb / 1024).toFixed(1)} МБ`;
+}
+
+/**
+ * Ссылка tel: из строки телефона (оставляет только цифры и ведущий +)
+ */
+export function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
+/**
+ * Ссылка mailto: из строки email
+ */
+export function mailtoHref(email: string): string {
+  return `mailto:${email}`;
+}

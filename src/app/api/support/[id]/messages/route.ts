@@ -1,0 +1,109 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
+
+interface AttachmentInput {
+  url: string;
+  name: string;
+}
+
+function parseAttachments(raw: unknown): AttachmentInput[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 10) return null;
+  const result: AttachmentInput[] = [];
+  for (const item of raw) {
+    if (
+      typeof item !== "object" || item === null ||
+      typeof (item as any).url !== "string" ||
+      typeof (item as any).name !== "string"
+    ) {
+      return null;
+    }
+    const url = (item as any).url as string;
+    const name = (item as any).name as string;
+    if (!url.startsWith("/uploads/") || name.trim().length === 0 || name.length > 255) {
+      return null;
+    }
+    result.push({ url, name: name.trim() });
+  }
+  return result;
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const userId = (session.user as any).id as string;
+    const userType = (session.user as any).type as string;
+    const isAdmin = ADMIN_TYPES.includes(userType);
+
+    let body: { message?: unknown; files?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Некорректный формат запроса" }, { status: 400 });
+    }
+
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (message.length > 5000) {
+      return NextResponse.json({ error: "Сообщение должно быть не более 5000 знаков" }, { status: 400 });
+    }
+
+    const attachments = parseAttachments(body.files);
+    if (attachments === null) {
+      return NextResponse.json({ error: "Некорректный список файлов" }, { status: 400 });
+    }
+    if (!message && attachments.length === 0) {
+      return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
+    }
+
+    const ticket = await prisma.supportTicket.findUnique({ where: { id } });
+    if (!ticket) {
+      return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
+    }
+    if (!isAdmin && ticket.userId !== userId) {
+      return NextResponse.json({ error: "Нет доступа к обращению" }, { status: 403 });
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const messageRow = await tx.supportMessage.create({
+        data: {
+          ticketId: id,
+          authorId: userId,
+          isStaff: isAdmin,
+          message,
+          attachments: JSON.stringify(attachments),
+        },
+      });
+      // поднимаем тикет в списке
+      await tx.supportTicket.update({
+        where: { id },
+        data: { updatedAt: new Date() },
+      });
+      return messageRow;
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: {
+        id: created.id,
+        message: created.message,
+        isStaff: created.isStaff,
+        createdAt: created.createdAt,
+        authorName: (session.user as any).username || null,
+        attachments,
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Не удалось отправить сообщение" }, { status: 500 });
+  }
+}

@@ -23,7 +23,7 @@ export default async function LibraryPage() {
           profile: { select: { nick: true } },
         },
       },
-      treeItem: { select: { fullNumberPath: true } },
+      treeItem: { select: { fullNumberPath: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -43,6 +43,7 @@ export default async function LibraryPage() {
     id: d.id,
     title: d.title,
     treeItemPath: d.treeItem?.fullNumberPath || null,
+    treeItemName: d.treeItem?.name || null,
     coinPrice: d.coinPrice,
     uploaderName: d.user.profile?.nick || d.user.username,
     fileSize: d.fileSize,
@@ -56,6 +57,7 @@ export default async function LibraryPage() {
       documents={rows}
       treeItems={treeItems}
       moderatorText={pageContent?.content || null}
+      pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
       purchasedDocIds={purchasedDocIds}
     />

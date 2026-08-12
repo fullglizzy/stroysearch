@@ -39,7 +39,7 @@ export default async function CompanyReviewsPage() {
 
   const avgRating =
     receivedReviews.length > 0
-      ? Math.round(receivedReviews.reduce((s, r) => s + r.weightedAverage, 0) / receivedReviews.length)
+      ? Math.round(receivedReviews.reduce((s, r) => s + r.weightedAverage, 0) / receivedReviews.length * 10) / 10
       : null;
 
   return (

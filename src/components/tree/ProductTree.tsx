@@ -25,6 +25,7 @@ interface TreeNode extends FlatItem {
 
 interface ProductTreeProps {
   items: FlatItem[];
+  expandAll?: boolean;
 }
 
 function buildTree(flat: FlatItem[]): TreeNode[] {
@@ -63,20 +64,20 @@ function buildTree(flat: FlatItem[]): TreeNode[] {
   return roots;
 }
 
-export function ProductTree({ items }: ProductTreeProps) {
+export function ProductTree({ items, expandAll }: ProductTreeProps) {
   const tree = useMemo(() => buildTree(items), [items]);
 
   return (
     <div className="border rounded-lg divide-y">
       {tree.map((node) => (
-        <TreeNodeItem key={node.id} node={node} />
+        <TreeNodeItem key={node.id} node={node} expandAll={expandAll} />
       ))}
     </div>
   );
 }
 
-function TreeNodeItem({ node }: { node: TreeNode }) {
-  const [expanded, setExpanded] = useState(node.level < 2);
+function TreeNodeItem({ node, expandAll }: { node: TreeNode; expandAll?: boolean }) {
+  const [expanded, setExpanded] = useState(expandAll || node.level < 2);
   const hasChildren = node.children.length > 0;
 
   return (
@@ -137,7 +138,7 @@ function TreeNodeItem({ node }: { node: TreeNode }) {
       {hasChildren && expanded && (
         <div>
           {node.children.map((child) => (
-            <TreeNodeItem key={child.id} node={child} />
+            <TreeNodeItem key={child.id} node={child} expandAll={expandAll} />
           ))}
         </div>
       )}

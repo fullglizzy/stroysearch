@@ -39,6 +39,7 @@ model User {
   pollVotes             PollVote[]
   giftClaims            GiftClaim[]
   supportTickets        SupportTicket[]
+  supportMessages       SupportMessage[]
 
   @@map("users")
 }
@@ -74,6 +75,30 @@ model UserProfileRole {
   @@map("user_profile_roles")
 }
 
+// ─────────────────────────── СПРАВОЧНИКИ ───────────────────────────
+
+model Region {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("regions")
+}
+
+// Юридические документы (PDF) для /privacy и /terms
+model LegalDocument {
+  key       String   @id // "privacy" | "terms"
+  fileName  String
+  fileUrl   String
+  fileSize  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("legal_documents")
+}
+
 model UserServiceFields {
   userId          String   @id
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -106,6 +131,8 @@ model ProductTreeItem {
   fullNumberPath String
   description    String?
   bannerUrl      String?
+  unitOptions     String  @default("[]") // JSON: string[] — единицы измерения категории
+  characteristics String  @default("[]") // JSON: [{name, value, unit}] — шаблон характеристик
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   deletedAt      DateTime?
@@ -329,7 +356,7 @@ model PollVote {
   user      User       @relation(fields: [userId], references: [id])
   createdAt DateTime   @default(now())
 
-  @@unique([pollId, userId])
+  @@unique([pollId, optionId, userId])
   @@map("poll_votes")
 }
 
@@ -417,20 +444,22 @@ model BillingConfig {
 }
 
 model Invoice {
-  id        String        @id @default(uuid())
+  id        String         @id @default(uuid())
   userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  number    String        @unique
+  user      User           @relation(fields: [userId], references: [id])
+  number    String         @unique
   date      DateTime
   dueDate   DateTime
-  status    String        @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
+  status    String         @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
   subtotal  Float
   limit     Float
-  discount  Float         @default(0)
+  discount  Float          @default(0)
   total     Float
   items     InvoiceItem[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  ticketId  String?        @unique
+  ticket    SupportTicket? @relation(fields: [ticketId], references: [id])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
   sentAt    DateTime?
   paidAt    DateTime?
 
@@ -454,6 +483,7 @@ model InvoiceItem {
 model PageContent {
   id        String   @id @default(uuid())
   pageKey   String   @unique
+  title     String   @default("")
   content   String
   bannerUrl String?
   updatedAt DateTime @updatedAt
@@ -464,15 +494,33 @@ model PageContent {
 // ─────────────────────────── ОБРАЩЕНИЯ В ПОДДЕРЖКУ ───────────────────────────
 
 model SupportTicket {
-  id         String   @id @default(uuid())
-  userId     String?
-  user       User?    @relation(fields: [userId], references: [id])
-  email      String
-  subject    String
-  message    String
-  isResolved Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String           @id @default(uuid())
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id])
+  email          String
+  subject        String
+  message        String
+  isResolved     Boolean          @default(false)
+  userLastReadAt DateTime?
+  adminLastReadAt DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  messages       SupportMessage[]
+  invoice        Invoice?
 
   @@map("support_tickets")
+}
+
+model SupportMessage {
+  id          String        @id @default(uuid())
+  ticketId    String
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String?
+  author      User?         @relation(fields: [authorId], references: [id])
+  isStaff     Boolean       @default(false)
+  message     String
+  attachments String        @default("[]") // JSON: [{url,name}]
+  createdAt   DateTime      @default(now())
+
+  @@map("support_messages")
 }

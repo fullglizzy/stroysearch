@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Loader2, Save, Plus, Trash2, Gift, Package } from "lucide-react";
+import { ImagePreview } from "@/components/shared/ImagePreview";
+import { toastError, toastWarning } from "@/lib/toast";
+import { Loader2, Save, Plus, Trash2, Gift, Package, Upload, X } from "lucide-react";
 
 interface BillingConfig {
   id: string;
@@ -44,13 +54,39 @@ export function FinancesManager({ config, gifts }: Props) {
   const [configMsg, setConfigMsg] = useState("");
 
   // Gift form
+  const [giftOpen, setGiftOpen] = useState(false);
   const [giftName, setGiftName] = useState("");
   const [giftPrice, setGiftPrice] = useState("");
   const [giftLimit, setGiftLimit] = useState("");
+  const [giftImageUrl, setGiftImageUrl] = useState("");
+  const [giftPhotoLoading, setGiftPhotoLoading] = useState(false);
   const [giftLoading, setGiftLoading] = useState(false);
+  const giftPhotoInputRef = useRef<HTMLInputElement>(null);
   const [deleteGiftId, setDeleteGiftId] = useState<string | null>(null);
   const [deleteGiftLoading, setDeleteGiftLoading] = useState(false);
   const [giftError, setGiftError] = useState("");
+
+  async function handleGiftPhoto(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toastWarning("Проверьте файл", "Фото должно быть изображением");
+      return;
+    }
+    setGiftPhotoLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setGiftImageUrl(data.fileUrl);
+      } else {
+        toastError("Ошибка загрузки", data.error || "Не удалось загрузить фото");
+      }
+    } catch {
+      toastError("Ошибка соединения");
+    }
+    setGiftPhotoLoading(false);
+  }
 
   async function saveConfig() {
     setConfigLoading(true);
@@ -76,6 +112,7 @@ export function FinancesManager({ config, gifts }: Props) {
   async function addGift(e: React.FormEvent) {
     e.preventDefault();
     setGiftLoading(true);
+    setGiftError("");
     try {
       const res = await fetch("/api/admin/gifts", {
         method: "POST",
@@ -84,10 +121,12 @@ export function FinancesManager({ config, gifts }: Props) {
           name: giftName,
           coinPrice: parseInt(giftPrice),
           limit: parseInt(giftLimit),
+          imageUrl: giftImageUrl || null,
         }),
       });
       if (res.ok) {
-        setGiftName(""); setGiftPrice(""); setGiftLimit("");
+        setGiftOpen(false);
+        setGiftName(""); setGiftPrice(""); setGiftLimit(""); setGiftImageUrl("");
         setGiftError("");
         router.refresh();
       } else {
@@ -136,18 +175,92 @@ export function FinancesManager({ config, gifts }: Props) {
 
       <TabsContent value="gifts">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-orange-accent" /> Управление подарками</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-orange-accent" /> Управление подарками</CardTitle>
+            <Dialog open={giftOpen} onOpenChange={(o) => {
+              setGiftOpen(o);
+              if (!o) { setGiftError(""); setGiftName(""); setGiftPrice(""); setGiftLimit(""); setGiftImageUrl(""); }
+            }}>
+              <DialogTrigger>
+                <Button className="bg-menthol hover:bg-menthol-dark gap-2" onClick={() => setGiftError("")}>
+                  <Plus className="h-4 w-4" />
+                  Добавить подарок
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Новый подарок</DialogTitle>
+                  <DialogDescription>
+                    Подарок появится в разделе «Сувениры» у пользователей
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={addGift} className="space-y-4">
+                  {giftError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{giftError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="gift-name">Название</Label>
+                    <Input id="gift-name" value={giftName} onChange={(e) => setGiftName(e.target.value)} placeholder="Сувенир" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="gift-price">Цена (мон.)</Label>
+                      <Input id="gift-price" type="number" min="1" value={giftPrice} onChange={(e) => setGiftPrice(e.target.value)} placeholder="10" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gift-limit">Лимит</Label>
+                      <Input id="gift-limit" type="number" min="0" value={giftLimit} onChange={(e) => setGiftLimit(e.target.value)} placeholder="100" required />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Фото подарка</Label>
+                    <input
+                      ref={giftPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleGiftPhoto(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => giftPhotoInputRef.current?.click()}
+                        disabled={giftPhotoLoading}
+                      >
+                        {giftPhotoLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-2" />
+                        )}
+                        {giftImageUrl ? "Заменить фото" : "Загрузить фото"}
+                      </Button>
+                      {giftImageUrl && (
+                        <>
+                          <img src={giftImageUrl} alt="Фото подарка" className="h-12 w-12 rounded-md border object-cover" />
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setGiftImageUrl("")}>
+                            <X className="h-4 w-4 mr-1" />
+                            Убрать
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={giftLoading}>
+                    {giftLoading ? "Создание..." : "Создать подарок"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
           <CardContent className="space-y-6">
-            <form onSubmit={addGift} className="flex gap-3 items-end flex-wrap">
-              <div className="space-y-1"><Label>Название</Label><Input value={giftName} onChange={(e) => setGiftName(e.target.value)} placeholder="Сувенир" required /></div>
-              <div className="space-y-1"><Label>Цена (мон.)</Label><Input type="number" min="1" value={giftPrice} onChange={(e) => setGiftPrice(e.target.value)} placeholder="10" required className="w-24" /></div>
-              <div className="space-y-1"><Label>Лимит</Label><Input type="number" min="0" value={giftLimit} onChange={(e) => setGiftLimit(e.target.value)} placeholder="100" required className="w-24" /></div>
-              <Button type="submit" className="bg-menthol hover:bg-menthol-dark" disabled={giftLoading}>
-                <Plus className="h-4 w-4 mr-1" /> Добавить
-              </Button>
-            </form>
-            {giftError && <Alert variant="destructive"><AlertDescription>{giftError}</AlertDescription></Alert>}
-
             {gifts.length === 0 ? (
               <div className="border rounded-lg p-8 text-center text-muted-foreground">
                 <Package className="h-10 w-10 mx-auto mb-2 opacity-50" />
@@ -158,9 +271,22 @@ export function FinancesManager({ config, gifts }: Props) {
               <div className="space-y-2">
                 {gifts.map((g) => (
                   <div key={g.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{g.name}</p>
-                      <p className="text-xs text-muted-foreground">{g.coinPrice} монет • лимит: {g.limit}</p>
+                    <div className="flex items-center gap-3">
+                      {g.imageUrl ? (
+                        <ImagePreview
+                          src={g.imageUrl}
+                          alt={g.name}
+                          className="h-12 w-12 rounded-md border shrink-0"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-md bg-secondary flex items-center justify-center shrink-0">
+                          <Gift className="h-5 w-5 text-orange-accent" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium text-sm">{g.name}</p>
+                        <p className="text-xs text-muted-foreground">{g.coinPrice} монет • лимит: {g.limit}</p>
+                      </div>
                     </div>
                     <Button variant="ghost" size="icon" className="text-red-500" onClick={() => setDeleteGiftId(g.id)}>
                       <Trash2 className="h-4 w-4" />

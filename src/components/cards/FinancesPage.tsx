@@ -16,6 +16,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toastSuccess } from "@/lib/toast";
+import { ImagePreview } from "@/components/shared/ImagePreview";
 import {
   Coins,
   Gift,
@@ -24,6 +26,7 @@ import {
   TrendingDown,
   Loader2,
   Receipt,
+  ShoppingCart,
 } from "lucide-react";
 
 interface FinancesPageProps {
@@ -43,6 +46,7 @@ interface FinancesPageProps {
     imageUrl: string | null;
   }[];
   userId: string;
+  coinPriceRub: number;
 }
 
 const typeLabels: Record<string, string> = {
@@ -60,7 +64,7 @@ const typeLabels: Record<string, string> = {
   INVOICE_PAID: "Пополнение счёта",
 };
 
-export function FinancesPage({ balance, transactions, gifts, userId }: FinancesPageProps) {
+export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub }: FinancesPageProps) {
   const router = useRouter();
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftTo, setGiftTo] = useState("");
@@ -69,6 +73,37 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
   const [giftLoading, setGiftLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState<string | null>(null);
   const [claimError, setClaimError] = useState("");
+  const [buyOpen, setBuyOpen] = useState(false);
+  const [buyAmount, setBuyAmount] = useState("");
+  const [buyError, setBuyError] = useState("");
+  const [buyLoading, setBuyLoading] = useState(false);
+
+  const buyTotal = (parseInt(buyAmount, 10) || 0) * coinPriceRub;
+
+  async function handleBuyCoins(e: React.FormEvent) {
+    e.preventDefault();
+    setBuyError("");
+    setBuyLoading(true);
+    try {
+      const res = await fetch("/api/coins/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: parseInt(buyAmount, 10) }),
+      });
+      if (res.ok) {
+        setBuyOpen(false);
+        setBuyAmount("");
+        toastSuccess("Заявка отправлена", "Счёт придёт файлом в переписку — статус в «Поддержке»");
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setBuyError(data.error || "Ошибка создания заявки");
+      }
+    } catch {
+      setBuyError("Ошибка соединения");
+    }
+    setBuyLoading(false);
+  }
 
   async function handleGiftCoins(e: React.FormEvent) {
     e.preventDefault();
@@ -131,6 +166,14 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
                 variant="outline"
                 size="sm"
                 className="gap-1"
+                onClick={() => setBuyOpen(true)}
+              >
+                <ShoppingCart className="h-4 w-4" /> Купить монеты
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
                 onClick={() => setGiftOpen(true)}
               >
                 <Send className="h-4 w-4" /> Подарить
@@ -139,6 +182,49 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
           </div>
         </CardContent>
       </Card>
+
+      {/* Buy Coins Dialog */}
+      <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Покупка монет</DialogTitle>
+            <DialogDescription>
+              Заявка будет направлена администратору. Счёт придёт файлом в переписку —
+              статус отслеживайте в разделе «Поддержка».
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBuyCoins} className="space-y-4">
+            {buyError && (
+              <Alert variant="destructive">
+                <AlertDescription>{buyError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="buyAmount">Количество монет</Label>
+              <Input
+                id="buyAmount"
+                type="number"
+                min="1"
+                step="1"
+                value={buyAmount}
+                onChange={(e) => setBuyAmount(e.target.value)}
+                placeholder="10"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Стоимость: {buyTotal} ₽ (1 монета = {coinPriceRub} ₽)
+              </p>
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-menthol hover:bg-menthol-dark"
+              disabled={buyLoading}
+            >
+              {buyLoading ? "Отправка..." : "Отправить заявку"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Gift Coins Dialog */}
       <Dialog open={giftOpen} onOpenChange={setGiftOpen}>
@@ -207,9 +293,17 @@ export function FinancesPage({ balance, transactions, gifts, userId }: FinancesP
                   key={gift.id}
                   className="border rounded-lg p-3 flex flex-col items-center text-center"
                 >
-                  <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center mb-2">
-                    <Gift className="h-6 w-6 text-orange-accent" />
-                  </div>
+                  {gift.imageUrl ? (
+                    <ImagePreview
+                      src={gift.imageUrl}
+                      alt={gift.name}
+                      className="w-16 h-16 rounded-lg mb-2"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center mb-2">
+                      <Gift className="h-6 w-6 text-orange-accent" />
+                    </div>
+                  )}
                   <p className="font-medium text-sm">{gift.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {gift.coinPrice} монет • {gift.limit} шт.

@@ -21,6 +21,7 @@ export default async function FinancesPageServer() {
     where: { limit: { gt: 0 } },
     orderBy: { coinPrice: "asc" },
   });
+  const billing = await prisma.billingConfig.findUnique({ where: { id: "default" } });
 
   return (
     <div className="container-page py-8">
@@ -36,6 +37,7 @@ export default async function FinancesPageServer() {
         }))}
         gifts={gifts}
         userId={userId}
+        coinPriceRub={billing?.coinPriceRub ?? 100}
       />
     </div>
   );

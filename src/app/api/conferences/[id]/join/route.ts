@@ -19,6 +19,11 @@ export async function POST(
     return NextResponse.json({ error: "Конференция не найдена" }, { status: 404 });
   }
 
+  // Организатор не покупает билет на свою конференцию
+  if (conf.organizerId === userId) {
+    return NextResponse.json({ success: true, alreadyJoined: true });
+  }
+
   // Check existing
   const existing = await prisma.conferenceParticipant.findUnique({
     where: { conferenceId_userId: { conferenceId: confId, userId } },

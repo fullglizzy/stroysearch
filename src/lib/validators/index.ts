@@ -13,21 +13,49 @@ export const registerSchema = z.object({
     .min(3, "Логин должен быть не менее 3 символов")
     .max(63, "Логин должен быть не более 63 символов")
     .regex(/^[a-zA-Z0-9_]+$/, "Логин может содержать только латинские буквы, цифры и _"),
-  email: z.string().email("Некорректный email"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Некорректный email"),
   password: z.string().min(8, "Пароль должен быть не менее 8 символов"),
-  agreePersonalData: z.literal(true, {
-    message: "Необходимо согласие на обработку персональных данных",
-  }),
-  agreeTerms: z.literal(true, {
-    message: "Необходимо согласие с пользовательским соглашением",
-  }),
+  agreePersonalData: z
+    .boolean()
+    .refine((value) => value, "Необходимо согласие на обработку персональных данных"),
+  agreeTerms: z
+    .boolean()
+    .refine((value) => value, "Необходимо согласие с пользовательским соглашением"),
 });
+
+/**
+ * Проверяет контрольную сумму ИНН:
+ * 10 цифр — организация, 12 цифр — ИП (алгоритм ФНС).
+ */
+export function isValidInn(inn: string): boolean {
+  if (!/^\d{10}$|^\d{12}$/.test(inn)) return false;
+  const digits = [...inn].map(Number);
+  const checksum = (coeffs: number[], from: number, pos: number) =>
+    (coeffs.reduce((sum, c, i) => sum + c * digits[from + i], 0) % 11) % 10 === digits[pos];
+
+  if (digits.length === 10) {
+    return checksum([2, 4, 10, 3, 5, 9, 4, 6, 8], 0, 9);
+  }
+  return (
+    checksum([7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 0, 10) &&
+    checksum([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8], 0, 11)
+  );
+}
 
 export const registerCompanySchema = registerSchema.extend({
   inn: z
     .string()
-    .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр"),
-  companyName: z.string().max(255).optional(),
+    .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр")
+    .refine(isValidInn, "Такого ИНН не существует — проверьте номер"),
+  companyName: z
+    .string()
+    .trim()
+    .min(1, "Укажите название компании")
+    .max(255, "Название должно быть не более 255 символов"),
 });
 
 // ────────────── Profile ──────────────
@@ -41,8 +69,15 @@ export const profileSchema = z.object({
     .optional()
     .or(z.literal("")),
   region: z.string().max(255).optional(),
-  classifierIds: z.array(z.string()).optional(),
-  roles: z.array(z.enum(["PRODUCTOLOGIST", "TENDER_SPECIALIST", "DESIGNER", "COMPANY_OWNER", "OTHER"])).optional(),
+  classifierIds: z.array(z.string().uuid("Некорректный классификатор")).optional(),
+  roles: z
+    .array(
+      z.enum(
+        ["PRODUCTOLOGIST", "TENDER_SPECIALIST", "DESIGNER", "COMPANY_OWNER", "OTHER"],
+        { error: "Некорректная роль" },
+      ),
+    )
+    .optional(),
   isContactsHidden: z.boolean().optional(),
   kpp: z.string().regex(/^\d{9}$/, "КПП должен содержать ровно 9 цифр").optional().or(z.literal("")),
   legalAddress: z.string().max(511).optional(),
@@ -55,7 +90,14 @@ export const profileSchema = z.object({
 export const addCompanySchema = z.object({
   inn: z.string()
     .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр"),
+  name: z.string()
+    .min(1, "Название компании обязательно")
+    .max(255, "Название должно быть не более 255 символов"),
   email: z.string().email("Некорректный email"),
+  phone: z.string().regex(/^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/, "Неверный формат телефона. Пример: +7 (999) 123-45-67"),
+  website: z.string().max(255, "Сайт должен быть не более 255 символов").optional().or(z.literal("")),
+  region: z.string().min(1, "Выберите регион").max(255),
+  classifierIds: z.array(z.string().uuid()).min(1, "Выберите хотя бы одну категорию классификатора"),
 });
 
 // ────────────── Review ──────────────
@@ -63,7 +105,10 @@ export const addCompanySchema = z.object({
 export const reviewSchema = z.object({
   targetId: z.string().uuid(),
   companyId: z.string().uuid().optional(),
-  comment: z.string().min(100, "Комментарий должен быть не менее 100 знаков"),
+  comment: z
+    .string()
+    .min(100, "Комментарий должен быть не менее 100 знаков")
+    .max(5000, "Комментарий должен быть не более 5000 знаков"),
   signatureType: z.enum(["nick", "name"]),
   criteria: z
     .array(
@@ -86,6 +131,7 @@ export const conferenceSchema = z.object({
   coinPrice: z.number().int().min(0).default(0),
   isPublic: z.boolean().default(true),
   connectionLink: z.string().url().optional().nullable(),
+  logoUrl: z.string().max(511).optional().nullable(),
 });
 
 // ────────────── Library ──────────────
@@ -113,7 +159,6 @@ export const pollSchema = z.object({
 // ────────────── Support ──────────────
 
 export const supportTicketSchema = z.object({
-  email: z.string().email("Некорректный email"),
   subject: z.string().min(1, "Тема обязательна").max(511),
   message: z.string().min(1, "Сообщение обязательно"),
 });
@@ -138,6 +183,7 @@ export const productTreeItemSchema = z.object({
 
 export const pageContentSchema = z.object({
   pageKey: z.string().min(1).max(63),
+  title: z.string().max(255).default(""),
   content: z.string(),
   bannerUrl: z.string().optional().nullable(),
 });

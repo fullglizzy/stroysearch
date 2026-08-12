@@ -10,12 +10,13 @@ export async function getPageContent(pageKey: string) {
 
 export async function updatePageContent(
   pageKey: string,
+  title: string,
   content: string,
   bannerUrl?: string | null,
 ) {
   return prisma.pageContent.upsert({
     where: { pageKey },
-    update: { content, bannerUrl },
-    create: { pageKey, content, bannerUrl },
+    update: { title, content, bannerUrl },
+    create: { pageKey, title, content, bannerUrl },
   });
 }

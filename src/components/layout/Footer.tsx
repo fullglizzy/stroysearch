@@ -8,20 +8,23 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="sm:col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2 font-bold text-lg mb-2">
-              <span className="text-menthol">Е</span>
-              <span className="text-foreground">ЦПР</span>
+            <Link href="/" aria-label="ЕЦПР — на главную" className="flex items-center gap-1 mb-2">
+              <img
+                src="/logo/logo.svg"
+                alt=""
+                // Справа в холсте SVG ~33% пустоты (425px из 1280): при h-36 это ~60px —
+                // убираем их отрицательным отступом, чтобы текст был вплотную к рисунку
+                className="h-36 w-auto translate-y-[9.7%] -mr-[60px]"
+              />
+              <span className="font-bold text-lg">
+                <span className="text-menthol">Е</span>
+                <span className="text-foreground">ЦПР</span>
+              </span>
             </Link>
             <p className="text-sm text-muted-foreground mb-3">
               Единый независимый центр продуктовых решений, закупок и
               технических заданий строительной отрасли
             </p>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Mail className="h-3.5 w-3.5" />
-              <a href="mailto:support@ecpr.ru" className="hover:text-menthol transition-colors">
-                support@ecpr.ru
-              </a>
-            </div>
           </div>
 
           {/* Navigation */}

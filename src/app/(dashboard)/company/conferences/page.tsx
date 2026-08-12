@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExpandableText } from "@/components/shared/ExpandableText";
 import { Calendar, Clock, Users, Eye, Coins, ExternalLink } from "lucide-react";
 
 export default async function CompanyConferencesPage() {
@@ -49,6 +50,7 @@ export default async function CompanyConferencesPage() {
                     <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {conf._count.participants}</span>
                     <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {conf.views}</span>
                   </div>
+                  <ExpandableText text={conf.description} />
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {conf.coinPrice > 0 ? <Badge className="gap-1"><Coins className="h-3 w-3" />{conf.coinPrice}</Badge> : <Badge variant="outline" className="text-menthol">Бесплатно</Badge>}
@@ -81,6 +83,7 @@ export default async function CompanyConferencesPage() {
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {formatDate(conf.date)}</span>
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {conf.time} МСК</span>
                   </div>
+                  <ExpandableText text={conf.description} />
                 </CardContent>
               </Card>
             ))}

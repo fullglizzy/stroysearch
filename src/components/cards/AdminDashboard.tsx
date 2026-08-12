@@ -16,6 +16,9 @@ import {
   Library,
   CheckCircle,
   Eye,
+  MapPin,
+  LifeBuoy,
+  Ruler,
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -27,12 +30,13 @@ interface AdminDashboardProps {
     totalPolls: number;
   };
   userType: string;
+  supportUnread: number;
 }
 
 const isSuper = (type: string) => ["SUPER", "ROOT"].includes(type);
 const isEditor = (type: string) => ["EDITOR", "SUPER", "ROOT"].includes(type);
 
-export function AdminDashboard({ stats, userType }: AdminDashboardProps) {
+export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboardProps) {
   const sections = [
     {
       href: "/admin/content",
@@ -78,13 +82,6 @@ export function AdminDashboard({ stats, userType }: AdminDashboardProps) {
       show: true,
     },
     {
-      href: "/admin/goods",
-      icon: Eye,
-      title: "Товары и услуги",
-      desc: "Управление карточками товаров",
-      show: true,
-    },
-    {
       href: "/admin/polls",
       icon: BarChart3,
       title: "Опросы",
@@ -96,6 +93,35 @@ export function AdminDashboard({ stats, userType }: AdminDashboardProps) {
       icon: Coins,
       title: "Финансы и биллинг",
       desc: "Настройка экономики, реквизиты, подарки",
+      show: isSuper(userType),
+    },
+    {
+      href: "/admin/regions",
+      icon: MapPin,
+      title: "Справочник регионов",
+      desc: "Единый список регионов для всех форм и фильтров",
+      show: isSuper(userType),
+    },
+    {
+      href: "/admin/documents",
+      icon: FileText,
+      title: "Юридические документы",
+      desc: "PDF: согласие на обработку данных, пользовательское соглашение",
+      show: isSuper(userType),
+    },
+    {
+      href: "/admin/support",
+      icon: LifeBuoy,
+      title: "Обращения в поддержку",
+      desc: "Переписка с пользователями и закрытие обращений",
+      show: true,
+      badge: supportUnread > 0 ? supportUnread : undefined,
+    },
+    {
+      href: "/admin/categories",
+      icon: Ruler,
+      title: "Настройки категорий",
+      desc: "Единицы измерения и характеристики категорий классификатора",
       show: isSuper(userType),
     },
   ];

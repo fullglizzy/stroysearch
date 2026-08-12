@@ -22,6 +22,13 @@ export default async function AdminPage() {
   const totalDocuments = await prisma.libraryDocument.count();
   const totalPolls = await prisma.poll.count();
 
+  const supportTickets = await prisma.supportTicket.findMany({
+    include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
+  });
+  const supportUnread = supportTickets.filter((t) =>
+    t.messages.some((m) => !m.isStaff && (!t.adminLastReadAt || m.createdAt > t.adminLastReadAt)),
+  ).length;
+
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Панель управления</h1>
@@ -37,6 +44,7 @@ export default async function AdminPage() {
           totalPolls,
         }}
         userType={userType}
+        supportUnread={supportUnread}
       />
     </div>
   );

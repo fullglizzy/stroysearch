@@ -66,7 +66,7 @@
   --orange-accent: #F48120;
   --orange-light: #FFB74D;
 
-  --background: #FFFFFF;
+  --background: #F3F4F6;
   --foreground: #1A1A2E;
   --card: #FFFFFF;
   --card-foreground: #1A1A2E;
@@ -74,15 +74,15 @@
   --popover-foreground: #1A1A2E;
   --primary: #00A896;
   --primary-foreground: #FFFFFF;
-  --secondary: #F5F7FA;
+  --secondary: #ECEEF1;
   --secondary-foreground: #1A1A2E;
-  --muted: #F5F7FA;
-  --muted-foreground: #6B7280;
+  --muted: #ECEEF1;
+  --muted-foreground: #5F6672;
   --accent: #F48120;
   --accent-foreground: #FFFFFF;
   --destructive: #EF4444;
-  --border: #E5E7EB;
-  --input: #E5E7EB;
+  --border: #DADEE4;
+  --input: #DADEE4;
   --ring: #00A896;
   --chart-1: #00A896;
   --chart-2: #F48120;
@@ -90,13 +90,13 @@
   --chart-4: #9CA3AF;
   --chart-5: #D1D5DB;
   --radius: 0.5rem;
-  --sidebar: #F8FAFB;
+  --sidebar: #EDEFF2;
   --sidebar-foreground: #1A1A2E;
   --sidebar-primary: #00A896;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #F48120;
   --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #E5E7EB;
+  --sidebar-border: #DADEE4;
   --sidebar-ring: #00A896;
 }
 
@@ -143,7 +143,7 @@
 
 /* Custom utility classes */
 @utility container-page {
-  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  @apply max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10;
 }
 
 @utility text-balance {
