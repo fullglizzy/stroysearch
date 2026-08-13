@@ -272,17 +272,27 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
     [regions],
   );
 
+  // Поля, просмотры которых уже засчитаны (один раз за сессию на поле)
+  const countedRef = useRef<Record<string, Record<string, boolean>>>({});
+
   const handleReveal = useCallback(
     async (companyId: string, field: string) => {
       const key = `${companyId}`;
+      const isReveal = !revals[key]?.[field];
       setRevals((prev) => ({
         ...prev,
         [key]: { ...prev[key], [field]: !prev[key]?.[field] },
       }));
 
-      // Метрика просмотров считается только для компаний
+      // Метрика просмотров считается только для компаний,
+      // только при раскрытии и один раз за сессию
       const row = rows.find((c) => c.id === companyId);
-      if (row?.kind === "participant") return;
+      if (row?.kind === "participant" || !isReveal) return;
+      if (countedRef.current[key]?.[field]) return;
+      countedRef.current = {
+        ...countedRef.current,
+        [key]: { ...countedRef.current[key], [field]: true },
+      };
 
       try {
         await fetch(`/api/suppliers/metrics/${companyId}/click`, {
@@ -294,7 +304,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
         // silent
       }
     },
-    [rows],
+    [rows, revals],
   );
 
   async function handleAddCompany(values: AddCompanyFormValues) {

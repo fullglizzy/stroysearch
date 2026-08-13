@@ -59,6 +59,8 @@ export default async function CompanyProfilePage() {
           phoneViews: metrics.phoneViews,
           emailViews: metrics.emailViews,
           websiteViews: metrics.websiteViews,
+          ratingViews: metrics.ratingViews,
+          reviewsViews: metrics.reviewsViews,
         } : null}
         regionOptions={regions.map((r) => ({ value: r.name, label: r.name }))}
         classifierOptions={treeItems.map((t) => ({

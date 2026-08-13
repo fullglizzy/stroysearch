@@ -139,7 +139,7 @@ export function RegionsManager({ regions }: RegionsManagerProps) {
     <div className="space-y-6">
       {/* Добавление */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="px-4">
           <div className="flex flex-col sm:flex-row gap-2">
             <Input
               value={newName}
@@ -167,7 +167,7 @@ export function RegionsManager({ regions }: RegionsManagerProps) {
 
       {/* Список */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="px-4">
           {regions.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
               Список регионов пуст

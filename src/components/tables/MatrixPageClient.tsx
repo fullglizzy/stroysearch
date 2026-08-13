@@ -164,10 +164,22 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
     return Array.from(map.entries());
   }, [products, sortBy]);
 
+  // Поля, просмотры которых уже засчитаны (один раз за сессию на поле)
+  const countedRef = useRef<Record<string, Record<string, boolean>>>({});
+
   const handleReveal = async (companyId: string, field: string) => {
+    const isReveal = !revals[companyId]?.[field];
     setRevals((prev) => ({
       ...prev, [companyId]: { ...prev[companyId], [field]: !prev[companyId]?.[field] },
     }));
+
+    // Метрика: только при раскрытии и один раз за сессию
+    if (!isReveal || countedRef.current[companyId]?.[field]) return;
+    countedRef.current = {
+      ...countedRef.current,
+      [companyId]: { ...countedRef.current[companyId], [field]: true },
+    };
+
     try { await fetch(`/api/suppliers/metrics/${companyId}/click`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field }) }); } catch { /* */ }
   };
 

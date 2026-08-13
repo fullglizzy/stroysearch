@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Mail, Globe, Loader2, Save } from "lucide-react";
+import { Phone, Mail, Globe, Star, MessageSquare, Loader2, Save } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { profileSchema } from "@/lib/validators";
 import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
@@ -71,7 +71,7 @@ interface CompanyProfileFormProps {
     directorName: string;
   };
   username: string;
-  metrics: { phoneViews: number; emailViews: number; websiteViews: number } | null;
+  metrics: { phoneViews: number; emailViews: number; websiteViews: number; ratingViews: number; reviewsViews: number } | null;
   regionOptions: SearchSelectOption[];
   classifierOptions: MultiSelectOption[];
 }
@@ -159,6 +159,14 @@ export function CompanyProfileForm({
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Сайт: <strong>{metrics.websiteViews}</strong> просмотров</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Рейтинг: <strong>{metrics.ratingViews}</strong> просмотров</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Отзывы: <strong>{metrics.reviewsViews}</strong> просмотров</span>
               </div>
             </div>
           </CardContent>

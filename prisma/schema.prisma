@@ -106,6 +106,7 @@ model UserServiceFields {
   isEmailVerified Boolean  @default(false)
   isPhoneVerified Boolean  @default(false)
   refreshTokenHash String?
+  banReason       String?
 
   @@map("user_service_fields")
 }

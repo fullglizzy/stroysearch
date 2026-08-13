@@ -35,17 +35,35 @@ export default function LoginPage() {
 
     const formData = new FormData(e.currentTarget);
 
-    const result = await signIn("credentials", {
-      username: formData.get("username") as string,
-      password: formData.get("password") as string,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        username: formData.get("username") as string,
+        password: formData.get("password") as string,
+        redirect: false,
+      });
 
-    setLoading(false);
+      if (result?.error) {
+        // Забаненный аккаунт — показываем причину блокировки
+        if (result.code === "banned") {
+          try {
+            const res = await fetch("/api/auth/ban-info", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: formData.get("username") as string }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data?.banned) {
+              setError(`Аккаунт заблокирован. Причина: ${data.reason}`);
+              return;
+            }
+          } catch {
+            // fallthrough — общая ошибка ниже
+          }
+        }
+        setError("Неверный логин или пароль");
+        return;
+      }
 
-    if (result?.error) {
-      setError("Неверный логин или пароль");
-    } else {
       // Возвращаем пользователя туда, откуда его отправил middleware (защищённая страница)
       const params = new URLSearchParams(window.location.search);
       const callbackUrl = params.get("callbackUrl") || "";
@@ -68,6 +86,12 @@ export default function LoginPage() {
 
       router.push(dashboard);
       router.refresh();
+    } catch (err) {
+      // Сетевая ошибка или устаревший JS-бандл — показываем ошибку вместо «тихого» зависания
+      console.error("Ошибка входа", err);
+      setError("Не удалось выполнить вход. Обновите страницу (Ctrl+F5) и попробуйте ещё раз");
+    } finally {
+      setLoading(false);
     }
   }
 
