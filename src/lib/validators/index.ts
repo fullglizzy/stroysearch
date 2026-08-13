@@ -83,6 +83,7 @@ export const profileSchema = z.object({
   legalAddress: z.string().max(511).optional(),
   directorName: z.string().max(255).optional(),
   companyName: z.string().max(255).optional(),
+  website: z.string().max(255, "Сайт должен быть не более 255 символов").optional().or(z.literal("")),
 });
 
 // ────────────── Company ──────────────

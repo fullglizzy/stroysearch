@@ -16,7 +16,7 @@ import { Loader2, Crown, Shield, Pencil, Building2, User } from "lucide-react";
 const quickLogins = [
   { label: "Владелец", username: "root", icon: Crown, role: "ROOT", color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
   { label: "КерамФасад", username: "keram_facade", icon: Building2, role: "КОМПАНИЯ", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
-  { label: "Проектировщик", username: "petrov_engineer", icon: User, role: "УЧАСТНИК", color: "bg-green-100 text-green-700 hover:bg-green-200" },
+  { label: "Проектировщик", username: "petrov_nik", icon: User, role: "УЧАСТНИК", color: "bg-green-100 text-green-700 hover:bg-green-200" },
 ];
 
 export default function LoginPage() {

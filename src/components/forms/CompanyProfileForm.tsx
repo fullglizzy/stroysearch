@@ -39,6 +39,13 @@ const companyProfileSchema = z.object({
     .optional()
     .or(z.literal("")),
   phone: profileSchema.shape.phone,
+  website: z
+    .string()
+    .trim()
+    .max(255, "Сайт должен быть не более 255 символов")
+    .refine((v) => !/\s/.test(v), "Ссылка не должна содержать пробелов")
+    .optional()
+    .or(z.literal("")),
   region: z
     .string()
     .trim()
@@ -58,6 +65,7 @@ interface CompanyProfileFormProps {
     legalAddress: string;
     phone: string;
     email: string;
+    website: string;
     region: string;
     classifierIds: string[];
     directorName: string;
@@ -94,6 +102,7 @@ export function CompanyProfileForm({
       directorName: initialData.directorName,
       legalAddress: initialData.legalAddress,
       phone: initialData.phone,
+      website: initialData.website,
       region: initialData.region,
       classifierIds: initialData.classifierIds,
     },
@@ -108,6 +117,7 @@ export function CompanyProfileForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: data.phone || undefined,
+          website: data.website || undefined,
           region: data.region || undefined,
           classifierIds: data.classifierIds,
           companyName: data.companyName || undefined,
@@ -289,6 +299,28 @@ export function CompanyProfileForm({
           <div className="space-y-2">
             <Label>Email</Label>
             <Input value={initialData.email} disabled />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="website">Сайт (необязательно)</Label>
+            <Input
+              id="website"
+              type="url"
+              autoComplete="url"
+              placeholder="example.ru"
+              maxLength={255}
+              disabled={loading}
+              aria-invalid={!!errors.website}
+              aria-describedby={errors.website ? "website-error" : undefined}
+              {...register("website", {
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/\s/g, "");
+                },
+                onBlur: (e) => {
+                  e.target.value = e.target.value.trim();
+                },
+              })}
+            />
+            {errors.website && <FieldError id="website-error" message={errors.website.message} />}
           </div>
         </CardContent>
       </Card>

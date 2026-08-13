@@ -50,6 +50,7 @@ export async function PATCH(request: Request) {
     lastName,
     middleName,
     phone,
+    website,
     region,
     isContactsHidden,
     roles,
@@ -61,6 +62,14 @@ export async function PATCH(request: Request) {
   } = parsed.data;
 
   const classifierIdsCsv = (classifierIds ?? []).join(",");
+
+  // Нормализуем сайт: добавляем https://, если протокол не указан
+  let normalizedWebsite: string | null = null;
+  if (website && website.trim()) {
+    normalizedWebsite = /^https?:\/\//i.test(website.trim())
+      ? website.trim()
+      : `https://${website.trim()}`;
+  }
 
   try {
     await prisma.user.update({
@@ -96,6 +105,14 @@ export async function PATCH(request: Request) {
         directorName,
       },
     });
+
+    // Обновляем сайт компании (если у пользователя есть компания)
+    if (website !== undefined) {
+      await prisma.company.updateMany({
+        where: { ownerUserId: userId },
+        data: { website: normalizedWebsite },
+      });
+    }
 
     // Обновляем роли (только если они переданы)
     if (roles !== undefined) {

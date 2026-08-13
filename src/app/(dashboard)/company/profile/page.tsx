@@ -46,6 +46,7 @@ export default async function CompanyProfilePage() {
           legalAddress: company?.legalAddress || profile?.legalAddress || "",
           phone: company?.phone || "",
           email: session.user?.email || "",
+          website: company?.website || "",
           region: company?.region || profile?.region || "",
           classifierIds: (company?.classifierIds || profile?.classifierIds || "")
             .split(",")
