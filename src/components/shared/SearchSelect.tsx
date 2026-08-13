@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export interface SearchSelectOption {
@@ -24,6 +25,8 @@ interface SearchSelectProps {
   ariaInvalid?: boolean;
   /** Имя скрытого input — для отправки значения через форму */
   name?: string;
+  /** Не показывать название выбранной категории — только счётчик «Выбрано: 1» */
+  hideSelectedLabels?: boolean;
 }
 
 export function SearchSelect({
@@ -36,6 +39,7 @@ export function SearchSelect({
   disabled = false,
   ariaInvalid = false,
   name,
+  hideSelectedLabels = false,
 }: SearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -130,7 +134,17 @@ export function SearchSelect({
         onClick={() => setOpen(!open)}
       >
         <span className={cn("truncate", !selectedOption && !value && "text-muted-foreground")}>
-          {selectedOption ? selectedOption.label : value || placeholder}
+          {selectedOption ? (
+            hideSelectedLabels ? (
+              <Badge variant="secondary" className="text-xs font-normal">
+                Выбрано: 1
+              </Badge>
+            ) : (
+              selectedOption.label
+            )
+          ) : (
+            value || placeholder
+          )}
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>

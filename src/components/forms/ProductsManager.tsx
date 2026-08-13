@@ -369,6 +369,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
               }}
               placeholder="Выберите категорию"
               searchPlaceholder="Поиск категории..."
+              hideSelectedLabels
               ariaInvalid={!!errors.treeItemId}
             />
           )}

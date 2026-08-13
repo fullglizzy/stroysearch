@@ -46,7 +46,16 @@ export default function LoginPage() {
     if (result?.error) {
       setError("Неверный логин или пароль");
     } else {
-      // Redirect based on role
+      // Возвращаем пользователя туда, откуда его отправил middleware (защищённая страница)
+      const params = new URLSearchParams(window.location.search);
+      const callbackUrl = params.get("callbackUrl") || "";
+      if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") && callbackUrl !== "/login") {
+        router.push(callbackUrl);
+        router.refresh();
+        return;
+      }
+
+      // Без callbackUrl — в кабинет по роли
       const session = await getSession();
       const userType = (session?.user as any)?.type as string;
 
