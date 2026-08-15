@@ -68,6 +68,7 @@ interface PayoutRow {
 interface HistoryRow {
   id: string;
   number: string;
+  kind: string;
   username: string;
   companyName: string | null;
   date: string;
@@ -76,13 +77,34 @@ interface HistoryRow {
   total: number;
 }
 
+interface ActivityRow {
+  userId: string;
+  username: string;
+  status: string;
+  companyName: string;
+  newProducts: number;
+  newReviews: number;
+  presenceDays: number;
+  prices: {
+    productPrice: number;
+    reviewPrice: number;
+    presencePrice: number;
+  };
+  billedUntil: string | null;
+}
+
 interface Props {
-  tab: "rates" | "history";
+  tab: "rates" | "history" | "activity";
   rows: PayoutRow[];
   total: number;
   page: number;
   totalPages: number;
   initialQuery: { q: string; status: string; sort: string; pending: boolean };
+  activityRows: ActivityRow[];
+  activityTotal: number;
+  activityPage: number;
+  activityTotalPages: number;
+  activityQuery: { q: string; status: string; sort: string; pending: boolean; start: string; end: string };
   historyRows: HistoryRow[];
   historyTotal: number;
   historyPage: number;
@@ -141,6 +163,11 @@ export function MetricsPayoutsManager({
   page,
   totalPages,
   initialQuery,
+  activityRows,
+  activityTotal,
+  activityPage,
+  activityTotalPages,
+  activityQuery,
   historyRows,
   historyTotal,
   historyPage,
@@ -152,6 +179,8 @@ export function MetricsPayoutsManager({
   // ── Поиск/фильтры: состояние живёт в URL ──
   const [search, setSearch] = useState(initialQuery.q);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [aSearch, setASearch] = useState(activityQuery.q);
+  const aSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hSearch, setHSearch] = useState(historyQuery.q);
   const hSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -165,13 +194,15 @@ export function MetricsPayoutsManager({
     router.replace(qs ? `/admin/payouts?${qs}` : "/admin/payouts", { scroll: false });
   }
 
-  function handleSearchChange(value: string, key: "q" | "hq") {
+  function handleSearchChange(value: string, key: "q" | "aq" | "hq") {
     if (key === "q") setSearch(value);
+    else if (key === "aq") setASearch(value);
     else setHSearch(value);
-    const timerRef = key === "q" ? searchTimer : hSearchTimer;
+    const timerRef = key === "q" ? searchTimer : key === "aq" ? aSearchTimer : hSearchTimer;
+    const pageKey = key === "q" ? "page" : key === "aq" ? "apage" : "hpage";
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      updateQuery({ [key]: value, [key === "q" ? "page" : "hpage"]: null });
+      updateQuery({ [key]: value, [pageKey]: null });
     }, 300);
   }
 
@@ -263,6 +294,91 @@ export function MetricsPayoutsManager({
     }
   }
 
+  // ── Попап ставок и счёта за активность ──
+  const [activityRow, setActivityRow] = useState<ActivityRow | null>(null);
+  const [activityInputs, setActivityInputs] = useState<{ productPrice: string; reviewPrice: string; presencePrice: string }>({
+    productPrice: "0",
+    reviewPrice: "0",
+    presencePrice: "0",
+  });
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  function openActivityDialog(row: ActivityRow) {
+    setActivityRow(row);
+    setActivityInputs({
+      productPrice: String(row.prices.productPrice),
+      reviewPrice: String(row.prices.reviewPrice),
+      presencePrice: String(row.prices.presencePrice),
+    });
+  }
+
+  function activityDialogTotal(): number {
+    if (!activityRow) return 0;
+    const productPrice = parseInput(activityInputs.productPrice) ?? 0;
+    const reviewPrice = parseInput(activityInputs.reviewPrice) ?? 0;
+    const presencePrice = parseInput(activityInputs.presencePrice) ?? 0;
+    return (
+      Math.round(
+        (activityRow.newProducts * productPrice +
+          activityRow.newReviews * reviewPrice +
+          activityRow.presenceDays * presencePrice) *
+          100,
+      ) / 100
+    );
+  }
+
+  async function handleCreateActivityInvoice() {
+    if (!activityRow) return;
+    const productPrice = parseInput(activityInputs.productPrice);
+    const reviewPrice = parseInput(activityInputs.reviewPrice);
+    const presencePrice = parseInput(activityInputs.presencePrice);
+    if (productPrice === null || reviewPrice === null || presencePrice === null) {
+      toastError("Ошибка", "Введите корректные ставки (только числа)");
+      return;
+    }
+
+    setActivityLoading(true);
+    try {
+      // Сначала сохраняем ставки, затем формируем счёт за период из URL
+      const rateRes = await fetch("/api/admin/payouts/activity-rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: activityRow.userId, productPrice, reviewPrice, presencePrice }),
+      });
+      if (!rateRes.ok) {
+        const d = await rateRes.json().catch(() => ({}));
+        toastError("Ошибка", d.error || "Не удалось сохранить ставки");
+        return;
+      }
+
+      const invRes = await fetch("/api/admin/payouts/activity-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: activityRow.userId,
+          productPrice,
+          reviewPrice,
+          presencePrice,
+          startDate: activityQuery.start,
+          endDate: activityQuery.end,
+        }),
+      });
+      if (invRes.ok) {
+        const d = await invRes.json().catch(() => ({}));
+        toastSuccess("Счёт за активность сформирован", d.number ? `Счёт № ${d.number} на ${formatRub(d.total)}` : undefined);
+        setActivityRow(null);
+        router.refresh();
+      } else {
+        const d = await invRes.json().catch(() => ({}));
+        toastError("Ошибка", d.error || "Не удалось сформировать счёт");
+      }
+    } catch {
+      toastError("Ошибка соединения", "Проверьте подключение к интернету");
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
   // ── История выплат: печать и отметка выплаты ──
   const [printOpen, setPrintOpen] = useState<string | null>(null);
   const [printData, setPrintData] = useState<InvoicePrintData | null>(null);
@@ -313,6 +429,14 @@ export function MetricsPayoutsManager({
     initialQuery.sort !== "created" ||
     initialQuery.pending
   );
+  const hasActivityFilters = !!(
+    activityQuery.q ||
+    activityQuery.status !== "ACTIVE" ||
+    activityQuery.sort !== "created" ||
+    activityQuery.pending ||
+    activityQuery.start !== "" ||
+    activityQuery.end !== ""
+  );
   const hasHistoryFilters = !!(historyQuery.q || historyQuery.status || historyQuery.sort !== "desc");
 
   return (
@@ -320,6 +444,7 @@ export function MetricsPayoutsManager({
       <Tabs value={tab} onValueChange={(v) => updateQuery({ tab: v === "rates" ? null : v })}>
         <TabsList>
           <TabsTrigger value="rates">Ставки и счета</TabsTrigger>
+          <TabsTrigger value="activity">Активность</TabsTrigger>
           <TabsTrigger value="history">История выплат</TabsTrigger>
         </TabsList>
 
@@ -527,6 +652,278 @@ export function MetricsPayoutsManager({
           </Dialog>
         </TabsContent>
 
+        {/* ── Вкладка «Активность» ── */}
+        <TabsContent value="activity" className="pt-4">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Поиск: логин, email, ник, компания..."
+                value={aSearch}
+                onChange={(e) => handleSearchChange(e.target.value, "aq")}
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={activityQuery.status || "all"}
+              items={{ all: "Все статусы", ...USER_STATUS_LABELS }}
+              onValueChange={(v) => updateQuery({ astatus: v === "all" ? null : v, apage: null })}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" label="Все статусы">Все статусы</SelectItem>
+                {Object.entries(USER_STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value} label={label}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-sm">
+              <Input
+                type="date"
+                value={activityQuery.start}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) updateQuery({ astart: v, apage: null });
+                }}
+                className="w-[150px] h-9"
+                title="Начало периода"
+              />
+              <span className="text-muted-foreground">—</span>
+              <Input
+                type="date"
+                value={activityQuery.end}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) updateQuery({ aend: v, apage: null });
+                }}
+                className="w-[150px] h-9"
+                title="Конец периода"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <Checkbox
+                checked={activityQuery.pending}
+                onCheckedChange={(v) => updateQuery({ apending: v === true ? "1" : null, apage: null })}
+              />
+              Только с активностью
+            </label>
+            {hasActivityFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setASearch("");
+                  updateQuery({ aq: null, astatus: null, asort: null, apending: null, astart: null, aend: null });
+                }}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Сбросить
+              </Button>
+            )}
+          </div>
+
+          <div className="border rounded-lg overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Компания</TableHead>
+                  <TableHead>Дней на платформе</TableHead>
+                  <TableHead>Товаров за период</TableHead>
+                  <TableHead>Отзывов за период</TableHead>
+                  <TableHead>Ставки (день · товар · отзыв)</TableHead>
+                  <TableHead>К выплате</TableHead>
+                  <TableHead>Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activityRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      Компании не найдены
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  activityRows.map((row) => {
+                    const hasActivity = row.newProducts > 0 || row.newReviews > 0 || row.presenceDays > 0;
+                    const estimate =
+                      Math.round(
+                        (row.newProducts * row.prices.productPrice +
+                          row.newReviews * row.prices.reviewPrice +
+                          row.presenceDays * row.prices.presencePrice) *
+                          100,
+                      ) / 100;
+                    return (
+                      <TableRow key={row.userId}>
+                        <TableCell className="max-w-[240px]">
+                          <div className="font-medium truncate">{row.companyName}</div>
+                          <div className="text-xs text-muted-foreground truncate">@{row.username}</div>
+                          <Badge variant="secondary" className={`mt-1 text-xs ${USER_STATUS_BADGE[row.status] || ""}`}>
+                            {USER_STATUS_LABELS[row.status] || row.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{row.presenceDays}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className={row.newProducts > 0 ? "text-sm font-medium" : "text-sm text-muted-foreground"}>
+                            {row.newProducts}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className={row.newReviews > 0 ? "text-sm font-medium" : "text-sm text-muted-foreground"}>
+                            {row.newReviews}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatRub(row.prices.presencePrice)} · {formatRub(row.prices.productPrice)} · {formatRub(row.prices.reviewPrice)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{formatRub(estimate)}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-menthol hover:bg-menthol-dark"
+                            disabled={!hasActivity}
+                            onClick={() => openActivityDialog(row)}
+                          >
+                            <FileText className="h-3 w-3" />
+                            Ставки и счёт
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {activityTotalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+              <span>Всего: {activityTotal} компаний</span>
+              <Pagination
+                currentPage={activityPage}
+                totalPages={activityTotalPages}
+                onPageChange={(p) => updateQuery({ apage: String(p) })}
+              />
+            </div>
+          )}
+
+          {/* Попап ставок и счёта за активность */}
+          <Dialog open={!!activityRow} onOpenChange={(o) => { if (!o) setActivityRow(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Ставки и счёт за активность</DialogTitle>
+                <DialogDescription>
+                  {activityRow ? `${activityRow.companyName} (@${activityRow.username})` : ""}
+                </DialogDescription>
+              </DialogHeader>
+              {activityRow && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border p-3 text-sm space-y-1">
+                    <p className="text-muted-foreground">
+                      Период: с {new Date(`${activityQuery.start}T00:00:00`).toLocaleDateString("ru-RU")} по{" "}
+                      {new Date(`${activityQuery.end}T00:00:00`).toLocaleDateString("ru-RU")}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Дней на платформе: {activityRow.presenceDays} · Товаров: {activityRow.newProducts} · Отзывов: {activityRow.newReviews}
+                    </p>
+                    {activityRow.billedUntil && (
+                      <p className="text-muted-foreground">
+                        Уже выставлено по: {new Date(activityRow.billedUntil).toLocaleDateString("ru-RU")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-36 shrink-0">
+                        <Label className="text-sm">День на платформе</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {activityRow.presenceDays > 0 ? `${activityRow.presenceDays} дн. в периоде` : "нет дней в периоде"}
+                        </p>
+                      </div>
+                      <Input
+                        value={activityInputs.presencePrice}
+                        onChange={(e) =>
+                          setActivityInputs((prev) => ({
+                            ...prev,
+                            presencePrice: e.target.value.replace(/[^0-9.]/g, ""),
+                          }))
+                        }
+                        placeholder="0"
+                        inputMode="decimal"
+                        className="h-8 w-24 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">₽ / день</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-36 shrink-0">
+                        <Label className="text-sm">Товар</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {activityRow.newProducts > 0 ? `${activityRow.newProducts} за период` : "нет за период"}
+                        </p>
+                      </div>
+                      <Input
+                        value={activityInputs.productPrice}
+                        onChange={(e) =>
+                          setActivityInputs((prev) => ({
+                            ...prev,
+                            productPrice: e.target.value.replace(/[^0-9.]/g, ""),
+                          }))
+                        }
+                        placeholder="0"
+                        inputMode="decimal"
+                        className="h-8 w-24 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">₽ / товар</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-36 shrink-0">
+                        <Label className="text-sm">Отзыв</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {activityRow.newReviews > 0 ? `${activityRow.newReviews} за период` : "нет за период"}
+                        </p>
+                      </div>
+                      <Input
+                        value={activityInputs.reviewPrice}
+                        onChange={(e) =>
+                          setActivityInputs((prev) => ({
+                            ...prev,
+                            reviewPrice: e.target.value.replace(/[^0-9.]/g, ""),
+                          }))
+                        }
+                        placeholder="0"
+                        inputMode="decimal"
+                        className="h-8 w-24 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">₽ / отзыв</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <span className="text-sm font-medium">Итого к выплате</span>
+                    <span className="font-bold">{formatRub(activityDialogTotal())}</span>
+                  </div>
+                  <Button
+                    className="w-full bg-menthol hover:bg-menthol-dark"
+                    disabled={activityLoading || activityDialogTotal() <= 0}
+                    onClick={handleCreateActivityInvoice}
+                  >
+                    {activityLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <FileText className="h-4 w-4 mr-2" />
+                    )}
+                    Сформировать счёт
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
         {/* ── Вкладка «История выплат» ── */}
         <TabsContent value="history" className="pt-4">
           <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -607,7 +1004,14 @@ export function MetricsPayoutsManager({
                     const paying = payingId === inv.id;
                     return (
                       <TableRow key={inv.id}>
-                        <TableCell className="font-mono text-sm">{inv.number}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {inv.number}
+                          {inv.kind === "ACTIVITY" && (
+                            <Badge variant="outline" className="ml-1 text-[10px] px-1 h-4">
+                              активность
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="max-w-[200px] truncate">
                           {inv.companyName || `@${inv.username}`}
                         </TableCell>

@@ -14,7 +14,7 @@ export async function GET() {
   const userId = (session.user as { id: string }).id;
 
   const invoices = await prisma.invoice.findMany({
-    where: { userId, kind: "PAYOUT" },
+    where: { userId, kind: { in: ["PAYOUT", "ACTIVITY"] } },
     orderBy: { date: "desc" },
     select: {
       id: true,

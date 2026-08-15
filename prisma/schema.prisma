@@ -31,6 +31,7 @@ model User {
   products              Product[]
   wallet                Wallet?
   payoutRate            MetricsPayoutRate?
+  activityPayoutRate    ActivityPayoutRate?
   treeSnapshots         TreeSnapshot[]
   invoices              Invoice[]
   transactions          Transaction[]
@@ -515,6 +516,22 @@ model MetricsPayoutRate {
   updatedAt        DateTime @updatedAt
 
   @@map("metrics_payout_rates")
+}
+
+// ─────────────────── ВЫПЛАТЫ ЗА АКТИВНОСТЬ ───────────────────
+// Ставки за активность компании (₽ за товар/отзыв) и дата, по которую
+// активность уже выставлена в счёт (включительно) — защита от повторного
+// выставления за тот же период.
+model ActivityPayoutRate {
+  userId        String    @id
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productPrice  Decimal   @default(0) // ₽ за добавленный товар
+  reviewPrice   Decimal   @default(0) // ₽ за полученный отзыв
+  presencePrice Decimal   @default(0) // ₽ за день нахождения на платформе
+  billedUntil   DateTime? // период уже выставлен по эту дату (включительно)
+  updatedAt     DateTime  @updatedAt
+
+  @@map("activity_payout_rates")
 }
 
 // ─────────────────────────── СНИМКИ ДЕРЕВА ───────────────────────────

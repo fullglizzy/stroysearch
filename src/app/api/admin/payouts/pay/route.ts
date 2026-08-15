@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     where: { id: invoiceId },
     select: { id: true, kind: true, status: true, sentAt: true },
   });
-  if (!invoice || invoice.kind !== "PAYOUT") {
+  if (!invoice || (invoice.kind !== "PAYOUT" && invoice.kind !== "ACTIVITY")) {
     return NextResponse.json({ error: "Счёт на выплату не найден" }, { status: 404 });
   }
   if (invoice.status === "PAID") {

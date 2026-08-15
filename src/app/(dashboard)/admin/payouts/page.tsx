@@ -10,6 +10,24 @@ import type { SessionUser } from "@/types";
 const PAGE_SIZE = 20;
 const USER_STATUSES = ["ACTIVE", "INACTIVE", "BANNED", "DELETED"] as const;
 const INVOICE_STATUSES = ["DRAFT", "SENT", "PAID", "SKIPPED", "OVERDUE", "CANCELLED"] as const;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+// Текущий месяц в формате YYYY-MM-DD (период активности по умолчанию)
+function currentMonthPeriod() {
+  const now = new Date();
+  return {
+    start: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`,
+    end: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`,
+  };
+}
+
+function parsePeriodDate(raw: string, fallback: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00Z`) : new Date(`${fallback}T00:00:00Z`);
+}
 
 export default async function AdminPayoutsPage({
   searchParams,
@@ -29,7 +47,8 @@ export default async function AdminPayoutsPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const tab = get("tab") === "history" ? "history" : "rates";
+  const tabRaw = get("tab");
+  const tab = tabRaw === "history" ? "history" : tabRaw === "activity" ? "activity" : "rates";
 
   // ── Вкладка «Ставки и счета» ──
   const q = (get("q") || "").trim();
@@ -108,6 +127,95 @@ export default async function AdminPayoutsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // ── Вкладка «Активность» ──
+  const aq = (get("aq") || "").trim();
+  const apage = Math.max(1, parseInt(get("apage") || "1", 10) || 1);
+  const astatus = (USER_STATUSES as readonly string[]).includes(get("astatus") || "")
+    ? get("astatus")!
+    : "ACTIVE";
+  const asort = get("asort") === "name" ? "name" : "created";
+  const apending = get("apending") === "1";
+
+  const monthPeriod = currentMonthPeriod();
+  const astartRaw = get("astart") || monthPeriod.start;
+  const aendRaw = get("aend") || monthPeriod.end;
+  const astart = parsePeriodDate(astartRaw, monthPeriod.start);
+  const aend = parsePeriodDate(aendRaw, monthPeriod.end);
+  const aendExclusive = new Date(aend.getTime() + DAY_MS);
+
+  // Право на выплату за активность: у карточки есть владелец (компания
+  // зарегистрировалась сама) — ownedCompany is not null
+  const aWhere: Prisma.UserWhereInput = { type: "COMPANY", ownedCompany: { isNot: null } };
+  if (aq) {
+    aWhere.OR = [
+      { username: { contains: aq } },
+      { email: { contains: aq } },
+      { profile: { nick: { contains: aq } } },
+      { profile: { firstName: { contains: aq } } },
+      { profile: { lastName: { contains: aq } } },
+      { ownedCompany: { name: { contains: aq } } },
+    ];
+  }
+  if (astatus) aWhere.status = astatus;
+
+  const aUsers = await prisma.user.findMany({
+    where: aWhere,
+    include: {
+      ownedCompany: { select: { id: true, name: true } },
+      activityPayoutRate: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const activityRows = await Promise.all(
+    aUsers.map(async (u) => {
+      const companyId = u.ownedCompany!.id;
+      const [newProducts, newReviews] = await Promise.all([
+        prisma.product.count({
+          where: { companyId, createdAt: { gte: astart, lt: aendExclusive } },
+        }),
+        prisma.review.count({
+          where: { companyId, createdAt: { gte: astart, lt: aendExclusive } },
+        }),
+      ]);
+      // Дни нахождения на платформе в периоде — с момента регистрации аккаунта
+      const presenceStart = new Date(Math.max(astart.getTime(), u.createdAt.getTime()));
+      const presenceDays =
+        presenceStart.getTime() < aendExclusive.getTime()
+          ? Math.floor((aendExclusive.getTime() - presenceStart.getTime()) / DAY_MS)
+          : 0;
+      const r = u.activityPayoutRate;
+      return {
+        userId: u.id,
+        username: u.username,
+        status: u.status,
+        companyName: u.ownedCompany!.name,
+        newProducts,
+        newReviews,
+        presenceDays,
+        prices: {
+          productPrice: r?.productPrice.toNumber() ?? 0,
+          reviewPrice: r?.reviewPrice.toNumber() ?? 0,
+          presencePrice: r?.presencePrice.toNumber() ?? 0,
+        },
+        billedUntil: r?.billedUntil ? r.billedUntil.toISOString() : null,
+      };
+    }),
+  );
+
+  const aFiltered = apending
+    ? activityRows.filter((r) => r.newProducts > 0 || r.newReviews > 0)
+    : activityRows;
+  const activitySorted =
+    asort === "name"
+      ? [...aFiltered].sort((a, b) =>
+          (a.companyName || a.username).localeCompare(b.companyName || b.username, "ru"),
+        )
+      : aFiltered;
+  const activityTotal = activitySorted.length;
+  const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
+  const activityPageRows = activitySorted.slice((apage - 1) * PAGE_SIZE, apage * PAGE_SIZE);
+
   // ── Вкладка «История выплат» ──
   const hq = (get("hq") || "").trim();
   const hpage = Math.max(1, parseInt(get("hpage") || "1", 10) || 1);
@@ -116,7 +224,7 @@ export default async function AdminPayoutsPage({
     : "";
   const hsort = get("hsort") === "asc" ? "asc" : "desc";
 
-  const hWhere: Prisma.InvoiceWhereInput = { kind: "PAYOUT" };
+  const hWhere: Prisma.InvoiceWhereInput = { kind: { in: ["PAYOUT", "ACTIVITY"] } };
   if (hq) {
     hWhere.OR = [
       { number: { contains: hq } },
@@ -142,6 +250,7 @@ export default async function AdminPayoutsPage({
   const historyRows = invoices.map((i) => ({
     id: i.id,
     number: i.number,
+    kind: i.kind,
     username: i.user.username,
     companyName: i.user.ownedCompany?.name ?? null,
     date: i.date.toISOString(),
@@ -155,7 +264,7 @@ export default async function AdminPayoutsPage({
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Учёт метрик и выплаты</h1>
       <p className="text-muted-foreground mb-6">
-        Индивидуальные ставки (₽ за 1 просмотр) и счета на выплату для компаний
+        Индивидуальные ставки и счета на выплату: монетизация просмотров и активность компаний
       </p>
       <MetricsPayoutsManager
         tab={tab}
@@ -164,6 +273,11 @@ export default async function AdminPayoutsPage({
         page={page}
         totalPages={totalPages}
         initialQuery={{ q, status, sort, pending }}
+        activityRows={activityPageRows}
+        activityTotal={activityTotal}
+        activityPage={apage}
+        activityTotalPages={activityTotalPages}
+        activityQuery={{ q: aq, status: astatus, sort: asort, pending: apending, start: astartRaw, end: aendRaw }}
         historyRows={historyRows}
         historyTotal={invoiceTotal}
         historyPage={hpage}

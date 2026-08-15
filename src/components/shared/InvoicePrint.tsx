@@ -25,8 +25,8 @@ export interface InvoicePrintData {
   subtotal: number;
   discount: number;
   total: number;
-  /** PURCHASE — покупка монет, PAYOUT — выплата за просмотры */
-  kind?: "PURCHASE" | "PAYOUT";
+  /** PURCHASE — покупка монет, PAYOUT — выплата за просмотры, ACTIVITY — за активность */
+  kind?: "PURCHASE" | "PAYOUT" | "ACTIVITY";
   buyerName: string;
   buyerInn: string | null;
   buyerKpp: string | null;

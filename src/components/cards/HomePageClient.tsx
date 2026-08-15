@@ -256,7 +256,7 @@ export function HomePageClient({
       </section>
 
       {/* Account Buttons */}
-      <section className="py-12 bg-secondary/50">
+      <section className="py-4 bg-secondary/50">
         <div className="container-page">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="border-1 border-orange-accent shadow-md hover:shadow-lg transition-shadow">
