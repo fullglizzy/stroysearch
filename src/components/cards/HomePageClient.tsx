@@ -1,26 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SupportDialog } from "@/components/shared/SupportDialog";
 import {
-  HelpCircle,
   ArrowRight,
   Calendar,
   MapPin,
   Clock,
   User,
   Building2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HomePageProps {
   pageContent: string;
   bannerUrl: string | null;
-  conferenceCount: number;
-  participantCount: number;
   upcomingConferences: {
     id: string;
     title: string;
@@ -32,17 +30,102 @@ interface HomePageProps {
 export function HomePageClient({
   pageContent,
   bannerUrl,
-  conferenceCount,
-  participantCount,
   upcomingConferences,
 }: HomePageProps) {
-  const [supportOpen, setSupportOpen] = useState(false);
+  // Высота одной копии ленты конференций: подгоняем контейнер под неё,
+  // чтобы дубль списка всегда был за пределами видимой области и не «появлялся» на глазах
+  const marqueeCopyRef = useRef<HTMLUListElement>(null);
+  const [marqueeHeight, setMarqueeHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      if (marqueeCopyRef.current) {
+        setMarqueeHeight(marqueeCopyRef.current.offsetHeight);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [upcomingConferences]);
+
+  // ── Автопрокрутка + ручное листание ленты ──
+  // Прокрутка управляется из JS (requestAnimationFrame): автодвижение вверх
+  // с постоянной скоростью, ручные кнопки делают плавный твин на шаг карточки.
+  const MARQUEE_SPEED = 30; // px/сек
+  const [marqueeOffset, setMarqueeOffset] = useState(0);
+  const offsetRef = useRef(0);
+  const tweenRef = useRef<{ from: number; to: number; start: number; duration: number } | null>(null);
+  const pausedRef = useRef(false);
+  const reduceMotionRef = useRef(false);
+  const cardStepRef = useRef(96);
+
+  useEffect(() => {
+    reduceMotionRef.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotionRef.current) pausedRef.current = true;
+
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const tween = tweenRef.current;
+      if (tween) {
+        const p = Math.min(1, (now - tween.start) / tween.duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        offsetRef.current = tween.from + (tween.to - tween.from) * eased;
+        setMarqueeOffset(offsetRef.current);
+        if (p >= 1) tweenRef.current = null;
+      } else if (!pausedRef.current) {
+        offsetRef.current += MARQUEE_SPEED * dt;
+        setMarqueeOffset(offsetRef.current);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Шаг ручной прокрутки = высота одной карточки + отступ
+  useEffect(() => {
+    const ul = marqueeCopyRef.current;
+    if (ul?.firstElementChild) {
+      cardStepRef.current = (ul.firstElementChild as HTMLElement).offsetHeight + 12;
+    }
+  }, [upcomingConferences, marqueeHeight]);
+
+  function scrollMarquee(dir: 1 | -1) {
+    tweenRef.current = {
+      from: offsetRef.current,
+      to: offsetRef.current + dir * cardStepRef.current,
+      start: performance.now(),
+      duration: 350,
+    };
+  }
+
+  // Смещение ленты (зациклено по высоте одной копии)
+  const marqueeY = marqueeHeight ? -(marqueeOffset % marqueeHeight) : 0;
 
   return (
     <div>
-      {/* Hero Section — 3 columns: text | photo | conferences */}
-      <section className="bg-gradient-to-b from-menthol/5 to-background py-16 md:py-24">
-        <div className="container-page">
+      {/* Логотип с полным названием платформы + Hero — общий градиентный фон */}
+      <section className="bg-gradient-to-b from-menthol/10 via-menthol/5 to-background">
+        <div className="pt-4 md:pt-2">
+          <div className="container-page">
+            <div className="mx-auto max-w-4xl rounded-2xl border bg-orange-accent border-orange-accent/30 px-6 py-4 md:py-2 shadow-sm flex flex-col items-center text-center">
+              <p className="max-w-4xl font-semibold uppercase tracking-[0.18em] leading-relaxed text-foreground">
+                <span className="block text-xl md:text-2xl">
+                  Единый независимый центр продуктовых решений
+                </span>
+                <span className="mt-1 block text-sm md:text-base">
+                 закупок и технических заданий строительной отрасли
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Hero Section — 3 columns: text | photo | conferences */}
+        <div className="container-page py-4 md:py-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 items-center">
             {/* Column 1: Text */}
             <div>
@@ -76,32 +159,83 @@ export function HomePageClient({
                 Ближайшие конференции
               </h3>
               {upcomingConferences.length > 0 ? (
-                <ul className="space-y-3">
-                  {upcomingConferences.map((conf) => {
-                    const dateStr = new Date(conf.date).toLocaleDateString("ru-RU", {
-                      day: "numeric",
-                      month: "long",
-                    });
-                    return (
-                      <li key={conf.id}>
-                        <Link
-                          href={`/conferences`}
-                          className="block rounded-lg border bg-card p-3 hover:border-menthol/50 hover:shadow-sm transition-all"
+                <div
+                  className="relative"
+                  onMouseEnter={() => { pausedRef.current = true; }}
+                  onMouseLeave={() => { pausedRef.current = false; }}
+                >
+                  {/* Лента с мягкими границами (маска сверху и снизу) */}
+                  <div
+                    className="overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_40px,black_calc(100%-40px),transparent)]"
+                    style={marqueeHeight ? { height: `${marqueeHeight}px` } : undefined}
+                  >
+                    <div
+                      className="flex w-full flex-col"
+                      style={{ transform: `translateY(${marqueeY}px)` }}
+                    >
+                      {/* Дублируем список заранее — дубль всегда за пределами видимой области */}
+                      {[0, 1].map((copy) => (
+                        <ul
+                          key={copy}
+                          ref={copy === 0 ? marqueeCopyRef : undefined}
+                          aria-hidden={copy === 1 ? true : undefined}
+                          className="flex flex-col gap-3 pb-3"
                         >
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            <span>
-                              {dateStr}
-                            </span>
-                            <Clock className="h-3.5 w-3.5 ml-2" />
-                            <span>{conf.time} МСК</span>
-                          </div>
-                          <p className="text-sm font-medium line-clamp-2">{conf.title}</p>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          {upcomingConferences.map((conf) => {
+                            const dateStr = new Date(conf.date).toLocaleDateString("ru-RU", {
+                              day: "numeric",
+                              month: "long",
+                            });
+                            return (
+                              <li key={conf.id} className="w-full shrink-0">
+                                <Link
+                                  href={`/conferences`}
+                                  className="block rounded-lg border bg-card p-3 hover:border-menthol/50 hover:shadow-sm transition-all"
+                                >
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    <span>
+                                      {dateStr}
+                                    </span>
+                                    <Clock className="h-3.5 w-3.5 ml-2" />
+                                    <span>{conf.time} МСК</span>
+                                  </div>
+                                  <p className="text-sm font-medium line-clamp-2">{conf.title}</p>
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Ручное листание (автопрокрутка приостанавливается при наведении) */}
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 rounded-full bg-background/70 backdrop-blur shadow-sm"
+                      onClick={() => scrollMarquee(-1)}
+                      title="Прокрутить вверх"
+                      aria-label="Прокрутить вверх"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 rounded-full bg-background/70 backdrop-blur shadow-sm"
+                      onClick={() => scrollMarquee(1)}
+                      title="Прокрутить вниз"
+                      aria-label="Прокрутить вниз"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Презентуйте свой продукт, проведите лекцию
@@ -125,7 +259,7 @@ export function HomePageClient({
       <section className="py-12 bg-secondary/50">
         <div className="container-page">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-1 border-menthol shadow-md hover:shadow-lg transition-shadow">
+            <Card className="border-1 border-orange-accent shadow-md hover:shadow-lg transition-shadow">
               <CardContent>
                 <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
                   <User className="h-5 w-5 text-menthol" />
@@ -136,13 +270,13 @@ export function HomePageClient({
                 </p>
                 <Link
                   href="/account"
-                  className={cn(buttonVariants({}), "w-full bg-menthol hover:bg-menthol-dark")}
+                  className={cn(buttonVariants({}), "w-full bg-orange-accent hover:bg-menthol-dark")}
                 >
                   Войти в кабинет
                 </Link>
               </CardContent>
             </Card>
-            <Card className="border-1 border-menthol shadow-md hover:shadow-lg transition-shadow">
+            <Card className="border-1 border-orange-accent shadow-md hover:shadow-lg transition-shadow">
               <CardContent>
                 <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-menthol" />
@@ -153,7 +287,7 @@ export function HomePageClient({
                 </p>
                 <Link
                   href="/company"
-                  className={cn(buttonVariants({}), "w-full bg-menthol hover:bg-menthol-dark")}
+                  className={cn(buttonVariants({}), "w-full bg-orange-accent hover:bg-menthol-dark")}
                 >
                   Войти в кабинет
                 </Link>
@@ -212,19 +346,6 @@ export function HomePageClient({
           </div>
         </div>
       </section>
-
-      {/* Support Button */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <Button
-          size="lg"
-          className="rounded-full shadow-lg bg-orange-accent hover:bg-orange-accent/90 h-14 w-14 p-0"
-          title="Поддержка"
-          onClick={() => setSupportOpen(true)}
-        >
-          <HelpCircle className="h-6 w-6" />
-        </Button>
-        <SupportDialog open={supportOpen} onOpenChange={setSupportOpen} />
-      </div>
     </div>
   );
 }

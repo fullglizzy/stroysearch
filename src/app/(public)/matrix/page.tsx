@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getPageContent } from "@/server/admin/content";
 import { getRegions } from "@/server/admin/regions";
+import { ALL_REGIONS } from "@/lib/regions";
 import { MatrixPageClient } from "@/components/tables/MatrixPageClient";
 
 export const revalidate = 60; // страница кэшируется на 60 сек
@@ -58,12 +59,21 @@ export default async function MatrixPage({
   if (productClass) {
     where.push(`p.classes LIKE ${push(`%"${productClass}"%`)}`);
   }
-  if (region.length > 0) {
-    where.push(`(p.region IS NULL OR p.region IN (${region.map(() => "?").join(", ")}))`);
-    region.forEach((r) => values.push(r));
+  // «Все регионы» в фильтре означает «без ограничения по региону»
+  if (region.length > 0 && !region.includes(ALL_REGIONS)) {
+    const conds: string[] = [];
+    for (const r of region) {
+      conds.push(`(',' || COALESCE(p."regions", '') || ',') LIKE ${push(`%,${r},%`)}`);
+    }
+    // Товар с «Все регионы» подходит под любой выбранный регион
+    conds.push(`(',' || COALESCE(p."regions", '') || ',') LIKE ${push(`%,${ALL_REGIONS},%`)}`);
+    // Товар без указанного региона показывается при любом фильтре
+    conds.push(`COALESCE(p."regions", '') = ''`);
+    where.push(`(${conds.join(" OR ")})`);
   }
   if (classifier.length > 0) {
-    where.push(`t."fullNumberPath" IN (${classifier.map(() => "?").join(", ")})`);
+    // classifier — id узлов дерева (надёжнее путей: переживает перенумерацию)
+    where.push(`t.id IN (${classifier.map(() => "?").join(", ")})`);
     classifier.forEach((c) => values.push(c));
   }
 
@@ -78,7 +88,7 @@ export default async function MatrixPage({
     WHERE ${where.join(" AND ")}`;
 
   const selectSql = `
-    SELECT p.id, p.name, p.classes, p.region, p."imageUrl", p.unit, p.characteristics,
+    SELECT p.id, p.name, p.classes, p."regions", p."imageUrl", p.unit, p.characteristics,
       p.price, p.views, p."companyId",
       c.name AS "companyName", c.inn AS "companyInn", c.phone AS "companyPhone", c.email AS "companyEmail",
       t."fullNumberPath" AS "treeItemPath", t.name AS "treeItemName",
@@ -98,7 +108,7 @@ export default async function MatrixPage({
     id: string;
     name: string;
     classes: string;
-    region: string | null;
+    regions: string;
     imageUrl: string | null;
     unit: string | null;
     characteristics: string;
@@ -121,7 +131,7 @@ export default async function MatrixPage({
     companyId: p.companyId,
     name: p.name,
     classes: parseJsonArray(p.classes),
-    region: p.region,
+    regions: p.regions ? p.regions.split(",").map((r) => r.trim()).filter(Boolean) : [],
     imageUrl: p.imageUrl,
     unit: p.unit,
     characteristics: parseJsonArray(p.characteristics),

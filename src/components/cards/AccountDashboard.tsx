@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageBanner } from "@/components/shared/PageBanner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User,
@@ -27,7 +28,7 @@ interface AccountDashboardProps {
       firstName: string | null;
       lastName: string | null;
       nick: string | null;
-      region: string | null;
+      regions: string | null;
       roles: string[];
     } | null;
     walletBalance: number;
@@ -39,9 +40,10 @@ interface AccountDashboardProps {
     };
   };
   supportUnread: number;
+  bannerUrl: string | null;
 }
 
-export function AccountDashboard({ user, supportUnread }: AccountDashboardProps) {
+export function AccountDashboard({ user, supportUnread, bannerUrl }: AccountDashboardProps) {
   const displayName =
     user.profile?.firstName && user.profile?.lastName
       ? `${user.profile.lastName} ${user.profile.firstName}`
@@ -61,6 +63,9 @@ export function AccountDashboard({ user, supportUnread }: AccountDashboardProps)
           Баланс: {user.walletBalance.toFixed(1)} монет
         </Badge>
       </div>
+
+      {/* Баннер */}
+      {bannerUrl && <PageBanner url={bannerUrl} alt="Баннер личного кабинета" />}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

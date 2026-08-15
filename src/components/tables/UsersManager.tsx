@@ -47,7 +47,7 @@ interface UserRow {
   lastName: string | null;
   nick: string | null;
   inn: string | null;
-  region: string | null;
+  regions: string | null;
   balance: number;
   roles: string[];
   banReason: string | null;
@@ -72,7 +72,7 @@ interface UserDetail {
     lastName: string | null;
     middleName: string | null;
     nick: string | null;
-    region: string | null;
+    regions: string | null;
     inn: string | null;
     companyName: string | null;
     kpp: string | null;
@@ -88,7 +88,7 @@ interface UserDetail {
     phone: string | null;
     email: string | null;
     website: string | null;
-    region: string | null;
+    regions: string | null;
     metrics: {
       phoneViews: number;
       emailViews: number;
@@ -119,6 +119,15 @@ interface UsersManagerProps {
   initialRegion: string;
   initialSort: string;
   regionOptions: SearchSelectOption[];
+}
+
+// CSV-строка регионов → «Регион1, Регион2»
+function formatRegions(csv: string | null): string {
+  return (csv || "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 const statusBadge: Record<string, string> = {
@@ -590,7 +599,7 @@ export function UsersManager({
                   <p className="text-sm font-medium text-muted-foreground mb-1">Профиль</p>
                   <InfoRow label="ФИО" value={fio} />
                   <InfoRow label="Ник" value={detail.profile.nick} />
-                  <InfoRow label="Регион" value={detail.profile.region} />
+                  <InfoRow label="Регион" value={formatRegions(detail.profile.regions)} />
                   <InfoRow
                     label="Роли"
                     value={detail.profile.roles.map(roleLabel).join(", ") || "нет"}
@@ -622,7 +631,7 @@ export function UsersManager({
                   <InfoRow label="Телефон" value={detail.company.phone} />
                   <InfoRow label="Email" value={detail.company.email} />
                   <InfoRow label="Сайт" value={detail.company.website} />
-                  <InfoRow label="Регион" value={detail.company.region} />
+                  <InfoRow label="Регион" value={formatRegions(detail.company.regions)} />
                   {detail.company.metrics && (
                     <div className="text-xs text-muted-foreground pt-1">
                       Просмотры: телефон {detail.company.metrics.phoneViews}, email{" "}

@@ -29,7 +29,7 @@ export async function GET(
         select: {
           username: true,
           profile: {
-            select: { nick: true, inn: true, kpp: true, legalAddress: true, region: true, companyName: true },
+            select: { nick: true, inn: true, kpp: true, legalAddress: true, regions: true, companyName: true },
           },
         },
       },
@@ -54,7 +54,10 @@ export async function GET(
       buyerName: invoice.user.profile?.companyName || invoice.user.profile?.nick || invoice.user.username,
       buyerInn: invoice.user.profile?.inn || null,
       buyerKpp: invoice.user.profile?.kpp || null,
-      buyerAddress: invoice.user.profile?.legalAddress || invoice.user.profile?.region || null,
+      buyerAddress:
+        invoice.user.profile?.legalAddress ||
+        invoice.user.profile?.regions?.split(",").map((r) => r.trim()).filter(Boolean)[0] ||
+        null,
       items: invoice.items.map((it) => ({
         description: it.description,
         quantity: it.quantity,

@@ -69,7 +69,7 @@ export async function GET(
           lastName: user.profile.lastName,
           middleName: user.profile.middleName,
           nick: user.profile.nick,
-          region: user.profile.region,
+          regions: user.profile.regions,
           inn: user.profile.inn,
           companyName: user.profile.companyName,
           kpp: user.profile.kpp,
@@ -87,7 +87,7 @@ export async function GET(
           phone: user.ownedCompany.phone,
           email: user.ownedCompany.email,
           website: user.ownedCompany.website,
-          region: user.ownedCompany.region,
+          regions: user.ownedCompany.regions,
           metrics: user.ownedCompany.metrics
             ? {
                 phoneViews: user.ownedCompany.metrics.phoneViews,

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SuppliersPageClient } from "@/components/tables/SuppliersPageClient";
 import { getPageContent } from "@/server/admin/content";
 import { getRegions } from "@/server/admin/regions";
+import { ALL_REGIONS } from "@/lib/regions";
 
 export const revalidate = 60; // страница кэшируется на 60 сек
 
@@ -29,10 +30,11 @@ function buildCombinedQuery(params: {
   };
 
   const companySelect = `
-    SELECT c.id, 'company' AS kind, c.inn, c.name, c.phone, c.email, c.website, c.region,
+    SELECT c.id, 'company' AS kind, c.inn, c.name, c.phone, c.email, c.website, c."regions",
       COALESCE(pr.nick, NULL) AS "ownerNick",
       COALESCE(c."ownerUserId", '') AS "roleUserId",
       COALESCE(c."classifierIds", '') AS "classifierIds",
+      0 AS "isContactsHidden",
       cr.rating AS rating, COALESCE(cr.cnt, 0) AS "reviewCount"
     FROM companies c
     LEFT JOIN users ou ON ou.id = c."ownerUserId"
@@ -45,10 +47,13 @@ function buildCombinedQuery(params: {
         THEN u.username
         ELSE TRIM(COALESCE(pr2."firstName", '') || ' ' || COALESCE(pr2."lastName", ''))
       END AS name,
-      u.phone, u.email, NULL AS website, pr2.region,
+      CASE WHEN COALESCE(pr2."isContactsHidden", 1) = 1 THEN NULL ELSE u.phone END AS phone,
+      CASE WHEN COALESCE(pr2."isContactsHidden", 1) = 1 THEN NULL ELSE u.email END AS email,
+      NULL AS website, pr2."regions",
       COALESCE(pr2.nick, u.username) AS "ownerNick",
       u.id AS "roleUserId",
       COALESCE(pr2."classifierIds", '') AS "classifierIds",
+      COALESCE(pr2."isContactsHidden", 1) AS "isContactsHidden",
       ur.rating AS rating, COALESCE(ur.cnt, 0) AS "reviewCount"
     FROM users u
     LEFT JOIN user_profiles pr2 ON pr2."userId" = u.id
@@ -72,14 +77,20 @@ function buildCombinedQuery(params: {
       `COALESCE(phone, '')`,
       `COALESCE(email, '')`,
       `COALESCE(website, '')`,
-      `COALESCE(region, '')`,
+      `COALESCE(regions, '')`,
     ];
     const parts = cols.map((col) => `lower(${col}) LIKE ${push(like)}`);
     where.push(`(${parts.join(" OR ")})`);
   }
-  if (region.length > 0) {
-    where.push(`region IN (${region.map(() => "?").join(", ")})`);
-    region.forEach((r) => values.push(r));
+  // «Все регионы» в фильтре означает «без ограничения по региону»
+  if (region.length > 0 && !region.includes(ALL_REGIONS)) {
+    const conds: string[] = [];
+    for (const r of region) {
+      conds.push(`(',' || COALESCE(regions, '') || ',') LIKE ${push(`%,${r},%`)}`);
+    }
+    // Компания/участник с «Все регионы» подходит под любой выбранный регион
+    conds.push(`(',' || COALESCE(regions, '') || ',') LIKE ${push(`%,${ALL_REGIONS},%`)}`);
+    where.push(`(${conds.join(" OR ")})`);
   }
   for (const id of classifier) {
     const like = push(`%,${id},%`);
@@ -165,10 +176,11 @@ export default async function SuppliersPage({
     phone: string | null;
     email: string | null;
     website: string | null;
-    region: string | null;
+    regions: string;
     ownerNick: string | null;
     roleUserId: string;
     classifierIds: string;
+    isContactsHidden: number;
     rating: number | null;
     reviewCount: number;
   };
@@ -204,8 +216,9 @@ export default async function SuppliersPage({
     phone: r.phone,
     email: r.email,
     website: r.website,
-    region: r.region,
+    regions: r.regions ? r.regions.split(",").map((x) => x.trim()).filter(Boolean) : [],
     classifierIds: r.classifierIds ? r.classifierIds.split(",").filter(Boolean) : [],
+    isContactsHidden: !!r.isContactsHidden,
     // Рейтинг — одна цифра после запятой (как раньше делал computeRating)
     rating: r.rating !== null ? Math.round(r.rating * 10) / 10 : null,
     reviewCount: r.reviewCount,

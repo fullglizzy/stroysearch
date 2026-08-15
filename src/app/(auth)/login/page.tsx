@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { PasswordInput } from "@/components/forms/fields";
 import { Loader2, Crown, Shield, Pencil, Building2, User } from "lucide-react";
 
 const quickLogins = [
@@ -111,7 +112,7 @@ export default function LoginPage() {
     <div className="container-page py-12 flex justify-center">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Вход в ЕЦПР</CardTitle>
+          <CardTitle className="text-2xl">Вход в ЕНЦПР</CardTitle>
           <CardDescription>
             Войдите в свой аккаунт для доступа ко всем возможностям платформы
           </CardDescription>
@@ -139,11 +140,10 @@ export default function LoginPage() {
 
             <div className="space-y-2">
               <Label htmlFor="password">Пароль</Label>
-              <Input
+              <PasswordInput
                 ref={passwordRef}
                 id="password"
                 name="password"
-                type="password"
                 placeholder="Введите пароль"
                 required
                 disabled={loading}

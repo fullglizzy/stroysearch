@@ -21,7 +21,7 @@ interface ContentManagerProps {
   }[];
 }
 
-// Страницы из шапки + главная
+// Страницы из шапки + главная + личные кабинеты
 const pageLabels: Record<string, string> = {
   home: "Главная страница",
   products: "Продуктовые решения",
@@ -30,6 +30,8 @@ const pageLabels: Record<string, string> = {
   library: "Библиотека",
   conferences: "Конференции",
   polls: "Статистика и опросы",
+  account: "ЛК участника",
+  company: "ЛК компании",
 };
 
 const PAGE_KEYS = Object.keys(pageLabels);

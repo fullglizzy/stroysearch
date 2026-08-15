@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageBanner } from "@/components/shared/PageBanner";
+import { getPageContent } from "@/server/admin/content";
 import { Package, FileText, Calendar, Star, Coins, ArrowRight, LifeBuoy } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +23,17 @@ export default async function CompanyDashboardPage() {
     t.messages.some((m) => m.isStaff && (!t.userLastReadAt || m.createdAt > t.userLastReadAt)),
   ).length;
 
+  const pageContent = await getPageContent("company");
+
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Личный кабинет компании</h1>
       <p className="text-muted-foreground mb-8">Управление товарами, конференциями и документами</p>
+
+      {/* Баннер */}
+      {pageContent?.bannerUrl && (
+        <PageBanner url={pageContent.bannerUrl} alt="Баннер личного кабинета компании" />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
@@ -33,6 +42,7 @@ export default async function CompanyDashboardPage() {
           { href: "/company/library", icon: FileText, title: "Моя библиотека", desc: "Загрузка технических заданий и спецификаций", color: "text-menthol" },
           { href: "/company/reviews", icon: Star, title: "Мои отзывы", desc: "Отзывы о компании и поставках", color: "text-orange-accent" },
           { href: "/company/finances", icon: Coins, title: "Мои финансы", desc: "Баланс монет, счета и подарки", color: "text-orange-accent" },
+          { href: "/company/payouts", icon: Coins, title: "Мои выплаты", desc: "Счета на выплату за просмотры контактов", color: "text-menthol" },
           { href: "/company/profile", icon: Package, title: "Личные данные", desc: "Профиль компании, ИНН, контакты", color: "text-menthol" },
           { href: "/company/support", icon: LifeBuoy, title: "Поддержка", desc: "Обращения и переписка со службой поддержки", color: "text-menthol", badge: supportUnread },
         ].map((item) => (

@@ -50,7 +50,6 @@ export default function RegisterCompanyPage() {
       password: "",
       inn: "",
       companyName: "",
-      agreePersonalData: false,
       agreeTerms: false,
     },
   });
@@ -104,7 +103,6 @@ export default function RegisterCompanyPage() {
     formData.append("password", values.password);
     formData.append("inn", values.inn);
     formData.append("companyName", values.companyName);
-    formData.append("agreePersonalData", values.agreePersonalData ? "on" : "off");
     formData.append("agreeTerms", values.agreeTerms ? "on" : "off");
 
     const result = await registerCompany(formData);
@@ -161,7 +159,7 @@ export default function RegisterCompanyPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="username">Логин</Label>
+              <Label htmlFor="username">Придумайте логин компании. Сменить его далее не получится</Label>
               <Input
                 id="username"
                 type="text"
@@ -355,40 +353,6 @@ export default function RegisterCompanyPage() {
             </div>
 
             <div className="space-y-3 pt-2">
-              <div>
-                <div className="flex items-start gap-2">
-                  <Controller
-                    name="agreePersonalData"
-                    control={control}
-                    render={({ field }) => (
-                      <Checkbox
-                        id="agreePersonalData"
-                        checked={field.value}
-                        onCheckedChange={(checked) => field.onChange(checked === true)}
-                        disabled={loading}
-                        aria-invalid={!!errors.agreePersonalData}
-                        aria-describedby={
-                          errors.agreePersonalData ? "agreePersonalData-error" : undefined
-                        }
-                      />
-                    )}
-                  />
-                  <Label htmlFor="agreePersonalData" className="cursor-pointer text-sm leading-tight">
-                    Я согласен на{" "}
-                    <Link href="/privacy" className="text-menthol hover:underline" target="_blank">
-                      обработку персональных данных
-                    </Link>
-                  </Label>
-                </div>
-                {errors.agreePersonalData && (
-                  <div className="pl-6 pt-1">
-                    <FieldError
-                      id="agreePersonalData-error"
-                      message={errors.agreePersonalData.message}
-                    />
-                  </div>
-                )}
-              </div>
               <div>
                 <div className="flex items-start gap-2">
                   <Controller

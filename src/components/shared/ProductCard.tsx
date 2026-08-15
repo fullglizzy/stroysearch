@@ -24,7 +24,7 @@ export function parseCharacteristic(raw: string): { name: string; value: string 
 export interface ProductCardData {
   name: string;
   classes: string[];
-  region: string | null;
+  regions: string[];
   unit: string | null;
   characteristics: string[];
   price: number | null;
@@ -39,6 +39,8 @@ interface ProductCardProps {
   companyName?: string;
   companyInn?: string;
   rating?: number | null;
+  /** Клик по рейтингу (например, попап отзывов в матрице) */
+  onRatingClick?: () => void;
   /** Контакты с раскрытием (для матрицы) */
   phone?: string | null;
   email?: string | null;
@@ -62,6 +64,7 @@ export function ProductCard({
   companyName,
   companyInn,
   rating,
+  onRatingClick,
   phone,
   email,
   revealed = {},
@@ -106,8 +109,22 @@ export function ProductCard({
 
           {rating !== null && rating !== undefined && (
             <div className="flex items-center gap-1 mb-2">
-              <StarRating rating={rating} size="sm" />
-              <span className="text-xs text-muted-foreground">{rating}</span>
+              {onRatingClick ? (
+                <button
+                  type="button"
+                  onClick={onRatingClick}
+                  className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+                  title="Показать отзывы"
+                >
+                  <StarRating rating={rating} size="sm" />
+                  <span className="text-xs text-muted-foreground">{rating}</span>
+                </button>
+              ) : (
+                <>
+                  <StarRating rating={rating} size="sm" />
+                  <span className="text-xs text-muted-foreground">{rating}</span>
+                </>
+              )}
             </div>
           )}
 
@@ -124,10 +141,10 @@ export function ProductCard({
             ))}
           </div>
 
-          {data.region && (
+          {data.regions.length > 0 && (
             <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
               <MapPin className="h-3 w-3 shrink-0" />
-              {data.region}
+              {data.regions.join(", ")}
             </p>
           )}
 

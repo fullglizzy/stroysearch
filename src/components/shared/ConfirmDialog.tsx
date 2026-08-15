@@ -22,6 +22,8 @@ interface ConfirmDialogProps {
   loading?: boolean;
   /** Если true — только кнопка OK, без отмены */
   alert?: boolean;
+  /** Дополнительный контент (например, список изменений) */
+  children?: React.ReactNode;
 }
 
 export function ConfirmDialog({
@@ -35,6 +37,7 @@ export function ConfirmDialog({
   onConfirm,
   loading = false,
   alert = false,
+  children,
 }: ConfirmDialogProps) {
   const Icon = variant === "success" ? CheckCircle : variant === "info" ? Info : AlertTriangle;
   const iconColor = variant === "success" ? "text-green-500" : variant === "info" ? "text-menthol" : "text-orange-accent";
@@ -60,6 +63,7 @@ export function ConfirmDialog({
           </div>
           <DialogDescription className="text-sm">{message}</DialogDescription>
         </DialogHeader>
+        {children && <div className="mt-2">{children}</div>}
         <div className="flex gap-2 justify-end mt-4">
           {!alert && (
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isLiveTreeItem } from "@/server/admin/tree";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
 
@@ -14,10 +15,18 @@ export async function POST(request: Request) {
   const userType = (session.user as { type?: string }).type ?? "";
 
   const body = await request.json();
-  const { companyId, treeItemId, name, classes, region, unit, characteristics, price, imageUrl } = body;
+  const { companyId, treeItemId, name, classes, regions, unit, characteristics, price, imageUrl } = body;
 
   if (!companyId || !treeItemId || !name) {
     return NextResponse.json({ error: "Поля companyId, treeItemId, name обязательны" }, { status: 400 });
+  }
+
+  // Товар можно создать только в живом разделе классификатора
+  if (!(await isLiveTreeItem(treeItemId))) {
+    return NextResponse.json(
+      { error: "Раздел классификатора не найден или удалён" },
+      { status: 400 },
+    );
   }
 
   // Создавать товары может владелец компании или админ
@@ -38,7 +47,7 @@ export async function POST(request: Request) {
       treeItemId,
       name,
       classes: JSON.stringify(classes || []),
-      region: region || null,
+      regions: (regions ?? []).join(","),
       unit: unit || null,
       characteristics: JSON.stringify(characteristics || []),
       price: price || null,

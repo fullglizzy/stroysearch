@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { inn, name, email, phone, website, region, classifierIds } = parsed.data;
+    const { inn, name, email, phone, website, regions, classifierIds } = parsed.data;
 
     const existing = await prisma.company.findUnique({ where: { inn } });
     if (existing) {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
           email: email.trim(),
           phone: phone.trim(),
           website: normalizedWebsite,
-          region,
+          regions: regions.join(","),
           classifierIds: classifierIds.join(","),
           addedById: userId,
           metrics: { create: {} },

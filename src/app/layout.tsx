@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { OfflineBanner } from "@/components/shared/OfflineBanner";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
+import { FloatingSupportButton } from "@/components/shared/FloatingSupportButton";
 import { PageTransition } from "@/components/shared/PageTransition";
 import "./globals.css";
 
@@ -22,14 +23,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ЕЦПР — Единый центр продуктовых решений",
+  title: "ЕНЦПР — Единый центр продуктовых решений",
   description:
     "Единый независимый центр продуктовых решений, закупок и технических заданий строительной отрасли",
   icons: {
     icon: "/favicon.svg",
   },
   openGraph: {
-    title: "ЕЦПР — Единый центр продуктовых решений",
+    title: "ЕНЦПР — Единый центр продуктовых решений",
     description:
       "Единый независимый центр продуктовых решений, закупок и технических заданий строительной отрасли",
     type: "website",
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Footer />
               <OfflineBanner />
               <ScrollToTop />
+              <FloatingSupportButton />
               <Toaster />
             </TooltipProvider>
           </SessionProvider>

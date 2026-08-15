@@ -115,14 +115,6 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      // Если компания без владельца и добавлена этим же пользователем,
-      // целью оказался бы сам автор — такую награду не начисляем
-      if (target === userId) {
-        return NextResponse.json(
-          { error: "Нельзя оставить отзыв о компании, добавленной вами" },
-          { status: 400 },
-        );
-      }
       resolvedTargetId = target;
       resolvedCompanyId = company.id;
     } else {
@@ -148,9 +140,15 @@ export async function POST(request: Request) {
     let updated = false;
 
     await prisma.$transaction(async (tx) => {
-      // Check if user already reviewed this target
+      // Check if user already reviewed this target.
+      // companyId учитывается, чтобы разные компании без владельца
+      // (добавленные одним пользователем) не затирали отзывы друг друга.
       const existing = await tx.review.findFirst({
-        where: { authorId: userId, targetId: resolvedTargetId },
+        where: {
+          authorId: userId,
+          targetId: resolvedTargetId,
+          companyId: resolvedCompanyId,
+        },
       });
 
       const data = {

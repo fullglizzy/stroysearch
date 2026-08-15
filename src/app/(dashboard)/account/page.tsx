@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AccountDashboard } from "@/components/cards/AccountDashboard";
+import { getPageContent } from "@/server/admin/content";
 
 export default async function AccountPage() {
   const session = await auth();
@@ -44,8 +45,11 @@ export default async function AccountPage() {
     )`, userId);
   const supportUnread = Number(unreadRows[0]?.cnt ?? 0);
 
+  const pageContent = await getPageContent("account");
+
   return (
     <AccountDashboard
+      bannerUrl={pageContent?.bannerUrl || null}
       user={{
         username: user.username,
         email: user.email,
@@ -55,7 +59,7 @@ export default async function AccountPage() {
               firstName: user.profile.firstName,
               lastName: user.profile.lastName,
               nick: user.profile.nick,
-              region: user.profile.region,
+              regions: user.profile.regions,
               roles: user.profile.roles.map((r) => r.role),
             }
           : null,

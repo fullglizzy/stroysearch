@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewCard } from "@/components/shared/ReviewCard";
 import { AddReviewSection } from "@/components/forms/AddReviewSection";
+import { AddCompanyDialog } from "@/components/forms/AddCompanyDialog";
+import { getRegions } from "@/server/admin/regions";
 
 async function getReviewData(userId: string) {
   const [receivedReviews, givenReviews, companies, participants] = await Promise.all([
@@ -69,12 +71,26 @@ export default async function AccountReviewsPage() {
   const isActive = (session.user as any).status === "ACTIVE";
   const { receivedReviews, givenReviews, companies, participantRows, avgRating } = await getReviewData(userId);
 
+  const [regions, treeItems] = await Promise.all([
+    getRegions(),
+    prisma.productTreeItem.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, fullNumberPath: true },
+      orderBy: { fullNumberPath: "asc" },
+    }),
+  ]);
+
   return (
     <div className="container-page py-8">
-      <h1 className="text-3xl font-bold mb-2">Мои отзывы</h1>
-      <p className="text-muted-foreground mb-6">
-        Отзывы о вас и от вас. За каждый опубликованный отзыв начисляется +1 монета.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Мои отзывы</h1>
+          <p className="text-muted-foreground">
+            Отзывы о вас и от вас. За каждый опубликованный отзыв начисляется +1 монета.
+          </p>
+        </div>
+        <AddCompanyDialog regions={regions.map((r) => r.name)} treeItems={treeItems} />
+      </div>
 
       {/* Rating */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

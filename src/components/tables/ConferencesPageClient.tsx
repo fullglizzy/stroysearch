@@ -28,6 +28,7 @@ import { FieldError } from "@/components/forms/fields";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { ExpandableText } from "@/components/shared/ExpandableText";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { toastError, toastSuccess, toastWarning } from "@/lib/toast";
 import { Search, Calendar, Clock, Plus, Coins, ExternalLink, Loader2, AlertCircle, Upload, X } from "lucide-react";
 
@@ -137,6 +138,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [joinError, setJoinError] = useState("");
+  const [joinTarget, setJoinTarget] = useState<{ id: string; title: string; price: number } | null>(null);
 
   // Пагинация и архив живут в URL
   function updateQuery(next: Record<string, string | null>) {
@@ -224,13 +226,47 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
     setCreateLoading(false);
   }
 
-  async function handleJoin(confId: string) {
+  async function handleJoinFree(confId: string) {
     setJoinLoading(confId);
     try {
       const res = await fetch(`/api/conferences/${confId}/join`, { method: "POST" });
-      if (res.ok) { router.refresh(); setJoinError(""); }
-      else { const d = await res.json(); setJoinError(d.error || "Недостаточно монет"); }
-    } catch { setJoinError("Ошибка соединения"); }
+      if (res.ok) {
+        // Моментальное обновление кнопки без ожидания перезагрузки
+        setJoinedConfIds((prev) => (prev.includes(confId) ? prev : [...prev, confId]));
+        setJoinError("");
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setJoinError(d.error || "Недостаточно монет");
+      }
+    } catch {
+      setJoinError("Ошибка соединения");
+    }
+    setJoinLoading(null);
+  }
+
+  async function confirmJoin() {
+    if (!joinTarget) return;
+    setJoinLoading(joinTarget.id);
+    try {
+      const res = await fetch(`/api/conferences/${joinTarget.id}/join`, { method: "POST" });
+      if (res.ok) {
+        // Моментальное обновление кнопки без ожидания перезагрузки
+        setJoinedConfIds((prev) => (prev.includes(joinTarget.id) ? prev : [...prev, joinTarget.id]));
+        setJoinTarget(null);
+        setJoinError("");
+        toastSuccess("Вы участвуете", `Вы записаны на «${joinTarget.title}»`);
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setJoinError(d.error || "Недостаточно монет");
+        toastError("Ошибка", d.error || "Не удалось записаться");
+        setJoinTarget(null);
+      }
+    } catch {
+      setJoinError("Ошибка соединения");
+      toastError("Ошибка соединения");
+    }
     setJoinLoading(null);
   }
 
@@ -516,7 +552,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
                         <Badge className="bg-green-100 text-green-700">Вы участвуете</Badge>
                       )
                     ) : conf.coinPrice > 0 ? (
-                      <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={guard(() => handleJoin(conf.id))} disabled={joinLoading === conf.id}>
+                      <Button size="sm" className="bg-orange-accent hover:bg-orange-accent/90" onClick={guard(() => setJoinTarget({ id: conf.id, title: conf.title, price: conf.coinPrice }))} disabled={joinLoading === conf.id}>
                         {joinLoading === conf.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Участвовать"}
                       </Button>
                     ) : conf.connectionLink ? (
@@ -524,7 +560,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
                         <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3 w-3" /> Подключиться</Button>
                       </a>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => handleJoin(conf.id)} disabled={joinLoading === conf.id}>
+                      <Button size="sm" variant="outline" onClick={() => handleJoinFree(conf.id)} disabled={joinLoading === conf.id}>
                         {joinLoading === conf.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Участвовать"}
                       </Button>
                     )}
@@ -544,6 +580,17 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
       )}
 
       {authDialog}
+
+      <ConfirmDialog
+        open={!!joinTarget}
+        onOpenChange={(v) => { if (!v) setJoinTarget(null); }}
+        title="Участвовать в конференции?"
+        message={joinTarget ? `Конференция «${joinTarget.title}» за ${joinTarget.price} монет. Монеты спишутся с вашего счёта.` : ""}
+        variant="info"
+        confirmLabel="Участвовать"
+        onConfirm={confirmJoin}
+        loading={!!joinLoading}
+      />
     </div>
   );
 }

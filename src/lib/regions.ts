@@ -99,3 +99,23 @@ export const REGIONS = [
 ] as const;
 
 export type Region = (typeof REGIONS)[number];
+
+/**
+ * Системный псевдо-регион «Все регионы»: компания/участник работает
+ * во всех регионах. В БД-справочник (model Region) не входит —
+ * добавляется первой опцией во всех списках выбора регионов.
+ */
+export const ALL_REGIONS = "Все регионы";
+
+/**
+ * Эксклюзивность «Все регионы» в мультивыборе регионов:
+ * - только что выбрали «Все регионы» — он один заменяет всё остальное;
+ * - при активном «Все регионы» выбрали конкретный регион — «Все регионы» снимается.
+ */
+export function toggleAllRegions(prev: string[], next: string[]): string[] {
+  if (!prev.includes(ALL_REGIONS) && next.includes(ALL_REGIONS)) return [ALL_REGIONS];
+  if (prev.includes(ALL_REGIONS) && next.length > 1) {
+    return next.filter((r) => r !== ALL_REGIONS);
+  }
+  return next;
+}

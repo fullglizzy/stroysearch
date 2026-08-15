@@ -135,7 +135,7 @@ export default function RegisterPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="username">Логин</Label>
+              <Label htmlFor="username">Придумайте логин участника. Сменить его далее не получится</Label>
               <Input
                 id="username"
                 type="text"

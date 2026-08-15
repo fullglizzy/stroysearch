@@ -14,14 +14,23 @@ import {
 } from "@/components/ui/select";
 import { MultiSelect } from "@/components/shared/MultiSelect";
 import { ProductCard } from "@/components/shared/ProductCard";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { StarRating } from "@/components/shared/StarRating";
 import { cn } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
+import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { PageBanner } from "@/components/shared/PageBanner";
-import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 interface ProductRow {
   id: string; companyName: string; companyInn: string; companyId: string;
-  name: string; classes: string[]; region: string | null; imageUrl: string | null;
+  name: string; classes: string[]; regions: string[]; imageUrl: string | null;
   unit: string | null; characteristics: string[]; price: number | null;
   views: number; treeItemPath: string; treeItemName: string;
   companyRating: number | null; companyPhone: string | null; companyEmail: string | null;
@@ -58,6 +67,19 @@ const SORT_ITEMS: Record<string, string> = {
   name: "По названию",
 };
 
+// Критерии оценки компании (совпадают с базой поставщиков)
+const COMPANY_CRITERIA_LABELS = [
+  "Качество оказанной работы/услуги/материала/поставки",
+  "Организация работы на объекте / организация поставки",
+  "Взаимодействие со специалистами компании",
+  "Наличие средств, необходимых для выполнения работ",
+  "Финансовое состояние предприятия",
+  "Наличие квалифицированных специалистов и руководителей",
+  "Срок выполнения работ/поставки",
+  "Стоимость и условия оплаты",
+  "Особые условия/гибкость в договорных отношениях",
+];
+
 export function MatrixPageClient({ products, total, capped, treeItems, regions, moderatorText, pageTitle, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -82,6 +104,36 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
   const scrollerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollerObservers = useRef<Map<string, ResizeObserver>>(new Map());
   const [scrollerState, setScrollerState] = useState<Record<string, { canLeft: boolean; canRight: boolean }>>({});
+
+  // Попап отзывов компании (как в базе поставщиков)
+  const [reviewPopup, setReviewPopup] = useState<{ id: string; kind: "company" | "participant"; name: string } | null>(null);
+  const [reviewsList, setReviewsList] = useState<{ id: string; authorNick: string; comment: string; weightedAverage: number; createdAt: string; criteria: { criteriaIndex: number; score: number }[] }[] | null>(null);
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
+
+  // Загрузка отзывов для попапа
+  useEffect(() => {
+    if (!reviewPopup) return;
+    let cancelled = false;
+    const params = reviewPopup.kind === "company"
+      ? `companyId=${reviewPopup.id}`
+      : `targetId=${reviewPopup.id}`;
+    fetch(`/api/reviews?${params}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setReviewsList(d.reviews || []); })
+      .catch(() => { if (!cancelled) setReviewsList([]); });
+    return () => { cancelled = true; };
+  }, [reviewPopup]);
+
+  function openReviewsPopup(popup: { id: string; kind: "company" | "participant"; name: string }) {
+    setExpandedReviewId(null);
+    setReviewPopup(popup);
+  }
+
+  function closeReviewsPopup() {
+    setReviewPopup(null);
+    setReviewsList(null);
+    setExpandedReviewId(null);
+  }
 
   function updateQuery(next: Record<string, string | null>) {
     const params = new URLSearchParams(window.location.search);
@@ -138,7 +190,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
 
   const currentClassifierName = useMemo(() => {
     if (classifiers.length !== 1) return null;
-    const found = treeItems.find(t => t.fullNumberPath === classifiers[0]);
+    const found = treeItems.find((t) => t.id === classifiers[0]);
     return found ? `${found.fullNumberPath} — ${found.name}` : classifiers[0];
   }, [classifiers, treeItems]);
 
@@ -192,6 +244,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
       companyName={product.companyName}
       companyInn={product.companyInn}
       rating={product.companyRating}
+      onRatingClick={() => openReviewsPopup({ id: product.companyId, kind: "company", name: product.companyName })}
       phone={product.companyPhone}
       email={product.companyEmail}
       revealed={revals[product.companyId] || {}}
@@ -275,10 +328,10 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
       {(classifiers.length > 0 || productClass !== "" || regionFilter.length > 0) && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           {classifiers.map((c) => {
-            const item = treeItems.find((t) => t.fullNumberPath === c);
+            const item = treeItems.find((t) => t.id === c);
             return (
               <Badge key={c} variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ classifier: classifiers.filter((v) => v !== c).join(",") })}>
-                {c}{item ? ` — ${item.name}` : ""} <X className="h-3 w-3" />
+                {item ? `${item.fullNumberPath} — ${item.name}` : c} <X className="h-3 w-3" />
               </Badge>
             );
           })}
@@ -297,7 +350,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Классификатор</Label>
                 <MultiSelect
-                  options={treeItems.map((t) => ({ value: t.fullNumberPath, label: `${t.fullNumberPath} — ${t.name}` }))}
+                  options={treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` }))}
                   value={classifiers}
                   onChange={(v) => updateQuery({ classifier: v.join(",") })}
                   placeholder="Все категории"
@@ -310,9 +363,9 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">Регион</Label>
                 <MultiSelect
-                  options={regions.map((r) => ({ value: r, label: r }))}
+                  options={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r, label: r }))]}
                   value={regionFilter}
-                  onChange={(v) => updateQuery({ region: v.join(",") })}
+                  onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(",") })}
                   placeholder="Любой регион"
                   searchPlaceholder="Поиск региона..."
                 />
@@ -398,6 +451,74 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
             </div>
           ))}
         </div>
+      )}
+
+      {/* Попап отзывов компании */}
+      {reviewPopup && (
+        <Dialog open={!!reviewPopup} onOpenChange={closeReviewsPopup}>
+          <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader className="min-w-0">
+              <DialogTitle className="break-words">Отзывы — {reviewPopup.name}</DialogTitle>
+              <DialogDescription>
+                {reviewsList === null
+                  ? "Загрузка..."
+                  : reviewsList.length > 0
+                    ? `Всего отзывов: ${reviewsList.length}`
+                    : "Отзывов пока нет"}
+              </DialogDescription>
+            </DialogHeader>
+            {reviewsList === null ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : reviewsList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Будьте первым, кто оставит отзыв
+              </p>
+            ) : (
+              <div className="space-y-3 min-w-0">
+                {reviewsList.map((r) => {
+                  const isExpanded = expandedReviewId === r.id;
+                  return (
+                    <div key={r.id} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-sm font-medium break-words min-w-0">{r.authorNick}</span>
+                        <StarRating rating={r.weightedAverage} size="sm" />
+                      </div>
+                      <p className="text-sm mb-1 wrap-anywhere whitespace-pre-wrap">{r.comment}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(r.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                      </p>
+                      {r.criteria.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedReviewId(isExpanded ? null : r.id)}
+                            className="text-xs text-menthol hover:underline cursor-pointer"
+                          >
+                            {isExpanded ? "Скрыть оценки по критериям" : "Показать оценки по критериям"}
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-2 space-y-1 border-t pt-2">
+                              {r.criteria.map((c) => (
+                                <div key={c.criteriaIndex} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">
+                                    {c.criteriaIndex}. {COMPANY_CRITERIA_LABELS[c.criteriaIndex - 1] || "Критерий"}
+                                  </span>
+                                  <span className="font-medium flex-shrink-0">{c.score}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

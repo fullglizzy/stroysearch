@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getAllTreeItems } from "@/server/admin/tree";
 import { getRegions } from "@/server/admin/regions";
 import { TreeConstructor } from "@/components/forms/TreeConstructor";
+import { TreeBackups } from "@/components/forms/TreeBackups";
 import { ProductsManager } from "@/components/forms/ProductsManager";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { SessionUser } from "@/types";
@@ -18,6 +19,9 @@ export default async function AdminProductsPage() {
   if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
     redirect("/account");
   }
+
+  // Резервные копии дерева — только для SUPER/ROOT (восстановление разрушительно)
+  const isBackupsAllowed = ["SUPER", "ROOT"].includes(userType);
 
   const [treeItemsRaw, regions, products, companies, treeConstructorItems] = await Promise.all([
     prisma.productTreeItem.findMany({
@@ -35,7 +39,7 @@ export default async function AdminProductsPage() {
     prisma.product.findMany({
       where: { deletedAt: null },
       include: {
-        treeItem: { select: { fullNumberPath: true, name: true } },
+        treeItem: { select: { id: true, fullNumberPath: true, name: true } },
         company: { select: { name: true, inn: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -58,10 +62,11 @@ export default async function AdminProductsPage() {
   const rows = products.map((p) => ({
     id: p.id,
     name: p.name,
+    treeItemId: p.treeItem.id,
     treeItemPath: p.treeItem.fullNumberPath,
     treeItemName: p.treeItem.name,
     classes: parseJson(p.classes),
-    region: p.region,
+    regions: p.regions ? p.regions.split(",").map((r) => r.trim()).filter(Boolean) : [],
     unit: p.unit,
     characteristics: parseJson(p.characteristics),
     price: p.price,
@@ -83,6 +88,7 @@ export default async function AdminProductsPage() {
         <TabsList>
           <TabsTrigger value="products">Товары</TabsTrigger>
           <TabsTrigger value="tree">Дерево решений</TabsTrigger>
+          {isBackupsAllowed && <TabsTrigger value="backups">Резервные копии</TabsTrigger>}
         </TabsList>
         <TabsContent value="products" className="pt-4">
           <ProductsManager
@@ -95,6 +101,11 @@ export default async function AdminProductsPage() {
         <TabsContent value="tree" className="pt-4">
           <TreeConstructor items={treeConstructorItems} />
         </TabsContent>
+        {isBackupsAllowed && (
+          <TabsContent value="backups" className="pt-4">
+            <TreeBackups items={treeConstructorItems} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

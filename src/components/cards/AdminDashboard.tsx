@@ -35,6 +35,7 @@ interface AdminDashboardProps {
 
 const isSuper = (type: string) => ["SUPER", "ROOT"].includes(type);
 const isEditor = (type: string) => ["EDITOR", "SUPER", "ROOT"].includes(type);
+const isRoot = (type: string) => type === "ROOT";
 
 export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboardProps) {
   const sections = [
@@ -116,6 +117,13 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       title: "Настройки категорий",
       desc: "Единицы измерения и характеристики категорий классификатора",
       show: isSuper(userType),
+    },
+    {
+      href: "/admin/payouts",
+      icon: Coins,
+      title: "Учёт метрик и выплаты",
+      desc: "Ставки за просмотры и счета на выплату компаниям",
+      show: isRoot(userType),
     },
   ];
 

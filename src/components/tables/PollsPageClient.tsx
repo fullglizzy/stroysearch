@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -11,6 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { MultiSelect } from "@/components/shared/MultiSelect";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +25,7 @@ import {
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { Pagination } from "@/components/shared/Pagination";
 import { toastSuccess, toastError } from "@/lib/toast";
-import { Coins, Vote, BarChart3, Loader2, AlertCircle, ChevronRight, PlusCircle } from "lucide-react";
+import { Coins, Vote, BarChart3, Loader2, AlertCircle, ChevronRight, PlusCircle, Search, X } from "lucide-react";
 import { PageBanner } from "@/components/shared/PageBanner";
 
 interface PollRow {
@@ -40,15 +45,56 @@ interface Props {
   total: number;
   page: number;
   totalPages: number;
+  treeItems: { id: string; name: string; fullNumberPath: string }[];
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
+  initialQuery: { q: string; type: string; classifier: string; sort: string; voted: string };
 }
 
-export function PollsPageClient({ polls, total, page, totalPages, moderatorText, pageTitle, bannerUrl }: Props) {
+const POLL_TYPE_LABELS: Record<string, string> = {
+  DICHOTOMOUS: "Да/Нет",
+  MULTIPLE: "Несколько вариантов",
+};
+
+export function PollsPageClient({ polls, total, page, totalPages, treeItems, moderatorText, pageTitle, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
+
+  // Фильтры живут в URL — сервер отдаёт только нужную страницу
+  const [search, setSearch] = useState(initialQuery.q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typeFilter = initialQuery.type;
+  const classifierFilter = initialQuery.classifier.split(",").filter(Boolean);
+  const sortBy = initialQuery.sort;
+  const votedFilter = initialQuery.voted;
+
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/polls?${qs}` : "/polls", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value, page: null });
+    }, 300);
+  }
+
+  const hasFilters = !!(
+    initialQuery.q ||
+    initialQuery.type ||
+    classifierFilter.length > 0 ||
+    initialQuery.sort !== "created" ||
+    initialQuery.voted
+  );
 
   // Голоса пользователя догружаем клиентом, чтобы страница могла кэшироваться
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
@@ -203,11 +249,94 @@ export function PollsPageClient({ polls, total, page, totalPages, moderatorText,
       {/* Баннер (ТЗ §10.1) */}
       {bannerUrl && <PageBanner url={bannerUrl} alt="Баннер опросов" />}
 
+      {/* Поиск и фильтры — состояние живёт в URL, данные отдаёт сервер */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Поиск по вопросу..."
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={typeFilter || "all"}
+          items={{ all: "Все типы", ...POLL_TYPE_LABELS }}
+          onValueChange={(v) => updateQuery({ type: v === "all" ? null : v, page: null })}
+        >
+          <SelectTrigger className="w-[190px]">
+            <SelectValue placeholder="Тип опроса" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" label="Все типы">Все типы</SelectItem>
+            {Object.entries(POLL_TYPE_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value} label={label}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <MultiSelect
+          options={treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` }))}
+          value={classifierFilter}
+          onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
+          placeholder="Категория"
+          searchPlaceholder="Поиск категории..."
+          className="w-[210px]"
+        />
+        {session?.user && (
+          <Select
+            value={votedFilter || "all"}
+            items={{ all: "Все", yes: "Проголосованные", no: "Не проголосованные" }}
+            onValueChange={(v) => updateQuery({ voted: v === "all" ? null : v, page: null })}
+          >
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="Голосование" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" label="Все">Все</SelectItem>
+              <SelectItem value="yes" label="Проголосованные">Проголосованные</SelectItem>
+              <SelectItem value="no" label="Не проголосованные">Не проголосованные</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        <Select
+          value={sortBy}
+          items={{ created: "Сначала новые", votes: "По популярности", reward: "По награде" }}
+          onValueChange={(v) => updateQuery({ sort: v === "created" ? null : v, page: null })}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Сортировка" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created" label="Сначала новые">Сначала новые</SelectItem>
+            <SelectItem value="votes" label="По популярности">По популярности</SelectItem>
+            <SelectItem value="reward" label="По награде">По награде</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("");
+              updateQuery({ q: null, type: null, classifier: null, sort: null, voted: null, page: null });
+            }}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Сбросить
+          </Button>
+        )}
+      </div>
+
       {polls.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg">Нет активных опросов</p>
-          <p className="text-sm mt-2">Хотите запустить опрос? Нажмите «Хочу создать опрос»</p>
+          <p className="text-lg">{hasFilters ? "Ничего не найдено" : "Нет активных опросов"}</p>
+          <p className="text-sm mt-2">
+            {hasFilters
+              ? "Попробуйте изменить или сбросить фильтры"
+              : "Хотите запустить опрос? Нажмите «Хочу создать опрос»"}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

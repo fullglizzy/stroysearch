@@ -113,7 +113,7 @@ function TreeNodeItem({ node, expandAll }: { node: TreeNode; expandAll?: boolean
 
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
           {node.productCount > 0 && (
-            <Link href={`/matrix?classifier=${node.fullNumberPath}`}>
+            <Link href={`/matrix?classifier=${node.id}`}>
               <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80">
                 <Package className="h-3 w-3 mr-1" />
                 {node.productCount}
@@ -121,12 +121,12 @@ function TreeNodeItem({ node, expandAll }: { node: TreeNode; expandAll?: boolean
             </Link>
           )}
           <div className="flex gap-1">
-            <Link href={`/matrix?classifier=${node.fullNumberPath}`}>
+            <Link href={`/matrix?classifier=${node.id}`}>
               <Button variant="ghost" size="sm" className="h-7 text-xs">
                 Товары
               </Button>
             </Link>
-            <Link href={`/library?classifier=${node.fullNumberPath}`}>
+            <Link href={`/library?classifier=${node.id}`}>
               <Button variant="ghost" size="sm" className="h-7 text-xs">
                 Документы
               </Button>

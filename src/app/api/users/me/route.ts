@@ -51,7 +51,7 @@ export async function PATCH(request: Request) {
     middleName,
     phone,
     website,
-    region,
+    regions,
     isContactsHidden,
     roles,
     classifierIds,
@@ -62,6 +62,7 @@ export async function PATCH(request: Request) {
   } = parsed.data;
 
   const classifierIdsCsv = (classifierIds ?? []).join(",");
+  const regionsCsv = (regions ?? []).join(",");
 
   // Нормализуем сайт: добавляем https://, если протокол не указан
   let normalizedWebsite: string | null = null;
@@ -83,7 +84,7 @@ export async function PATCH(request: Request) {
         firstName,
         lastName,
         middleName,
-        region,
+        regions: regionsCsv,
         isContactsHidden,
         classifierIds: classifierIdsCsv,
         companyName,
@@ -96,7 +97,7 @@ export async function PATCH(request: Request) {
         firstName,
         lastName,
         middleName,
-        region,
+        regions: regionsCsv,
         isContactsHidden,
         classifierIds: classifierIdsCsv,
         companyName,
@@ -106,11 +107,14 @@ export async function PATCH(request: Request) {
       },
     });
 
-    // Обновляем сайт компании (если у пользователя есть компания)
-    if (website !== undefined) {
+    // Обновляем сайт и регионы компании (если у пользователя есть компания)
+    if (website !== undefined || regions !== undefined) {
       await prisma.company.updateMany({
         where: { ownerUserId: userId },
-        data: { website: normalizedWebsite },
+        data: {
+          ...(website !== undefined ? { website: normalizedWebsite } : {}),
+          ...(regions !== undefined ? { regions: regionsCsv } : {}),
+        },
       });
     }
 

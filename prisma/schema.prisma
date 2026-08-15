@@ -30,6 +30,8 @@ model User {
   conferences           Conference[]
   products              Product[]
   wallet                Wallet?
+  payoutRate            MetricsPayoutRate?
+  treeSnapshots         TreeSnapshot[]
   invoices              Invoice[]
   transactions          Transaction[]
   addedCompanies        Company[]             @relation("AddedCompanies")
@@ -51,7 +53,7 @@ model UserProfile {
   lastName         String?
   middleName       String?
   nick             String?           @unique
-  region           String?
+  regions          String            @default("") // comma-separated; «Все регионы» — все регионы
   roles            UserProfileRole[]
   classifierIds    String            @default("") // comma-separated
   isContactsHidden Boolean           @default(true)
@@ -159,7 +161,7 @@ model Company {
   phone         String?
   email         String?
   website       String?
-  region        String?
+  regions       String          @default("") // comma-separated; «Все регионы» — все регионы
   classifierIds String          @default("") // comma-separated
   addedById     String?
   addedBy       User?           @relation("AddedCompanies", fields: [addedById], references: [id])
@@ -172,7 +174,6 @@ model Company {
   updatedAt     DateTime        @updatedAt
 
   @@map("companies")
-  @@index([region])
 }
 
 model CompanyMetrics {
@@ -231,7 +232,7 @@ model Product {
   treeItem        ProductTreeItem  @relation(fields: [treeItemId], references: [id])
   name            String
   classes         String           @default("[]") // JSON array: ["STANDARD","COMFORT",...]
-  region          String?
+  regions         String           @default("") // comma-separated; «Все регионы» — все регионы
   imageUrl        String?
   unit            String?
   characteristics String           @default("[]") // JSON
@@ -466,6 +467,7 @@ model Invoice {
   date      DateTime
   dueDate   DateTime
   status    String         @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
+  kind      String         @default("PURCHASE") // PURCHASE | PAYOUT
   subtotal  Decimal
   limit     Decimal
   discount  Decimal        @default(0)
@@ -491,6 +493,43 @@ model InvoiceItem {
   total       Decimal
 
   @@map("invoice_items")
+}
+
+// ─────────────────────────── ВЫПЛАТЫ ПО МЕТРИКАМ ───────────────────────────
+// Индивидуальные ставки (₽ за 1 просмотр) и «водяные знаки» — сколько
+// просмотров уже выставлено в счёт, чтобы не выставлять их повторно.
+model MetricsPayoutRate {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phonePrice       Decimal  @default(0)
+  emailPrice       Decimal  @default(0)
+  websitePrice     Decimal  @default(0)
+  ratingPrice      Decimal  @default(0)
+  reviewsPrice     Decimal  @default(0)
+  phonePaidViews   Int      @default(0)
+  emailPaidViews   Int      @default(0)
+  websitePaidViews Int      @default(0)
+  ratingPaidViews  Int      @default(0)
+  reviewsPaidViews Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@map("metrics_payout_rates")
+}
+
+// ─────────────────────────── СНИМКИ ДЕРЕВА ───────────────────────────
+
+// Резервные копии дерева решений («как гитхаб»): полный JSON дерева,
+// чтобы можно было вернуться к состоянию на момент снимка.
+model TreeSnapshot {
+  id          String   @id @default(uuid())
+  label       String?
+  data        String // JSON: TreeItemFlat[] (все узлы, включая удалённые)
+  nodeCount   Int      @default(0)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@map("tree_snapshots")
 }
 
 // ─────────────────────────── БАННЕРЫ И КОНТЕНТ СТРАНИЦ ───────────────────────────

@@ -111,7 +111,7 @@ export async function registerCompany(formData: FormData) {
     email: formData.get("email") as string,
     password: formData.get("password") as string,
     inn: formData.get("inn") as string,
-    agreePersonalData: formData.get("agreePersonalData") === "on",
+    companyName: formData.get("companyName") as string,
     agreeTerms: formData.get("agreeTerms") === "on",
   };
 

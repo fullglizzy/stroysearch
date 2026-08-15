@@ -62,7 +62,7 @@ async function main() {
       addCompanyCoins: 1,
       reviewCoins: 1,
       maxMonthlyLimit: 1000,
-      organizationName: "ООО «ЕЦПР»",
+      organizationName: "ООО «ЕНЦПР»",
       organizationInn: "7700000001",
       organizationKpp: "770001001",
       organizationAddress: "г. Москва, ул. Строителей, д. 1",
@@ -599,12 +599,12 @@ async function main() {
     { username: "root", email: "root@ecpr.ru", type: "ROOT", firstName: "Кирилл", lastName: "Кокорев", nick: "kokorev", region: "г. Москва", phone: "+7 (916) 111-11-11", isAdmin: true, adminType: "ROOT", balance: 0 },
     { username: "moderator", email: "moder@ecpr.ru", type: "MODERATOR", firstName: "Анна", lastName: "Смирнова", nick: "moderator_anna", region: "г. Санкт-Петербург", phone: "+7 (921) 222-22-22", isAdmin: true, adminType: "MODERATOR", balance: 50 },
     { username: "editor", email: "editor@ecpr.ru", type: "EDITOR", firstName: "Дмитрий", lastName: "Волков", nick: "editor_dmitry", region: "г. Москва", isAdmin: true, adminType: "EDITOR", balance: 30 },
-    { username: "stroy_boss", email: "boss@stroytech.ru", type: "COMPANY", firstName: "Алексей", lastName: "Громов", nick: "gromov_stroy", region: "г. Москва", phone: "+7 (495) 333-33-33", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25 },
+    { username: "stroy_boss", email: "boss@stroytech.ru", type: "COMPANY", firstName: "Алексей", lastName: "Громов", nick: "gromov_stroy", region: "г. Москва,Московская область", phone: "+7 (495) 333-33-33", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25 },
     { username: "keram_facade", email: "info@keramfacade.ru", type: "COMPANY", firstName: "Сергей", lastName: "Кузнецов", nick: "keram_servis", region: "г. Москва", phone: "+7 (495) 555-55-55", inn: "7723456688", companyName: "ООО «КерамФасад»", balance: 40 },
     { username: "ural_steel", email: "sales@uralsteel.ru", type: "COMPANY", firstName: "Павел", lastName: "Морозов", nick: "ural_steel", region: "Свердловская область", phone: "+7 (343) 777-77-77", inn: "6677463232", companyName: "ООО «УралКрепСтрой»", balance: 15 },
     { username: "arch_moscow", email: "arch@arhmos.ru", type: "COMPANY", firstName: "Елена", lastName: "Ветрова", nick: "arch_moscow", region: "г. Москва", phone: "+7 (495) 888-88-88", inn: "7723474343", companyName: "ООО «АрхФасад»", balance: 35 },
     { username: "steel_doors", email: "info@steeldoors.ru", type: "COMPANY", firstName: "Игорь", lastName: "Стальной", nick: "steel_doors", region: "Новосибирская область", phone: "+7 (383) 999-99-99", inn: "5407456677", companyName: "ООО «СтальДверь»", balance: 20 },
-    { username: "rem_facade", email: "rem@facade-spb.ru", type: "COMPANY", firstName: "Ольга", lastName: "Невская", nick: "rem_facade_spb", region: "г. Санкт-Петербург", phone: "+7 (812) 444-44-44", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18 },
+    { username: "rem_facade", email: "rem@facade-spb.ru", type: "COMPANY", firstName: "Ольга", lastName: "Невская", nick: "rem_facade_spb", region: "Все регионы", phone: "+7 (812) 444-44-44", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18 },
     { username: "petrov_engineer", email: "petrov@mail.ru", type: "COMMON", firstName: "Николай", lastName: "Петров", nick: "petrov_nik", region: "г. Москва", roles: ["DESIGNER", "TENDER_SPECIALIST"], balance: 12 },
     { username: "sidorova_anna", email: "sidorova@mail.ru", type: "COMMON", firstName: "Анна", lastName: "Сидорова", nick: "sidorova_anna", region: "Республика Татарстан", roles: ["PRODUCTOLOGIST"], balance: 8 },
     { username: "ivanov_tech", email: "ivanov@tech.ru", type: "COMMON", firstName: "Михаил", lastName: "Иванов", nick: "ivanov_mike", region: "Свердловская область", roles: ["DESIGNER"], balance: 5 },
@@ -629,7 +629,7 @@ async function main() {
             firstName: u.firstName,
             lastName: u.lastName,
             nick: u.nick,
-            region: u.region,
+            regions: u.region,
             inn: u.inn || null,
             companyName: u.companyName || null,
             roles: u.roles ? {
@@ -660,7 +660,7 @@ async function main() {
         name: cu.companyName!,
         email: cu.email,
         phone: cu.phone || null,
-        region: cu.region,
+        regions: cu.region,
         ownerUserId: userIdMap.get(cu.username)!,
         website: `https://${cu.nick.replace(/_/g, "")}.ru`,
         classifierIds: ["4.1.2", "4.1.2.2", "4.1.2.2.1"]
@@ -682,6 +682,23 @@ async function main() {
   }
   console.log(`  ✅ Companies: ${companyIdMap.size}`);
 
+  // Демо-ставки выплат по метрикам (₽ за 1 просмотр)
+  const demoRates: Record<string, Record<string, number>> = {
+    stroy_boss: { phonePrice: 2, emailPrice: 1, websitePrice: 1.5 },
+    keram_facade: { phonePrice: 1, emailPrice: 0.5, websitePrice: 1, ratingPrice: 0.5, reviewsPrice: 0.5 },
+    ural_steel: { phonePrice: 3, emailPrice: 1, websitePrice: 2 },
+  };
+  for (const [username, prices] of Object.entries(demoRates)) {
+    const uid = userIdMap.get(username);
+    if (!uid) continue;
+    await prisma.metricsPayoutRate.upsert({
+      where: { userId: uid },
+      update: prices,
+      create: { userId: uid, ...prices },
+    });
+  }
+  console.log(`  ✅ Ставки выплат по метрикам: ${Object.keys(demoRates).length} компании`);
+
   // Также добавим компанию без владельца (добавлена другим пользователем)
   await prisma.company.create({
     data: {
@@ -689,7 +706,7 @@ async function main() {
       name: "ООО «НовСтрой»",
       email: "novstroy@mail.ru",
       phone: "+7 (495) 123-45-68",
-      region: "г. Москва",
+      regions: "г. Москва,Московская область",
       addedById: userIdMap.get("petrov_engineer")!,
       classifierIds: ["4.1.2", "4.3"]
         .map((p) => treeIdMap.get(p))
@@ -706,11 +723,11 @@ async function main() {
   const productData = [
     { company: "keram_facade", treePath: "4.1.2.2", name: "Клинкерная плитка KeramPro 250x65", classes: ["STANDARD","COMFORT"], region: "г. Москва", unit: "шт", price: 2300, characteristics: ["Размер: 250x65 мм","Морозостойкость: F100","Водопоглощение: <3%"] },
     { company: "keram_facade", treePath: "4.1.2.1", name: "Керамогранит KeramGranit 600x600", classes: ["COMFORT","BUSINESS"], region: "г. Москва", unit: "м²", price: 1850, characteristics: ["Размер: 600x600 мм","Толщина: 10 мм","Износостойкость: PEI 4"] },
-    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер RommerS 240x71", classes: ["STANDARD","COMFORT","BUSINESS"], region: "г. Санкт-Петербург", unit: "шт", price: 2700, characteristics: ["Размер: 240x71 мм","Морозостойкость: F150","Производство: Германия"] },
+    { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер RommerS 240x71", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Все регионы", unit: "шт", price: 2700, characteristics: ["Размер: 240x71 мм","Морозостойкость: F150","Производство: Германия"] },
     { company: "rem_facade", treePath: "4.1.2.2", name: "Клинкер эконом RommerS 200x60", classes: ["STANDARD"], region: "г. Санкт-Петербург", unit: "шт", price: 1600, characteristics: ["Размер: 200x60 мм","Морозостойкость: F75"] },
     { company: "arch_moscow", treePath: "4.1.2.3", name: "Бетонная плитка ArchStone 400x400", classes: ["BUSINESS","PREMIUM"], region: "г. Москва", unit: "м²", price: 4200, characteristics: ["Размер: 400x400 мм","Толщина: 20 мм","Ручная работа"] },
     { company: "arch_moscow", treePath: "4.1.1", name: "Штукатурка фасадная ArchTex", classes: ["STANDARD","COMFORT","BUSINESS"], region: "г. Москва", unit: "кг", price: 350, characteristics: ["Расход: 3-4 кг/м²","Цвет: белый под окраску"] },
-    { company: "stroy_boss", treePath: "3.4.1", name: "Газобетонный блок D500 600x300x200", classes: ["STANDARD","COMFORT"], region: "г. Москва", unit: "шт", price: 180, characteristics: ["Плотность: D500","Размер: 600x300x200 мм","Прочность: B3.5"] },
+    { company: "stroy_boss", treePath: "3.4.1", name: "Газобетонный блок D500 600x300x200", classes: ["STANDARD","COMFORT"], region: "г. Москва,Московская область", unit: "шт", price: 180, characteristics: ["Плотность: D500","Размер: 600x300x200 мм","Прочность: B3.5"] },
     { company: "stroy_boss", treePath: "3.4.4", name: "Кирпич полнотелый М150", classes: ["STANDARD"], region: "г. Москва", unit: "шт", price: 25, characteristics: ["Размер: 250x120x65 мм","Прочность: М150","Морозостойкость: F50"] },
     { company: "ural_steel", treePath: "2.6.2.1", name: "Балка двутавровая 20Б1 С245", classes: ["STANDARD","COMFORT"], region: "Свердловская область", unit: "т", price: 68000, characteristics: ["Профиль: 20Б1","Сталь: С245","Длина: 12 м"] },
     { company: "ural_steel", treePath: "2.6.2.1", name: "Швеллер 20П С345", classes: ["STANDARD","COMFORT","BUSINESS"], region: "Свердловская область", unit: "т", price: 72000, characteristics: ["Профиль: 20П","Сталь: С345","Длина: 12 м"] },
@@ -732,7 +749,7 @@ async function main() {
           ownerUserId: userIdMap.get(p.company) || null,
           name: p.name,
           classes: JSON.stringify(p.classes),
-          region: p.region,
+          regions: p.region,
           unit: p.unit,
           characteristics: JSON.stringify(p.characteristics),
           price: p.price,
@@ -959,7 +976,7 @@ async function main() {
   // 10. GIFTS
   // ═══════════════════════════════════════════
   const giftsData = [
-    { name: "Фирменный блокнот ЕЦПР", coinPrice: 5, limit: 50 },
+    { name: "Фирменный блокнот ЕНЦПР", coinPrice: 5, limit: 50 },
     { name: "Термокружка с логотипом", coinPrice: 10, limit: 30 },
     { name: "Power Bank 10000 mAh", coinPrice: 20, limit: 15 },
     { name: "Сертификат OZON 1000 ₽", coinPrice: 15, limit: 20 },
@@ -1022,7 +1039,7 @@ async function main() {
   // 13. PAGE CONTENT
   // ═══════════════════════════════════════════
   const pages = {
-    home: `<h2>Добро пожаловать на платформу ЕЦПР</h2>
+    home: `<h2>Добро пожаловать на платформу ЕНЦПР</h2>
 <p><strong>Единый независимый центр продуктовых решений, закупок и технических заданий строительной отрасли</strong> — открытая независимая платформа для инженеров, специалистов по закупкам, поставщиков и собственников компаний.</p>
 <p>Наша цель — укрепить российский рынок строительства, повысить конкурентоспособность отечественных компаний.</p>
 <p><em>Основатель платформы — Кокорев Кирилл Владимирович</em></p>`,

@@ -24,8 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EyeButton } from "@/components/shared/EyeButton";
 import { GuestGuard } from "@/components/shared/GuestGuard";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
@@ -33,18 +31,13 @@ import { StarRating } from "@/components/shared/StarRating";
 import { ReviewForm } from "@/components/forms/ReviewForm";
 import { Pagination } from "@/components/shared/Pagination";
 import { MultiSelect } from "@/components/shared/MultiSelect";
-import { SearchSelect } from "@/components/shared/SearchSelect";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { AddCompanyDialog } from "@/components/forms/AddCompanyDialog";
 import { Plus, Search, MessageSquare, AlertCircle, Loader2, ArrowUpDown, Phone, Mail, Globe } from "lucide-react";
 import { roleLabel } from "@/lib/roles";
-import { toastSuccess } from "@/lib/toast";
 import { telHref, mailtoHref } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
+import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { PageBanner } from "@/components/shared/PageBanner";
-import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
-import { isValidInn } from "@/lib/validators";
 
 interface CompanyRow {
   id: string;
@@ -54,8 +47,9 @@ interface CompanyRow {
   phone: string | null;
   email: string | null;
   website: string | null;
-  region: string | null;
+  regions: string[];
   classifierIds: string[];
+  isContactsHidden: boolean;
   rating: number | null;
   reviewCount: number;
   ownerNick: string | null;
@@ -117,49 +111,6 @@ const PARTICIPANT_CRITERIA_LABELS = [
   "Соблюдение договорённостей — выполнение обязательств по срокам и условиям",
 ];
 
-// Сообщения совпадают с серверной схемой addCompanySchema
-const addCompanyFormSchema = z.object({
-  inn: z
-    .string()
-    .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр")
-    .refine(isValidInn, "Такого ИНН не существует — проверьте номер"),
-  name: z
-    .string()
-    .trim()
-    .min(1, "Название компании обязательно")
-    .max(255, "Название должно быть не более 255 символов"),
-  email: z.string().trim().toLowerCase().email("Некорректный email"),
-  phone: z
-    .string()
-    .regex(
-      /^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/,
-      "Неверный формат телефона. Пример: +7 (999) 123-45-67",
-    ),
-  website: z
-    .string()
-    .trim()
-    .max(255, "Сайт должен быть не более 255 символов")
-    .refine((v) => !/\s/.test(v), "Ссылка не должна содержать пробелов")
-    .optional()
-    .or(z.literal("")),
-  region: z.string().min(1, "Выберите регион").max(255),
-  classifierIds: z
-    .array(z.string().uuid("Некорректный классификатор"))
-    .min(1, "Выберите хотя бы одну категорию классификатора"),
-});
-
-type AddCompanyFormValues = z.infer<typeof addCompanyFormSchema>;
-
-const ADD_COMPANY_FORM_DEFAULTS: AddCompanyFormValues = {
-  inn: "",
-  name: "",
-  email: "",
-  phone: "",
-  website: "",
-  region: "",
-  classifierIds: [],
-};
-
 export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, regions, pageTitle, moderatorText, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -184,10 +135,6 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
   const sortBy = initialQuery.sort;
   const sortDir = initialQuery.dir;
 
-  const [addOpen, setAddOpen] = useState(false);
-  const [addError, setAddError] = useState("");
-  const [addLoading, setAddLoading] = useState(false);
-
   // Все фильтры/пагинация живут в URL — сервер отдаёт только нужную страницу
   function updateQuery(next: Record<string, string | null>) {
     const params = new URLSearchParams(window.location.search);
@@ -207,21 +154,6 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
     }, 300);
   }
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    setValue,
-    setError: setFieldError,
-    setFocus,
-    formState: { errors },
-  } = useForm<AddCompanyFormValues>({
-    resolver: zodResolver(addCompanyFormSchema),
-    // Валидируем после первого «касания» поля, а не сразу при наборе
-    mode: "onTouched",
-    defaultValues: ADD_COMPANY_FORM_DEFAULTS,
-  });
   const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; companyId?: string; label?: string } | null>(null);
   const [reviewPopup, setReviewPopup] = useState<{ id: string; kind: "company" | "participant"; name: string } | null>(null);
   const [reviewsList, setReviewsList] = useState<{ id: string; authorNick: string; comment: string; weightedAverage: number; createdAt: string; criteria: { criteriaIndex: number; score: number }[] }[] | null>(null);
@@ -266,14 +198,20 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
     [treeItems],
   );
 
-  // Единый список регионов (из БД)
+  // Единый список регионов: «Все регионы» + каталог из БД
   const regionOptions = useMemo(
-    () => regions.map((r) => ({ value: r, label: r })),
+    () => [{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r, label: r }))],
     [regions],
   );
 
   // Поля, просмотры которых уже засчитаны (один раз за сессию на поле)
   const countedRef = useRef<Record<string, Record<string, boolean>>>({});
+
+  // Счётчики просмотров для админа: обновляем локально сразу после раскрытия,
+  // иначе до ревалидации страницы видны устаревшие значения
+  const [metricOverrides, setMetricOverrides] = useState<
+    Record<string, Partial<Record<"phoneViews" | "emailViews" | "websiteViews", number>>>
+  >({});
 
   const handleReveal = useCallback(
     async (companyId: string, field: string) => {
@@ -287,7 +225,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
       // Метрика просмотров считается только для компаний,
       // только при раскрытии и один раз за сессию
       const row = rows.find((c) => c.id === companyId);
-      if (row?.kind === "participant" || !isReveal) return;
+      if (!row || row.kind === "participant" || !isReveal) return;
       if (countedRef.current[key]?.[field]) return;
       countedRef.current = {
         ...countedRef.current,
@@ -295,58 +233,25 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
       };
 
       try {
-        await fetch(`/api/suppliers/metrics/${companyId}/click`, {
+        const res = await fetch(`/api/suppliers/metrics/${companyId}/click`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ field }),
         });
+        // После успешного засчитывания сразу показываем новое значение
+        if (res.ok && (field === "phone" || field === "email" || field === "website")) {
+          const viewField = `${field}Views` as "phoneViews" | "emailViews" | "websiteViews";
+          setMetricOverrides((prev) => ({
+            ...prev,
+            [key]: { ...prev[key], [viewField]: (prev[key]?.[viewField] ?? row.metrics[viewField]) + 1 },
+          }));
+        }
       } catch {
         // silent
       }
     },
     [rows, revals],
   );
-
-  async function handleAddCompany(values: AddCompanyFormValues) {
-    setAddError("");
-    setAddLoading(true);
-
-    try {
-      const res = await fetch("/api/suppliers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inn: values.inn,
-          name: values.name,
-          email: values.email,
-          phone: values.phone,
-          website: values.website,
-          region: values.region,
-          classifierIds: values.classifierIds,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const message = data.error || "Ошибка добавления";
-        // Конфликт ИНН привязываем к полю
-        if (message.includes("ИНН")) {
-          setFieldError("inn", { message });
-          setFocus("inn");
-        } else {
-          setAddError(message);
-        }
-      } else {
-        setAddOpen(false);
-        reset(ADD_COMPANY_FORM_DEFAULTS);
-        toastSuccess("Компания добавлена", "+1 монета начислена на ваш счёт");
-        router.refresh();
-      }
-    } catch {
-      setAddError("Ошибка соединения");
-    }
-    setAddLoading(false);
-  }
 
   return (
     <div className="container-page py-8">
@@ -358,199 +263,19 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
           </p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={addOpen} onOpenChange={(o) => {
-            setAddOpen(o);
-            if (!o) {
-              setAddError("");
-              reset(ADD_COMPANY_FORM_DEFAULTS);
-            }
-          }}>
-            <Button
-              className="bg-menthol hover:bg-menthol-dark gap-2"
-              onClick={guard(() => setAddOpen(true))}
-            >
-              <Plus className="h-4 w-4" />
-              Добавить компанию
-            </Button>
-            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Добавить компанию</DialogTitle>
-                <DialogDescription>
-                  Заполните данные компании. За добавление начисляется +1 монета
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(handleAddCompany)} className="space-y-4" noValidate>
-                {addError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{addError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="inn">ИНН</Label>
-                  <Input
-                    id="inn"
-                    inputMode="numeric"
-                    placeholder="10 или 12 цифр"
-                    maxLength={12}
-                    disabled={addLoading}
-                    aria-invalid={!!errors.inn}
-                    aria-describedby={errors.inn ? "inn-error" : "inn-hint"}
-                    {...register("inn", {
-                      // Маска: только цифры, не более 12
-                      setValueAs: (value: string) => value.replace(/\D/g, "").slice(0, 12),
-                      onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
-                      },
-                    })}
-                  />
-                  {errors.inn ? (
-                    <FieldError id="inn-error" message={errors.inn.message} />
-                  ) : (
-                    <p id="inn-hint" className="text-xs text-muted-foreground">
-                      10 цифр для организации, 12 — для ИП
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Название</Label>
-                  <Input
-                    id="name"
-                    placeholder="ООО «Компания»"
-                    maxLength={255}
-                    disabled={addLoading}
-                    aria-invalid={!!errors.name}
-                    aria-describedby={errors.name ? "name-error" : undefined}
-                    {...register("name", {
-                      setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
-                      onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\s{2,}/g, " ");
-                      },
-                      onBlur: (e) => {
-                        e.target.value = e.target.value.trim();
-                      },
-                    })}
-                  />
-                  {errors.name && <FieldError id="name-error" message={errors.name.message} />}
-                </div>
-                <div className="space-y-2">
-                  <Label>Регион</Label>
-                  <Controller
-                    name="region"
-                    control={control}
-                    render={({ field }) => (
-                      <SearchSelect
-                        options={regionOptions}
-                        value={field.value ?? ""}
-                        onChange={field.onChange}
-                        placeholder="Регион"
-                        searchPlaceholder="Поиск региона..."
-                        disabled={addLoading}
-                        ariaInvalid={!!errors.region}
-                      />
-                    )}
-                  />
-                  {errors.region && <FieldError id="region-error" message={errors.region.message} />}
-                </div>
-                <div className="space-y-2">
-                  <Label>Классификатор</Label>
-                  <Controller
-                    name="classifierIds"
-                    control={control}
-                    render={({ field }) => (
-                      <MultiSelect
-                        options={classifierOptions}
-                        value={field.value ?? []}
-                        onChange={field.onChange}
-                        placeholder="Выберите категории классификатора"
-                        searchPlaceholder="Поиск по классификатору..."
-                        filter={matchClassifier}
-                        hideSelectedLabels
-                        disabled={addLoading}
-                        ariaInvalid={!!errors.classifierIds}
-                      />
-                    )}
-                  />
-                  {errors.classifierIds && (
-                    <FieldError
-                      id="classifierIds-error"
-                      message={(errors.classifierIds as { message?: string }).message}
-                    />
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Эл. почта</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="company@mail.ru"
-                    disabled={addLoading}
-                    aria-invalid={!!errors.email}
-                    aria-describedby={errors.email ? "email-error" : undefined}
-                    {...register("email", {
-                      // Маска: без пробелов, в нижнем регистре
-                      setValueAs: (value: string) => value.replace(/\s/g, "").toLowerCase(),
-                      onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\s/g, "").toLowerCase();
-                      },
-                    })}
-                  />
-                  {errors.email && <FieldError id="email-error" message={errors.email.message} />}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Телефон</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    inputMode="tel"
-                    placeholder="+7 (999) 123-45-67"
-                    maxLength={18}
-                    disabled={addLoading}
-                    aria-invalid={!!errors.phone}
-                    aria-describedby={errors.phone ? "phone-error" : undefined}
-                    {...register("phone", {
-                      setValueAs: (value: string) => formatRussianPhone(value),
-                      onChange: (e) => applyPhoneMask(e.target),
-                      onBlur: (e) => {
-                        const formatted = formatRussianPhone(e.target.value);
-                        e.target.value = formatted;
-                        setValue("phone", formatted, { shouldValidate: true, shouldDirty: true });
-                      },
-                    })}
-                  />
-                  {errors.phone && <FieldError id="phone-error" message={errors.phone.message} />}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website">Сайт (необязательно)</Label>
-                  <Input
-                    id="website"
-                    placeholder="example.ru"
-                    maxLength={255}
-                    disabled={addLoading}
-                    aria-invalid={!!errors.website}
-                    aria-describedby={errors.website ? "website-error" : undefined}
-                    {...register("website", {
-                      onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\s/g, "");
-                      },
-                      onBlur: (e) => {
-                        e.target.value = e.target.value.trim();
-                      },
-                    })}
-                  />
-                  {errors.website && (
-                    <FieldError id="website-error" message={errors.website.message} />
-                  )}
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-menthol hover:bg-menthol-dark"
-                  disabled={addLoading}
-                >
-                  {addLoading ? "Добавление..." : "Добавить (+1 монета)"}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <AddCompanyDialog
+            regions={regions}
+            treeItems={treeItems}
+            renderTrigger={(open) => (
+              <Button
+                className="bg-menthol hover:bg-menthol-dark gap-2"
+                onClick={guard(open)}
+              >
+                <Plus className="h-4 w-4" />
+                Добавить компанию
+              </Button>
+            )}
+          />
         </div>
       </div>
 
@@ -598,7 +323,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
         <MultiSelect
           options={regionOptions}
           value={regionFilter}
-          onChange={(v) => updateQuery({ region: v.join(","), page: null })}
+          onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(","), page: null })}
           placeholder="Регион"
           searchPlaceholder="Поиск региона..."
           className="w-[200px]"
@@ -643,7 +368,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
             <TableRow>
               <TableHead>Ник</TableHead>
               <TableHead>ИНН</TableHead>
-              <TableHead>Название</TableHead>
+              <TableHead>Название / Имя</TableHead>
               <TableHead>Рейтинг</TableHead>
               <TableHead>Телефон</TableHead>
               <TableHead>Email</TableHead>
@@ -665,6 +390,9 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
               rows.map((company) => {
                 const key = company.id;
                 const rev = revals[key] || {};
+                // Участник скрыл персональные данные — видимы только ник,
+                // классификатор, роль, рейтинг и отзывы
+                const hiddenContacts = company.kind === "participant" && company.isContactsHidden;
 
                 return (
                   <TableRow key={company.id}>
@@ -673,7 +401,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       {company.inn || "—"}
                     </TableCell>
                     <TableCell className="font-medium max-w-[180px] truncate">
-                      {company.name}
+                      {hiddenContacts ? "Скрыто" : company.name}
                     </TableCell>
                     <TableCell>
                       {company.rating !== null ? (
@@ -706,7 +434,9 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {company.phone ? (
+                      {hiddenContacts ? (
+                        "Скрыто"
+                      ) : company.phone ? (
                         <div className="flex items-center gap-1">
                           {rev.phone ? (
                             <a
@@ -727,7 +457,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                           )}
                           {isAdmin && (
                             <span className="text-[10px] text-muted-foreground">
-                              ({company.metrics.phoneViews})
+                              ({metricOverrides[company.id]?.phoneViews ?? company.metrics.phoneViews})
                             </span>
                           )}
                         </div>
@@ -736,7 +466,9 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {company.email ? (
+                      {hiddenContacts ? (
+                        "Скрыто"
+                      ) : company.email ? (
                         <div className="flex items-center gap-1">
                           {rev.email ? (
                             <a
@@ -757,7 +489,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                           )}
                           {isAdmin && (
                             <span className="text-[10px] text-muted-foreground">
-                              ({company.metrics.emailViews})
+                              ({metricOverrides[company.id]?.emailViews ?? company.metrics.emailViews})
                             </span>
                           )}
                         </div>
@@ -766,7 +498,9 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {company.website ? (
+                      {hiddenContacts ? (
+                        "Скрыто"
+                      ) : company.website ? (
                         <div className="flex items-center gap-1">
                           {rev.website ? (
                             <a
@@ -789,7 +523,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                           )}
                           {isAdmin && (
                             <span className="text-[10px] text-muted-foreground">
-                              ({company.metrics.websiteViews})
+                              ({metricOverrides[company.id]?.websiteViews ?? company.metrics.websiteViews})
                             </span>
                           )}
                         </div>

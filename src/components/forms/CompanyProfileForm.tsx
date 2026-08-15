@@ -13,9 +13,9 @@ import { Phone, Mail, Globe, Star, MessageSquare, Loader2, Save } from "lucide-r
 import { toastSuccess, toastError } from "@/lib/toast";
 import { profileSchema } from "@/lib/validators";
 import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
-import { SearchSelect, type SearchSelectOption } from "@/components/shared/SearchSelect";
 import { MultiSelect, type MultiSelectOption } from "@/components/shared/MultiSelect";
 import { matchClassifier } from "@/lib/classifier";
+import { toggleAllRegions } from "@/lib/regions";
 
 // Правила КПП и телефона берём из общей схемы, чтобы сообщения совпадали с сервером
 const companyProfileSchema = z.object({
@@ -46,12 +46,7 @@ const companyProfileSchema = z.object({
     .refine((v) => !/\s/.test(v), "Ссылка не должна содержать пробелов")
     .optional()
     .or(z.literal("")),
-  region: z
-    .string()
-    .trim()
-    .max(255, "Регион должен быть не более 255 символов")
-    .optional()
-    .or(z.literal("")),
+  regions: z.array(z.string().min(1).max(255, "Регион должен быть не более 255 символов")),
   classifierIds: z.array(z.string().uuid("Некорректный классификатор")),
 });
 
@@ -66,13 +61,13 @@ interface CompanyProfileFormProps {
     phone: string;
     email: string;
     website: string;
-    region: string;
+    regions: string[];
     classifierIds: string[];
     directorName: string;
   };
   username: string;
   metrics: { phoneViews: number; emailViews: number; websiteViews: number; ratingViews: number; reviewsViews: number } | null;
-  regionOptions: SearchSelectOption[];
+  regionOptions: MultiSelectOption[];
   classifierOptions: MultiSelectOption[];
 }
 
@@ -103,7 +98,7 @@ export function CompanyProfileForm({
       legalAddress: initialData.legalAddress,
       phone: initialData.phone,
       website: initialData.website,
-      region: initialData.region,
+      regions: initialData.regions,
       classifierIds: initialData.classifierIds,
     },
   });
@@ -118,7 +113,7 @@ export function CompanyProfileForm({
         body: JSON.stringify({
           phone: data.phone || undefined,
           website: data.website || undefined,
-          region: data.region || undefined,
+          regions: data.regions,
           classifierIds: data.classifierIds,
           companyName: data.companyName || undefined,
           kpp: data.kpp || undefined,
@@ -339,21 +334,21 @@ export function CompanyProfileForm({
           <div className="space-y-2">
             <Label>Регион</Label>
             <Controller
-              name="region"
+              name="regions"
               control={control}
               render={({ field }) => (
-                <SearchSelect
+                <MultiSelect
                   options={regionOptions}
-                  value={field.value ?? ""}
-                  onChange={field.onChange}
-                  placeholder="Выберите регион"
+                  value={field.value ?? []}
+                  onChange={(v) => field.onChange(toggleAllRegions(field.value ?? [], v))}
+                  placeholder="Выберите регионы"
                   searchPlaceholder="Поиск региона..."
                   disabled={loading}
-                  ariaInvalid={!!errors.region}
+                  ariaInvalid={!!errors.regions}
                 />
               )}
             />
-            {errors.region && <FieldError id="region-error" message={errors.region.message} />}
+            {errors.regions && <FieldError id="regions-error" message={errors.regions.message} />}
           </div>
           <div className="space-y-2">
             <Label>Классификаторы</Label>

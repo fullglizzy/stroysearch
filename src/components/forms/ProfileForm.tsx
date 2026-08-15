@@ -15,9 +15,9 @@ import { Loader2, Save } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { profileSchema } from "@/lib/validators";
 import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
-import { SearchSelect, type SearchSelectOption } from "@/components/shared/SearchSelect";
 import { MultiSelect, type MultiSelectOption } from "@/components/shared/MultiSelect";
 import { matchClassifier } from "@/lib/classifier";
+import { toggleAllRegions } from "@/lib/regions";
 
 const ROLE_VALUES = ["PRODUCTOLOGIST", "TENDER_SPECIALIST", "DESIGNER", "COMPANY_OWNER", "OTHER"] as const;
 type Role = (typeof ROLE_VALUES)[number];
@@ -51,12 +51,7 @@ const profileFormSchema = z.object({
     .optional()
     .or(z.literal("")),
   phone: profileSchema.shape.phone,
-  region: z
-    .string()
-    .trim()
-    .max(255, "Регион должен быть не более 255 символов")
-    .optional()
-    .or(z.literal("")),
+  regions: z.array(z.string().min(1).max(255, "Регион должен быть не более 255 символов")),
   classifierIds: z.array(z.string().uuid("Некорректный классификатор")),
   roles: z.array(z.enum(ROLE_VALUES)),
   isContactsHidden: z.boolean(),
@@ -71,14 +66,14 @@ interface ProfileFormProps {
     middleName: string;
     phone: string;
     email: string;
-    region: string;
+    regions: string[];
     isContactsHidden: boolean;
     classifierIds: string[];
     roles: string[];
   };
   username: string;
   nick: string | null;
-  regionOptions: SearchSelectOption[];
+  regionOptions: MultiSelectOption[];
   classifierOptions: MultiSelectOption[];
 }
 
@@ -107,7 +102,7 @@ export function ProfileForm({
       lastName: initialData.lastName,
       middleName: initialData.middleName,
       phone: initialData.phone,
-      region: initialData.region,
+      regions: initialData.regions,
       classifierIds: initialData.classifierIds,
       roles: initialData.roles.filter((r): r is Role => ROLE_VALUES.includes(r as Role)),
       isContactsHidden: initialData.isContactsHidden,
@@ -126,7 +121,7 @@ export function ProfileForm({
           lastName: data.lastName || undefined,
           middleName: data.middleName || undefined,
           phone: data.phone || undefined,
-          region: data.region || undefined,
+          regions: data.regions,
           isContactsHidden: data.isContactsHidden,
           roles: data.roles,
           classifierIds: data.classifierIds,
@@ -268,21 +263,21 @@ export function ProfileForm({
             <div className="space-y-2">
               <Label>Регион</Label>
               <Controller
-                name="region"
+                name="regions"
                 control={control}
                 render={({ field }) => (
-                  <SearchSelect
+                  <MultiSelect
                     options={regionOptions}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Выберите регион"
+                    value={field.value ?? []}
+                    onChange={(v) => field.onChange(toggleAllRegions(field.value ?? [], v))}
+                    placeholder="Выберите регионы"
                     searchPlaceholder="Поиск региона..."
                     disabled={loading}
-                    ariaInvalid={!!errors.region}
+                    ariaInvalid={!!errors.regions}
                   />
                 )}
               />
-              {errors.region && <FieldError id="region-error" message={errors.region.message} />}
+              {errors.regions && <FieldError id="regions-error" message={errors.regions.message} />}
             </div>
           </div>
 

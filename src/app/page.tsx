@@ -8,14 +8,6 @@ export default async function HomePage() {
     where: { pageKey: "home" },
   });
 
-  const conferenceCount = await prisma.conference.count({
-    where: { status: "APPROVED" },
-  });
-
-  const participantCount = await prisma.user.count({
-    where: { status: "ACTIVE" },
-  });
-
   const upcomingConferences = await prisma.conference.findMany({
     where: {
       status: "APPROVED",
@@ -33,10 +25,8 @@ export default async function HomePage() {
 
   return (
     <HomePageClient
-      pageContent={pageContent?.content || "<p>Добро пожаловать на платформу ЕЦПР</p>"}
+      pageContent={pageContent?.content || "<p>Добро пожаловать на платформу ЕНЦПР</p>"}
       bannerUrl={pageContent?.bannerUrl || null}
-      conferenceCount={conferenceCount}
-      participantCount={participantCount}
       upcomingConferences={upcomingConferences}
     />
   );

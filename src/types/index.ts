@@ -14,7 +14,7 @@ export interface CompanyRow {
   phone: string | null;
   email: string | null;
   website: string | null;
-  region: string | null;
+  regions: string | null;
   classifierIds: string[];
   rating: number | null;
   reviewCount: number;
@@ -84,7 +84,7 @@ export interface ProductRow {
   companyInn: string;
   name: string;
   classes: string[];
-  region: string | null;
+  regions: string | null;
   imageUrl: string | null;
   unit: string | null;
   characteristics: unknown;

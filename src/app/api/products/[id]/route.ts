@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isLiveTreeItem } from "@/server/admin/tree";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
 
@@ -45,13 +46,20 @@ export async function PATCH(
     return NextResponse.json({ error: "Недостаточно прав для редактирования товара" }, { status: 403 });
   }
 
+  if (body.treeItemId && !(await isLiveTreeItem(body.treeItemId))) {
+    return NextResponse.json(
+      { error: "Раздел классификатора не найден или удалён" },
+      { status: 400 },
+    );
+  }
+
   await prisma.product.update({
     where: { id },
     data: {
       name: body.name,
       treeItemId: body.treeItemId,
       classes: JSON.stringify(body.classes || []),
-      region: body.region || null,
+      regions: (body.regions ?? []).join(","),
       unit: body.unit || null,
       characteristics: JSON.stringify(body.characteristics || []),
       price: body.price || null,

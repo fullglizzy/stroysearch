@@ -257,7 +257,7 @@ export function LibraryPageClient({ documents, total, page, totalPages, treeItem
               <Input placeholder="Поиск по названию..." value={search} onChange={(e) => handleSearchChange(e.target.value)} className="pl-9" />
             </div>
             <MultiSelect
-              options={treeItems.map((t) => ({ value: t.fullNumberPath, label: `${t.fullNumberPath} — ${t.name}` }))}
+              options={treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` }))}
               value={classifiers}
               onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
               placeholder="Все категории"

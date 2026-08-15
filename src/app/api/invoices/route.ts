@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Список счетов текущего пользователя (для раздела «Счета» в финансах)
+// Список счетов текущего пользователя (для раздела «Счета» в финансах).
+// Счета на выплату (kind: PAYOUT) показываются в отдельном разделе «Выплаты».
 export async function GET() {
   const session = await auth();
   if (!session?.user) {
@@ -12,7 +13,7 @@ export async function GET() {
   const userId = (session.user as any).id;
 
   const invoices = await prisma.invoice.findMany({
-    where: { userId },
+    where: { userId, kind: "PURCHASE" },
     orderBy: { date: "desc" },
     select: {
       id: true,

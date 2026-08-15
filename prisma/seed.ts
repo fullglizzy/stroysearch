@@ -97,7 +97,7 @@ const USERS: UserSeed[] = [
   {
     username: "stroy_boss", email: "boss@stroytech.ru", type: "COMPANY",
     firstName: "Алексей", lastName: "Громов", nick: "gromov_stroy",
-    region: "г. Москва", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25,
+    region: "г. Москва,Московская область", inn: "7707083893", companyName: "ООО «СтройТехнологии»", balance: 25,
   },
   {
     username: "keram_facade", email: "info@keramfacade.ru", type: "COMPANY",
@@ -117,7 +117,7 @@ const USERS: UserSeed[] = [
   {
     username: "rem_facade", email: "rem@facade-spb.ru", type: "COMPANY",
     firstName: "Ольга", lastName: "Невская", nick: "rem_facade_spb",
-    region: "г. Санкт-Петербург", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18,
+    region: "Все регионы", inn: "7812457788", companyName: "ООО «РемФасад СПБ»", balance: 18,
   },
   {
     username: "arch_moscow", email: "arch@arhmos.ru", type: "COMPANY",
@@ -161,7 +161,7 @@ const PRODUCTS: {
   {
     company: "stroy_boss", treePath: "4.1.2.2.3",
     name: "Газобетонный блок D500 600x300x200",
-    classes: ["STANDARD", "COMFORT"], region: "г. Москва", unit: "шт", price: 180,
+    classes: ["STANDARD", "COMFORT"], region: "г. Москва,Московская область", unit: "шт", price: 180,
     characteristics: ["Плотность: D500", "Размер: 600x300x200 мм", "Прочность: B3.5"],
   },
   {
@@ -173,7 +173,7 @@ const PRODUCTS: {
   {
     company: "ural_steel", treePath: "3.2.2.2",
     name: "Балка двутавровая 20Б1 С245",
-    classes: ["STANDARD", "COMFORT"], region: "Свердловская область", unit: "т", price: 68000,
+    classes: ["STANDARD", "COMFORT"], region: "Все регионы", unit: "т", price: 68000,
     characteristics: ["Профиль: 20Б1", "Сталь: С245", "Длина: 12 м"],
   },
   {
@@ -263,7 +263,7 @@ const POLLS: { question: string; pollType: string; coinReward: number; treePath:
 ];
 
 const GIFTS = [
-  { name: "Фирменный блокнот ЕЦПР", coinPrice: 5, limit: 50 },
+  { name: "Фирменный блокнот ЕНЦПР", coinPrice: 5, limit: 50 },
   { name: "Термокружка с логотипом", coinPrice: 10, limit: 30 },
   { name: "Power Bank 10000 mAh", coinPrice: 20, limit: 15 },
   { name: "Сертификат OZON 1000 ₽", coinPrice: 15, limit: 20 },
@@ -350,7 +350,7 @@ async function main() {
             firstName: u.firstName,
             lastName: u.lastName,
             nick: u.nick,
-            region: u.region,
+            regions: u.region,
             inn: u.inn || null,
             companyName: u.companyName || null,
             roles: u.roles ? { create: u.roles.map((r) => ({ role: r })) } : undefined,
@@ -390,7 +390,7 @@ async function main() {
       update: {
         name: u.companyName!,
         email: u.email,
-        region: u.region,
+        regions: u.region,
         ownerUserId: userIdMap.get(u.username)!,
         classifierIds,
       },
@@ -398,7 +398,7 @@ async function main() {
         inn: u.inn!,
         name: u.companyName!,
         email: u.email,
-        region: u.region,
+        regions: u.region,
         ownerUserId: userIdMap.get(u.username)!,
         classifierIds,
         metrics: {
@@ -425,13 +425,30 @@ async function main() {
       name: EXTRA_COMPANY.name,
       email: EXTRA_COMPANY.email,
       phone: EXTRA_COMPANY.phone,
-      region: EXTRA_COMPANY.region,
+      regions: EXTRA_COMPANY.region,
       addedById: userIdMap.get(EXTRA_COMPANY.addedBy)!,
       classifierIds: EXTRA_COMPANY.classifierPaths.map(pathToId).filter((id): id is string => !!id).join(","),
       metrics: { create: { phoneViews: 8, emailViews: 4 } },
     },
   });
   console.log(`  ✅ Доп. компания: ${EXTRA_COMPANY.name}`);
+
+  // ── Демо-ставки выплат по метрикам (₽ за 1 просмотр) ──
+  const DEMO_RATES: Record<string, Record<string, number>> = {
+    stroy_boss: { phonePrice: 2, emailPrice: 1, websitePrice: 1.5 },
+    keram_facade: { phonePrice: 1, emailPrice: 0.5, websitePrice: 1, ratingPrice: 0.5, reviewsPrice: 0.5 },
+    ural_steel: { phonePrice: 3, emailPrice: 1, websitePrice: 2 },
+  };
+  for (const [username, prices] of Object.entries(DEMO_RATES)) {
+    const uid = userIdMap.get(username);
+    if (!uid) continue;
+    await prisma.metricsPayoutRate.upsert({
+      where: { userId: uid },
+      update: prices,
+      create: { userId: uid, ...prices },
+    });
+  }
+  console.log(`  ✅ Ставки выплат по метрикам: ${Object.keys(DEMO_RATES).length} компании`);
 
   // ── 6. Товары ──
   for (const p of PRODUCTS) {
@@ -448,7 +465,7 @@ async function main() {
         ownerUserId: userIdMap.get(p.company) ?? null,
         name: p.name,
         classes: JSON.stringify(p.classes),
-        region: p.region,
+        regions: p.region,
         unit: p.unit,
         characteristics: JSON.stringify(p.characteristics),
         price: p.price,

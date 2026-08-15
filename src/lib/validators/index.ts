@@ -47,6 +47,9 @@ export function isValidInn(inn: string): boolean {
 }
 
 export const registerCompanySchema = registerSchema.extend({
+  // На форме регистрации компании согласие на обработку персональных
+  // данных не требуется (переопределяем поле базовой схемы)
+  agreePersonalData: z.boolean().optional(),
   inn: z
     .string()
     .regex(/^\d{10}$|^\d{12}$/, "ИНН должен содержать ровно 10 или 12 цифр")
@@ -68,7 +71,7 @@ export const profileSchema = z.object({
     .regex(/^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/, "Неверный формат телефона. Пример: +7 (999) 123-45-67")
     .optional()
     .or(z.literal("")),
-  region: z.string().max(255).optional(),
+  regions: z.array(z.string().min(1).max(255)).optional(),
   classifierIds: z.array(z.string().uuid("Некорректный классификатор")).optional(),
   roles: z
     .array(
@@ -97,7 +100,7 @@ export const addCompanySchema = z.object({
   email: z.string().email("Некорректный email"),
   phone: z.string().regex(/^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/, "Неверный формат телефона. Пример: +7 (999) 123-45-67"),
   website: z.string().max(255, "Сайт должен быть не более 255 символов").optional().or(z.literal("")),
-  region: z.string().min(1, "Выберите регион").max(255),
+  regions: z.array(z.string().min(1).max(255)).min(1, "Выберите регион"),
   classifierIds: z.array(z.string().uuid()).min(1, "Выберите хотя бы одну категорию классификатора"),
 });
 
@@ -153,7 +156,13 @@ export const pollSchema = z.object({
   pollType: z.enum(["DICHOTOMOUS", "MULTIPLE"]),
   coinReward: z.number().min(0).max(10, "Награда не может превышать 10 монет").default(0.1),
   options: z
-    .array(z.object({ text: z.string().min(1).max(255), sortOrder: z.number().int().default(0) }))
+    .array(
+      z.object({
+        id: z.string().optional(), // при редактировании — id существующего варианта
+        text: z.string().min(1).max(255),
+        sortOrder: z.number().int().default(0),
+      }),
+    )
     .min(2, "Минимум 2 варианта ответа"),
 });
 
@@ -196,7 +205,7 @@ export const productSchema = z.object({
   treeItemId: z.string().uuid("Выберите категорию классификатора"),
   name: z.string().min(1, "Название обязательно").max(511),
   classes: z.array(z.enum(["STANDARD", "COMFORT", "BUSINESS", "PREMIUM"])).min(1, "Выберите хотя бы один класс товара"),
-  region: z.string().optional().nullable(),
+  regions: z.array(z.string().min(1).max(255)).optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   unit: z.string().max(63).optional().nullable(),
   characteristics: z.any().optional(),

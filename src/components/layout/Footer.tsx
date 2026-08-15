@@ -14,7 +14,7 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="sm:col-span-2 md:col-span-1">
-            <Link href="/" aria-label="ЕЦПР — на главную" className="flex items-center gap-1 mb-2">
+            <Link href="/" aria-label="ЕНЦПР — на главную" className="flex items-center gap-1 mb-2">
               <img
                 src="/logo/logo.svg"
                 alt=""
@@ -24,7 +24,7 @@ export function Footer() {
               />
               <span className="font-bold text-lg">
                 <span className="text-menthol">Е</span>
-                <span className="text-foreground">ЦПР</span>
+                <span className="text-foreground">НЦПР</span>
               </span>
             </Link>
             <p className="text-sm text-muted-foreground mb-3">
@@ -122,7 +122,7 @@ export function Footer() {
             персональных данных.
           </p>
           <p className="mt-2">
-            © {new Date().getFullYear()} ЕЦПР. Все права защищены.
+            © {new Date().getFullYear()} ЕНЦПР. Все права защищены.
           </p>
         </div>
       </div>

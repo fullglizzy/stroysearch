@@ -20,6 +20,10 @@ interface DocRow {
   isApproved: boolean;
   views: number;
   purchasesCount: number;
+  fileUrl: string;
+  fileSize: number;
+  createdAt: Date;
+  updatedAt: Date;
   user: { username: string; profile: { nick: string } | null };
   treeItem: { fullNumberPath: string; name: string } | null;
 }
@@ -30,6 +34,7 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DocRow | null>(null);
 
   async function toggleApprove(docId: string, approved: boolean) {
     setLoading(docId);
@@ -46,6 +51,13 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
     setDeleteId(null);
     await fetch(`/api/library/${docId}`, { method: "DELETE" });
     router.refresh();
+  }
+
+  function formatSize(bytes: number): string {
+    if (!bytes || bytes === 0) return "—";
+    if (bytes < 1024) return bytes + " Б";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " КБ";
+    return (bytes / (1024 * 1024)).toFixed(1) + " МБ";
   }
 
   if (documents.length === 0) {
@@ -75,7 +87,11 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
           </TableHeader>
           <TableBody>
             {documents.map((d) => (
-              <TableRow key={d.id}>
+              <TableRow
+                key={d.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => setDetail(d)}
+              >
                 <TableCell className="font-medium max-w-[200px] truncate">
                   <FileText className="h-3 w-3 inline mr-1 text-menthol" />{d.title}
                 </TableCell>
@@ -90,7 +106,7 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
                 <TableCell className="text-xs text-muted-foreground">
                   <Eye className="h-3 w-3 inline mr-1" />{d.views} <Download className="h-3 w-3 inline ml-1 mr-1" />{d.purchasesCount}
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-1">
                     <Button
                       size="sm" variant="outline"
@@ -113,6 +129,56 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
           </TableBody>
         </Table>
       </div>
+
+      {/* Детали документа (клик по строке) */}
+      <Dialog open={!!detail} onOpenChange={(v) => { if (!v) setDetail(null); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          {detail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="break-words">{detail.title}</DialogTitle>
+                <DialogDescription>
+                  {detail.user.profile?.nick || detail.user.username} · загружен{" "}
+                  {new Date(detail.createdAt).toLocaleDateString("ru-RU")}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <Badge variant="secondary" className={detail.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                    {detail.isApproved ? "Одобрен" : "На модерации"}
+                  </Badge>
+                  {detail.coinPrice > 0 ? (
+                    <Badge className="gap-1">Монет: {detail.coinPrice}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-menthol">Бесплатно</Badge>
+                  )}
+                  {detail.treeItem && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {detail.treeItem.fullNumberPath} — {detail.treeItem.name}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {detail.views} просмотров</span>
+                  <span className="flex items-center gap-1"><Download className="h-3 w-3" /> {detail.purchasesCount} покупок</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Размер файла: {formatSize(detail.fileSize)}
+                </p>
+                <a
+                  href={detail.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-menthol hover:underline inline-flex items-center gap-1 break-all"
+                >
+                  <Download className="h-3 w-3 shrink-0" />
+                  Открыть документ
+                </a>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

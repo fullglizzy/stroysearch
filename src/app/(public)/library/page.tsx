@@ -42,7 +42,8 @@ export default async function LibraryPage({
     where.push(`lower(d.title) LIKE ${push(`%${q.toLowerCase()}%`)}`);
   }
   if (classifier.length > 0) {
-    where.push(`t."fullNumberPath" IN (${classifier.map(() => "?").join(", ")})`);
+    // classifier — id узлов дерева (надёжнее путей: переживает перенумерацию)
+    where.push(`t.id IN (${classifier.map(() => "?").join(", ")})`);
     classifier.forEach((c) => whereValues.push(c));
   }
 

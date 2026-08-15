@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProfileForm } from "@/components/forms/ProfileForm";
 import { getRegions } from "@/server/admin/regions";
+import { ALL_REGIONS } from "@/lib/regions";
 import type { SessionUser } from "@/types";
 
 export default async function ProfilePage() {
@@ -45,7 +46,12 @@ export default async function ProfilePage() {
           middleName: user.profile?.middleName || "",
           phone: user.phone || "",
           email: user.email,
-          region: user.profile?.region || "",
+          regions: user.profile?.regions
+            ? user.profile.regions
+                .split(",")
+                .map((r) => r.trim())
+                .filter(Boolean)
+            : [],
           isContactsHidden: user.profile?.isContactsHidden ?? true,
           classifierIds: user.profile?.classifierIds
             ? user.profile.classifierIds
@@ -57,7 +63,7 @@ export default async function ProfilePage() {
         }}
         username={user.username}
         nick={user.profile?.nick || null}
-        regionOptions={regions.map((r) => ({ value: r.name, label: r.name }))}
+          regionOptions={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r.name, label: r.name }))]}
         classifierOptions={treeItems.map((t) => ({
           value: t.id,
           label: `${t.fullNumberPath} — ${t.name}`,

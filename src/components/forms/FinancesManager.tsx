@@ -256,7 +256,7 @@ export function FinancesManager({ config, gifts }: Props) {
           <CardHeader><CardTitle>Шаблон счёта</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Организация (продавец)</Label><Input value={tplOrgName} onChange={(e) => setTplOrgName(e.target.value)} placeholder="ООО «ЕЦПР»" /></div>
+              <div className="space-y-2"><Label>Организация (продавец)</Label><Input value={tplOrgName} onChange={(e) => setTplOrgName(e.target.value)} placeholder="ООО «ЕНЦПР»" /></div>
               <div className="space-y-2"><Label>ИНН организации</Label><Input value={tplOrgInn} onChange={(e) => setTplOrgInn(e.target.value)} placeholder="7700000001" /></div>
               <div className="space-y-2"><Label>КПП</Label><Input value={tplOrgKpp} onChange={(e) => setTplOrgKpp(e.target.value)} placeholder="770001001" /></div>
               <div className="space-y-2"><Label>Адрес организации</Label><Input value={tplOrgAddress} onChange={(e) => setTplOrgAddress(e.target.value)} placeholder="г. Москва, ул. Строителей, д. 1" /></div>

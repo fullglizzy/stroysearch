@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { auth } from "@/lib/auth";
 import { getPageContent } from "@/server/admin/content";
 import { PollsPageClient } from "@/components/tables/PollsPageClient";
 
@@ -20,12 +22,47 @@ export default async function PollsPage({
   };
 
   const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
+  const q = (get("q") || "").trim();
+  const pollType =
+    get("type") === "DICHOTOMOUS" || get("type") === "MULTIPLE" ? get("type")! : "";
+  const classifier = (get("classifier") || "").split(",").filter(Boolean);
+  const sort = get("sort") === "votes" || get("sort") === "reward" ? get("sort")! : "created";
+  const votedFilter =
+    get("voted") === "yes" || get("voted") === "no" ? get("voted")! : "";
 
   const pageContent = await getPageContent("polls");
 
-  const [polls, total] = await Promise.all([
+  const where: Prisma.PollWhereInput = { isActive: true };
+  if (q) where.question = { contains: q };
+  if (pollType) where.pollType = pollType;
+  if (classifier.length > 0) where.treeItemId = { in: classifier };
+
+  // Фильтр по голосованию — персональный, требует авторизации
+  if (votedFilter) {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id;
+    const votedIds = userId
+      ? (await prisma.pollVote.findMany({ where: { userId }, select: { pollId: true } })).map(
+          (v) => v.pollId,
+        )
+      : [];
+    if (votedFilter === "yes") {
+      where.id = { in: votedIds.length > 0 ? votedIds : ["__none__"] };
+    } else if (votedIds.length > 0) {
+      where.id = { notIn: votedIds };
+    }
+  }
+
+  const orderBy: Prisma.PollOrderByWithRelationInput =
+    sort === "votes"
+      ? { votes: { _count: "desc" } }
+      : sort === "reward"
+        ? { coinReward: "desc" }
+        : { createdAt: "desc" };
+
+  const [polls, total, treeItems] = await Promise.all([
     prisma.poll.findMany({
-      where: { isActive: true },
+      where,
       include: {
         options: {
           include: { _count: { select: { votes: true } } },
@@ -34,11 +71,16 @@ export default async function PollsPage({
         _count: { select: { votes: true } },
         treeItem: { select: { fullNumberPath: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.poll.count({ where: { isActive: true } }),
+    prisma.poll.count({ where }),
+    prisma.productTreeItem.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, fullNumberPath: true },
+      orderBy: { fullNumberPath: "asc" },
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -65,9 +107,11 @@ export default async function PollsPage({
       total={total}
       page={page}
       totalPages={totalPages}
+      treeItems={treeItems}
       moderatorText={pageContent?.content || null}
       pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
+      initialQuery={{ q, type: pollType, classifier: classifier.join(","), sort, voted: votedFilter }}
     />
   );
 }

@@ -47,7 +47,7 @@ export default async function CompanyProductsPage() {
     ? await prisma.product.findMany({
         where: { companyId: company.id, deletedAt: null },
         include: {
-          treeItem: { select: { fullNumberPath: true, name: true } },
+          treeItem: { select: { id: true, fullNumberPath: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
       })
@@ -56,10 +56,11 @@ export default async function CompanyProductsPage() {
   const rows = products.map((p) => ({
     id: p.id,
     name: p.name,
+    treeItemId: p.treeItem.id,
     treeItemPath: p.treeItem.fullNumberPath,
     treeItemName: p.treeItem.name,
     classes: parseJson(p.classes),
-    region: p.region,
+    regions: p.regions ? p.regions.split(",").map((r) => r.trim()).filter(Boolean) : [],
     unit: p.unit,
     characteristics: parseJson(p.characteristics),
     price: p.price,

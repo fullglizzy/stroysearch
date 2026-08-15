@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { UsersManager } from "@/components/tables/UsersManager";
 import { getRegions } from "@/server/admin/regions";
+import { ALL_REGIONS } from "@/lib/regions";
 
 const PAGE_SIZE = 20;
 
@@ -56,7 +57,14 @@ export default async function AdminUsersPage({
   if (type) where.type = type;
 
   const profileFilter: Prisma.UserProfileWhereInput = {};
-  if (region) profileFilter.region = region;
+  // «Все регионы» в фильтре = без ограничения по региону
+  if (region && region !== ALL_REGIONS) {
+    // Подходит выбранный регион, либо «Все регионы» (покрывает любой регион)
+    profileFilter.OR = [
+      { regions: { contains: region } },
+      { regions: { contains: ALL_REGIONS } },
+    ];
+  }
   if (role) profileFilter.roles = { some: { role } };
   if (Object.keys(profileFilter).length > 0) where.profile = profileFilter;
 
@@ -96,7 +104,7 @@ export default async function AdminUsersPage({
     lastName: u.profile?.lastName ?? null,
     nick: u.profile?.nick ?? null,
     inn: u.profile?.inn ?? null,
-    region: u.profile?.region ?? null,
+    regions: u.profile?.regions ?? null,
     balance: u.wallet ? u.wallet.balance.toNumber() : 0,
     roles: u.profile?.roles.map((r) => r.role) ?? [],
     banReason: u.serviceFields?.banReason ?? null,
@@ -117,7 +125,7 @@ export default async function AdminUsersPage({
         initialRole={role}
         initialRegion={region}
         initialSort={sort}
-        regionOptions={regions.map((r) => ({ value: r.name, label: r.name }))}
+        regionOptions={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r.name, label: r.name }))]}
       />
     </div>
   );

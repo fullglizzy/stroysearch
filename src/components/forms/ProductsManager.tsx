@@ -29,16 +29,18 @@ import { ProductCard } from "@/components/shared/ProductCard";
 import { MultiSelect } from "@/components/shared/MultiSelect";
 import { FieldError } from "@/components/forms/fields";
 import { matchClassifier } from "@/lib/classifier";
+import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { toastError, toastWarning } from "@/lib/toast";
 import { Plus, Edit, Trash2, Eye, Package, Upload, X, Loader2, Search } from "lucide-react";
 
 interface ProductRow {
   id: string;
   name: string;
+  treeItemId: string;
   treeItemPath: string;
   treeItemName: string;
   classes: string[];
-  region: string | null;
+  regions: string[];
   unit: string | null;
   characteristics: string[];
   price: number | null;
@@ -86,7 +88,7 @@ const productFormSchema = z.object({
     .min(1, "Укажите название товара")
     .max(511, "Название должно быть не более 511 символов"),
   classes: z.array(z.enum(CLASS_VALUES)).min(1, "Выберите хотя бы один класс товара"),
-  region: z.string().optional(),
+  regions: z.array(z.string().min(1).max(255, "Регион должен быть не более 255 символов")).optional(),
   unit: z.string().max(63, "Ед. измерения не более 63 символов").optional(),
   price: z
     .string()
@@ -131,7 +133,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
       treeItemId: "",
       name: "",
       classes: [],
-      region: "",
+      regions: [],
       unit: "",
       price: "",
     }),
@@ -159,7 +161,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
   const category = useWatch({ control, name: "treeItemId" }) ?? "";
 
   const categoryOptions = useMemo(
-    () => treeItems.map((t) => ({ value: t.fullNumberPath, label: `${t.fullNumberPath} — ${t.name}` })),
+    () => treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` })),
     [treeItems],
   );
 
@@ -167,7 +169,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
-      if (categoryFilter.length > 0 && !categoryFilter.includes(p.treeItemPath)) return false;
+      if (categoryFilter.length > 0 && !categoryFilter.includes(p.treeItemId)) return false;
       if (!q) return true;
       return [p.name, p.treeItemPath, p.treeItemName, p.companyName ?? ""].some((f) =>
         f.toLowerCase().includes(q),
@@ -244,7 +246,8 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
           .map((c, i) => {
             const v = (charInputs[i]?.value || "").trim();
             if (!v) return null;
-            const u = (charInputs[i]?.unit || "").trim();
+            // Единица измерения — из шаблона категории (задаётся администратором)
+            const u = (charInputs[i]?.unit || c.unit || "").trim();
             return `${c.name}: ${v}${u ? ` ${u}` : ""}`;
           })
           .filter((x): x is string => !!x)
@@ -255,7 +258,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
       treeItemId: values.treeItemId,
       name: values.name,
       classes: values.classes,
-      region: values.region || null,
+      regions: values.regions ?? [],
       unit: values.unit || null,
       characteristics,
       imageUrl: imageUrl || null,
@@ -469,20 +472,20 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
       <div className="space-y-2">
         <Label>Регион</Label>
         <Controller
-          name="region"
+          name="regions"
           control={control}
           render={({ field }) => (
-            <SearchSelect
-              options={regions.map((r) => ({ value: r, label: r }))}
-              value={field.value ?? ""}
-              onChange={field.onChange}
-              placeholder="Выберите регион"
+            <MultiSelect
+              options={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r, label: r }))]}
+              value={field.value ?? []}
+              onChange={(v) => field.onChange(toggleAllRegions(field.value ?? [], v))}
+              placeholder="Выберите регионы"
               searchPlaceholder="Поиск региона..."
-              ariaInvalid={!!errors.region}
+              ariaInvalid={!!errors.regions}
             />
           )}
         />
-        {errors.region && <FieldError id="region-error" message={errors.region.message} />}
+        {errors.regions && <FieldError id="regions-error" message={errors.regions.message} />}
       </div>
 
       <div className="space-y-2">
@@ -542,16 +545,16 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
                     }
                     placeholder="Значение"
                   />
-                  <Input
-                    value={charInputs[i]?.unit || ""}
-                    onChange={(e) =>
-                      setCharInputs((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)),
-                      )
-                    }
-                    placeholder="Ед. изм."
-                    className="w-24"
-                  />
+                  {/* Ед. изм.: если задана администратором — показываем неактивным полем,
+                      если не задана — поле не показываем вовсе */}
+                  {c.unit ? (
+                    <Input
+                      value={charInputs[i]?.unit || c.unit}
+                      disabled
+                      title="Единица измерения задана администратором"
+                      className="w-24"
+                    />
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -654,14 +657,14 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
                 <>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                     setEditId(p.id);
-                    const item = treeItems.find(t => t.fullNumberPath === p.treeItemPath);
+                    const item = treeItems.find(t => t.id === p.treeItemId);
                     const itemId = item?.id ?? "";
                     reset({
                       companyId: "",
                       treeItemId: itemId,
                       name: p.name,
                       classes: (p.classes as ClassValue[]).filter((c) => CLASS_VALUES.includes(c)),
-                      region: p.region ?? "",
+                      regions: p.regions,
                       unit: p.unit ?? "",
                       price: p.price != null ? String(p.price) : "",
                     });

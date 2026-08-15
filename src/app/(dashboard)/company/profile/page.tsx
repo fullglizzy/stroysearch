@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { CompanyProfileForm } from "@/components/forms/CompanyProfileForm";
 import { getRegions } from "@/server/admin/regions";
+import { ALL_REGIONS } from "@/lib/regions";
 import type { SessionUser } from "@/types";
 
 export default async function CompanyProfilePage() {
@@ -47,7 +48,10 @@ export default async function CompanyProfilePage() {
           phone: company?.phone || "",
           email: session.user?.email || "",
           website: company?.website || "",
-          region: company?.region || profile?.region || "",
+          regions: (company?.regions || profile?.regions || "")
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean),
           classifierIds: (company?.classifierIds || profile?.classifierIds || "")
             .split(",")
             .map((id) => id.trim())
@@ -62,7 +66,7 @@ export default async function CompanyProfilePage() {
           ratingViews: metrics.ratingViews,
           reviewsViews: metrics.reviewsViews,
         } : null}
-        regionOptions={regions.map((r) => ({ value: r.name, label: r.name }))}
+        regionOptions={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r.name, label: r.name }))]}
         classifierOptions={treeItems.map((t) => ({
           value: t.id,
           label: `${t.fullNumberPath} — ${t.name}`,
