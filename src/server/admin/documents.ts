@@ -10,7 +10,7 @@ export async function getLegalDocument(key: LegalDocKey) {
 }
 
 /** Удаляет PDF-файл из public/uploads (если он там лежит) */
-async function removeUploadedFile(fileUrl: string) {
+export async function removeUploadedFile(fileUrl: string) {
   if (!fileUrl.startsWith("/uploads/")) return;
   const relative = fileUrl.replace(/^\/+/, "");
   try {
@@ -20,20 +20,44 @@ async function removeUploadedFile(fileUrl: string) {
   }
 }
 
+/**
+ * Сохраняет документ. Если передан fileUrl — текст должен быть уже извлечён
+ * из PDF вызывающей стороной (route handler) и передан в text; если только
+ * text — обновляется текст, файл и его реквизиты остаются прежними.
+ */
 export async function upsertLegalDocument(
   key: LegalDocKey,
-  fileName: string,
-  fileUrl: string,
-  fileSize: number,
+  input: {
+    fileName?: string;
+    fileUrl?: string;
+    fileSize?: number;
+    text?: string;
+  },
 ) {
   const prev = await prisma.legalDocument.findUnique({ where: { key } });
-  if (prev && prev.fileUrl !== fileUrl) {
-    await removeUploadedFile(prev.fileUrl);
+
+  const data: { fileName?: string; fileUrl?: string; fileSize?: number; text?: string } = {};
+  if (input.text !== undefined) data.text = input.text;
+
+  if (input.fileUrl && input.fileName) {
+    if (prev && prev.fileUrl && prev.fileUrl !== input.fileUrl) {
+      await removeUploadedFile(prev.fileUrl);
+    }
+    data.fileName = input.fileName;
+    data.fileUrl = input.fileUrl;
+    data.fileSize = input.fileSize ?? 0;
   }
+
   return prisma.legalDocument.upsert({
     where: { key },
-    update: { fileName, fileUrl, fileSize },
-    create: { key, fileName, fileUrl, fileSize },
+    update: data,
+    create: {
+      key,
+      fileName: input.fileName ?? "",
+      fileUrl: input.fileUrl ?? "",
+      fileSize: input.fileSize ?? 0,
+      text: input.text ?? "",
+    },
   });
 }
 

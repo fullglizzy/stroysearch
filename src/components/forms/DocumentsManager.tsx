@@ -3,11 +3,11 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
-import { Upload, Trash2, FileText, ExternalLink, Loader2 } from "lucide-react";
+import { Upload, Trash2, FileText, ExternalLink, Loader2, Save } from "lucide-react";
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 МБ
 
@@ -16,6 +16,7 @@ interface LegalDocRow {
   fileName: string;
   fileUrl: string;
   fileSize: number;
+  text: string;
   updatedAt: Date;
 }
 
@@ -34,9 +35,13 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
   const router = useRouter();
   const byKey = Object.fromEntries(documents.map((d) => [d.key, d]));
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [savingTextKey, setSavingTextKey] = useState<string | null>(null);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [texts, setTexts] = useState<Record<string, string>>(
+    Object.fromEntries(documents.map((d) => [d.key, d.text || ""])),
+  );
 
   async function handleUpload(key: string, file: File) {
     if (file.type !== "application/pdf") {
@@ -72,6 +77,9 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
       const saveData = await saveRes.json().catch(() => ({}));
       if (saveRes.ok) {
         toastSuccess("Документ сохранён", file.name);
+        if (saveData.doc?.text !== undefined) {
+          setTexts((prev) => ({ ...prev, [key]: saveData.doc.text }));
+        }
         router.refresh();
       } else {
         toastError("Ошибка сохранения", saveData.error || "Не удалось сохранить документ");
@@ -80,6 +88,27 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
       toastError("Ошибка соединения");
     }
     setUploadingKey(null);
+  }
+
+  async function handleSaveText(key: string) {
+    setSavingTextKey(key);
+    try {
+      const res = await fetch("/api/admin/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, text: texts[key] ?? "" }),
+      });
+      if (res.ok) {
+        toastSuccess("Текст сохранён");
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toastError("Ошибка", d.error || "Не удалось сохранить текст");
+      }
+    } catch {
+      toastError("Ошибка соединения");
+    }
+    setSavingTextKey(null);
   }
 
   async function handleDelete() {
@@ -93,6 +122,7 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
       });
       if (res.ok) {
         toastSuccess("Документ удалён");
+        setTexts((prev) => ({ ...prev, [deleteKey]: "" }));
         setDeleteKey(null);
         router.refresh();
       } else {
@@ -121,7 +151,7 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {doc ? (
+              {doc?.fileUrl ? (
                 <div className="rounded-lg border p-3 text-sm space-y-2">
                   <p className="font-medium break-words">{doc.fileName}</p>
                   <p className="text-xs text-muted-foreground">
@@ -142,9 +172,32 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Документ не загружен — на странице {meta.page} отображается текст по умолчанию
+                  PDF не загружен — на странице {meta.page} выводится текст ниже
                 </p>
               )}
+
+              <div className="space-y-2">
+                <Textarea
+                  value={texts[meta.key] ?? ""}
+                  onChange={(e) => setTexts((prev) => ({ ...prev, [meta.key]: e.target.value }))}
+                  placeholder="Текст документа."
+                  rows={8}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => handleSaveText(meta.key)}
+                  disabled={savingTextKey === meta.key}
+                >
+                  {savingTextKey === meta.key ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  Сохранить текст
+                </Button>
+              </div>
 
               <input
                 ref={(el) => { inputRefs.current[meta.key] = el; }}
@@ -167,7 +220,7 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
                 ) : (
                   <Upload className="h-4 w-4 mr-2" />
                 )}
-                {doc ? "Заменить PDF" : "Загрузить PDF"}
+                {doc?.fileUrl ? "Заменить PDF" : "Загрузить PDF"}
               </Button>
             </CardContent>
           </Card>
@@ -180,7 +233,7 @@ export function DocumentsManager({ documents }: { documents: LegalDocRow[] }) {
         title="Удалить документ?"
         message={
           deleteTarget
-            ? `PDF-файл «${deleteTarget.title}» будет удалён. На странице ${deleteTarget.page} снова отобразится текст по умолчанию.`
+            ? `PDF-файл и текст «${deleteTarget.title}» будут удалены. На странице ${deleteTarget.page} снова отобразится текст по умолчанию.`
             : ""
         }
         confirmLabel="Удалить"

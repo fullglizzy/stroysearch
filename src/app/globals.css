@@ -149,21 +149,3 @@
 @utility text-balance {
   text-wrap: balance;
 }
-
-/* Печать счёта: выводим только блок .invoice-print */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  .invoice-print,
-  .invoice-print * {
-    visibility: visible;
-  }
-  .invoice-print {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    border: none !important;
-  }
-}

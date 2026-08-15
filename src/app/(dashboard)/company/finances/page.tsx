@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { FinancesPage } from "@/components/cards/FinancesPage";
+import { getMissingInvoiceProfileFields } from "@/lib/invoices";
 
 export default async function CompanyFinancesPage() {
   const session = await auth();
@@ -22,6 +23,16 @@ export default async function CompanyFinancesPage() {
     orderBy: { coinPrice: "asc" },
   });
   const billing = await prisma.billingConfig.findUnique({ where: { id: "default" } });
+  const [profile, ownedCompany] = await Promise.all([
+    prisma.userProfile.findUnique({
+      where: { userId },
+      select: { inn: true, companyName: true, legalAddress: true, firstName: true, lastName: true, middleName: true, regions: true },
+    }),
+    prisma.company.findFirst({
+      where: { ownerUserId: userId },
+      select: { name: true, legalAddress: true },
+    }),
+  ]);
 
   return (
     <div className="container-page py-8">
@@ -39,6 +50,18 @@ export default async function CompanyFinancesPage() {
         gifts={gifts}
         userId={userId}
         coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
+        missingInvoiceFields={getMissingInvoiceProfileFields({
+          inn: profile?.inn || null,
+          companyName: profile?.companyName || null,
+          legalAddress: profile?.legalAddress || null,
+          firstName: profile?.firstName || null,
+          lastName: profile?.lastName || null,
+          middleName: profile?.middleName || null,
+          regions: profile?.regions || null,
+          linkedCompanyName: ownedCompany?.name || null,
+          linkedCompanyAddress: ownedCompany?.legalAddress || null,
+        })}
+        profileHref="/company/profile"
       />
     </div>
   );

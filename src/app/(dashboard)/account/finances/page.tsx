@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { FinancesPage } from "@/components/cards/FinancesPage";
+import { getMissingInvoiceProfileFields } from "@/lib/invoices";
 
 export default async function FinancesPageServer() {
   const session = await auth();
@@ -22,6 +23,10 @@ export default async function FinancesPageServer() {
     orderBy: { coinPrice: "asc" },
   });
   const billing = await prisma.billingConfig.findUnique({ where: { id: "default" } });
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId },
+    select: { inn: true, companyName: true, legalAddress: true, firstName: true, lastName: true, middleName: true, regions: true },
+  });
 
   return (
     <div className="container-page py-8">
@@ -38,6 +43,8 @@ export default async function FinancesPageServer() {
         gifts={gifts}
         userId={userId}
         coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
+        missingInvoiceFields={getMissingInvoiceProfileFields(profile)}
+        profileHref="/account/profile"
       />
     </div>
   );

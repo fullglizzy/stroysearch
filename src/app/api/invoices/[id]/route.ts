@@ -28,8 +28,11 @@ export async function GET(
       user: {
         select: {
           username: true,
+          ownedCompany: {
+            select: { name: true, legalAddress: true },
+          },
           profile: {
-            select: { nick: true, inn: true, kpp: true, legalAddress: true, regions: true, companyName: true },
+            select: { nick: true, inn: true, kpp: true, legalAddress: true, regions: true, companyName: true, firstName: true, lastName: true, middleName: true },
           },
         },
       },
@@ -40,6 +43,18 @@ export async function GET(
     return NextResponse.json({ error: "Счёт не найден" }, { status: 404 });
   }
 
+  const profile = invoice.user.profile;
+  const ownedCompany = invoice.user.ownedCompany;
+
+  // Юр.лицо/ИП — по ИНН в профиле; физ.лицо — по ФИО
+  const buyerKind = profile?.inn ? "company" : "individual";
+  const buyerName =
+    buyerKind === "company"
+      ? profile?.companyName || ownedCompany?.name || profile?.nick || invoice.user.username
+      : [profile?.firstName, profile?.lastName, profile?.middleName].filter(Boolean).join(" ").trim() ||
+        profile?.nick ||
+        invoice.user.username;
+
   return NextResponse.json({
     invoice: {
       id: invoice.id,
@@ -47,16 +62,20 @@ export async function GET(
       date: invoice.date,
       dueDate: invoice.dueDate,
       status: invoice.status,
+      kind: invoice.kind,
       subtotal: invoice.subtotal.toNumber(),
       discount: invoice.discount.toNumber(),
       total: invoice.total.toNumber(),
       limit: invoice.limit.toNumber(),
-      buyerName: invoice.user.profile?.companyName || invoice.user.profile?.nick || invoice.user.username,
-      buyerInn: invoice.user.profile?.inn || null,
-      buyerKpp: invoice.user.profile?.kpp || null,
+      buyerName,
+      buyerKind,
+      buyerUserId: invoice.userId,
+      buyerInn: profile?.inn || null,
+      buyerKpp: profile?.kpp || null,
       buyerAddress:
-        invoice.user.profile?.legalAddress ||
-        invoice.user.profile?.regions?.split(",").map((r) => r.trim()).filter(Boolean)[0] ||
+        profile?.legalAddress ||
+        ownedCompany?.legalAddress ||
+        profile?.regions?.split(",").map((r) => r.trim()).filter(Boolean)[0] ||
         null,
       items: invoice.items.map((it) => ({
         description: it.description,

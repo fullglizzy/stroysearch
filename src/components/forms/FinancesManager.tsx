@@ -31,7 +31,6 @@ interface BillingConfig {
   reviewCoins: number;
   maxMonthlyLimit: number;
   vatRate: number;
-  invoiceBasis: string | null;
   organizationName: string | null;
   organizationInn: string | null;
   organizationKpp: string | null;
@@ -41,6 +40,7 @@ interface BillingConfig {
   bankAccount: string | null;
   bankCorrAccount: string | null;
   directorName: string | null;
+  signatureImage: string | null;
 }
 
 interface GiftItem {
@@ -76,7 +76,9 @@ export function FinancesManager({ config, gifts }: Props) {
   const [tplBankCorr, setTplBankCorr] = useState(config?.bankCorrAccount || "");
   const [tplDirector, setTplDirector] = useState(config?.directorName || "");
   const [tplVatRate, setTplVatRate] = useState(String(config?.vatRate ?? 0));
-  const [tplBasis, setTplBasis] = useState(config?.invoiceBasis || "");
+  const [tplSignature, setTplSignature] = useState(config?.signatureImage || "");
+  const [tplSignatureLoading, setTplSignatureLoading] = useState(false);
+  const tplSignatureInputRef = useRef<HTMLInputElement>(null);
   const [tplLoading, setTplLoading] = useState(false);
   const [tplMsg, setTplMsg] = useState("");
 
@@ -160,6 +162,28 @@ export function FinancesManager({ config, gifts }: Props) {
     setConfigLoading(false);
   }
 
+  async function handleSignaturePhoto(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toastWarning("Проверьте файл", "Фото должно быть изображением");
+      return;
+    }
+    setTplSignatureLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setTplSignature(data.fileUrl);
+      } else {
+        toastError("Ошибка загрузки", data.error || "Не удалось загрузить подпись");
+      }
+    } catch {
+      toastError("Ошибка соединения");
+    }
+    setTplSignatureLoading(false);
+  }
+
   async function saveTemplate() {
     setTplLoading(true);
     setTplMsg("");
@@ -178,7 +202,7 @@ export function FinancesManager({ config, gifts }: Props) {
           bankCorrAccount: tplBankCorr,
           directorName: tplDirector,
           vatRate: parseFloat(tplVatRate) || 0,
-          invoiceBasis: tplBasis,
+          signatureImage: tplSignature || null,
         }),
       });
       if (res.ok) { setTplMsg("✅ Сохранено"); router.refresh(); }
@@ -276,8 +300,53 @@ export function FinancesManager({ config, gifts }: Props) {
                 </Select>
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>Основание в счёте</Label>
-                <Input value={tplBasis} onChange={(e) => setTplBasis(e.target.value)} placeholder="Договор №1 от 01.01.2026" />
+                <Label>Фото рукописной подписи руководителя платформы</Label>
+                <input
+                  ref={tplSignatureInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleSignaturePhoto(file);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => tplSignatureInputRef.current?.click()}
+                    disabled={tplSignatureLoading}
+                  >
+                    {tplSignatureLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    {tplSignature ? "Заменить подпись" : "Загрузить подпись"}
+                  </Button>
+                  {tplSignature && (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={tplSignature}
+                        alt="Подпись руководителя"
+                        className="h-14 w-auto rounded-md border object-contain bg-white"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setTplSignature("")}>
+                        <X className="h-4 w-4 mr-1" />
+                        Убрать
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Вставляется автоматически на место подписи во всех генерируемых счетах и актах
+                </p>
               </div>
             </div>
             {tplMsg && <Alert><AlertDescription>{tplMsg}</AlertDescription></Alert>}

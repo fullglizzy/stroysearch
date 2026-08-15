@@ -675,7 +675,7 @@ export function MetricsPayoutsManager({
       <Dialog open={!!printOpen} onOpenChange={(o) => { if (!o) setPrintOpen(null); }}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Счёт на выплату</DialogTitle>
+            <DialogTitle>Акт об оказании услуг</DialogTitle>
             <DialogDescription>Документ для выплаты по реквизитам</DialogDescription>
           </DialogHeader>
           {printData && requisites ? (

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getMissingInvoiceProfileFields } from "@/lib/invoices";
 import crypto from "crypto";
 
 const PURCHASE_SUBJECT = "Покупка монет";
@@ -14,6 +15,33 @@ export async function POST(request: Request) {
 
     const userId = (session.user as any).id as string;
     const email = session.user.email || "";
+
+    // Покупатель в печатном счёте заполняется из профиля (название/ФИО и адрес) —
+    // блокируем покупку, пока нужные поля не заполнены
+    const [profile, ownedCompany] = await Promise.all([
+      prisma.userProfile.findUnique({ where: { userId } }),
+      prisma.company.findFirst({
+        where: { ownerUserId: userId },
+        select: { name: true, legalAddress: true },
+      }),
+    ]);
+    const missingInvoiceFields = getMissingInvoiceProfileFields({
+      inn: profile?.inn || null,
+      companyName: profile?.companyName || null,
+      legalAddress: profile?.legalAddress || null,
+      firstName: profile?.firstName || null,
+      lastName: profile?.lastName || null,
+      middleName: profile?.middleName || null,
+      regions: profile?.regions || null,
+      linkedCompanyName: ownedCompany?.name || null,
+      linkedCompanyAddress: ownedCompany?.legalAddress || null,
+    });
+    if (missingInvoiceFields.length > 0) {
+      return NextResponse.json(
+        { error: `Для выставления счёта заполните в профиле: ${missingInvoiceFields.join(", ")}` },
+        { status: 400 },
+      );
+    }
 
     let body: { amount?: unknown };
     try {

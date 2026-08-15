@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
 import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { PageBanner } from "@/components/shared/PageBanner";
-import { Search, SlidersHorizontal, Plus, X, Filter, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 interface ProductRow {
   id: string; companyName: string; companyInn: string; companyId: string;
@@ -100,7 +99,6 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [revals, setRevals] = useState<Record<string, Record<string, boolean>>>({});
-  const [showFilters, setShowFilters] = useState(false);
   const scrollerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollerObservers = useRef<Map<string, ResizeObserver>>(new Map());
   const [scrollerState, setScrollerState] = useState<Record<string, { canLeft: boolean; canRight: boolean }>>({});
@@ -295,12 +293,43 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
       {/* Баннер (ТЗ §7.1) */}
       {bannerUrl && <PageBanner url={bannerUrl} alt="Баннер матрицы" />}
 
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-end gap-2 mb-3">
-        <div className="relative flex-1 min-w-[180px]">
+      {/* Search + Filters — состояние живёт в URL, данные отдаёт сервер */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Поиск по товару или компании..." value={search} onChange={(e) => handleSearchChange(e.target.value)} className="pl-9" />
         </div>
+        <MultiSelect
+          options={treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` }))}
+          value={classifiers}
+          onChange={(v) => updateQuery({ classifier: v.join(",") })}
+          placeholder="Классификатор"
+          searchPlaceholder="Поиск категории..."
+          className="w-[220px]"
+          filter={matchClassifier}
+          hideSelectedLabels
+        />
+        <MultiSelect
+          options={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r, label: r }))]}
+          value={regionFilter}
+          onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(",") })}
+          placeholder="Регион"
+          searchPlaceholder="Поиск региона..."
+          className="w-[200px]"
+        />
+        <Select
+          value={productClass}
+          items={{ "": "Все классы", ...classLabels }}
+          onValueChange={(v) => updateQuery({ class: v || null })}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Класс" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="" label="Все классы">Все классы</SelectItem>
+            {Object.entries(classLabels).map(([k, v]) => <SelectItem key={k} value={k} label={v}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Select
           value={sortBy}
           items={SORT_ITEMS}
@@ -316,78 +345,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
             <SelectItem value="name" label="По названию">По названию</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="h-10 px-3 gap-1">
-          <Filter className="h-4 w-4" /> Фильтры {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1 h-4">{activeFiltersCount}</Badge>}
-        </Button>
-        {(classifiers.length > 0 || productClass !== "" || regionFilter.length > 0) && (
-          <Button variant="ghost" size="sm" onClick={() => updateQuery({ classifier: null, class: null, region: null })} className="h-10 px-3 text-muted-foreground gap-1"><X className="h-3 w-3" /> Сбросить</Button>
-        )}
       </div>
-
-      {/* Active chips */}
-      {(classifiers.length > 0 || productClass !== "" || regionFilter.length > 0) && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {classifiers.map((c) => {
-            const item = treeItems.find((t) => t.id === c);
-            return (
-              <Badge key={c} variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ classifier: classifiers.filter((v) => v !== c).join(",") })}>
-                {item ? `${item.fullNumberPath} — ${item.name}` : c} <X className="h-3 w-3" />
-              </Badge>
-            );
-          })}
-          {productClass !== "" && <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ class: null })}>{classLabels[productClass]} <X className="h-3 w-3" /></Badge>}
-          {regionFilter.map((r) => (
-            <Badge key={r} variant="secondary" className="gap-1 cursor-pointer" onClick={() => updateQuery({ region: regionFilter.filter((v) => v !== r).join(",") })}>{r} <X className="h-3 w-3" /></Badge>
-          ))}
-        </div>
-      )}
-
-      {/* Expandable filters */}
-      {showFilters && (
-        <Card className="mb-6 animate-in fade-in slide-in-from-top-2">
-          <CardContent className="pb-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">Классификатор</Label>
-                <MultiSelect
-                  options={treeItems.map((t) => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` }))}
-                  value={classifiers}
-                  onChange={(v) => updateQuery({ classifier: v.join(",") })}
-                  placeholder="Все категории"
-                  searchPlaceholder="Поиск категории..."
-                  filter={matchClassifier}
-                  hideSelectedLabels
-                />
-              </div>
-              
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">Регион</Label>
-                <MultiSelect
-                  options={[{ value: ALL_REGIONS, label: ALL_REGIONS }, ...regions.map((r) => ({ value: r, label: r }))]}
-                  value={regionFilter}
-                  onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(",") })}
-                  placeholder="Любой регион"
-                  searchPlaceholder="Поиск региона..."
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">Класс товара</Label>
-                <Select
-                  value={productClass}
-                  items={{ "": "Все классы", ...classLabels }}
-                  onValueChange={(v) => updateQuery({ class: v || null })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Все классы" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="" label="Все классы">Все классы</SelectItem>
-                    {Object.entries(classLabels).map(([k, v]) => <SelectItem key={k} value={k} label={v}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Results */}
       {capped && (

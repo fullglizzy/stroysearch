@@ -1,8 +1,14 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
-import { formatRub, formatInvoiceDate, INVOICE_STATUS_LABELS } from "@/lib/invoices";
+import { Printer, Download, Loader2 } from "lucide-react";
+import { formatRub, formatInvoiceDate, pluralRu, rublesInWords } from "@/lib/invoices";
+import { printHtmlNode } from "@/lib/print";
+import { downloadHtmlNodeAsPdf } from "@/lib/pdf";
+
+// Название платформы в формулировке предмета счёта
+const SITE_NAME = "ЕНЦПР";
 
 interface InvoiceItemRow {
   description: string;
@@ -19,10 +25,15 @@ export interface InvoicePrintData {
   subtotal: number;
   discount: number;
   total: number;
+  /** PURCHASE — покупка монет, PAYOUT — выплата за просмотры */
+  kind?: "PURCHASE" | "PAYOUT";
   buyerName: string;
   buyerInn: string | null;
   buyerKpp: string | null;
   buyerAddress: string | null;
+  /** company — юр.лицо/ИП, individual — физ.лицо */
+  buyerKind?: "company" | "individual";
+  buyerUserId?: string;
   items: InvoiceItemRow[];
 }
 
@@ -40,10 +51,21 @@ export interface BillingRequisites {
   stampImage: string | null;
   vatRate: number;
   invoiceBasis: string | null;
+  /** Дата публикации оферты (/terms), ISO */
+  offerDate?: string | null;
 }
 
 function round2(v: number): number {
   return Math.round(v * 100) / 100;
+}
+
+// Число с двумя знаками без символа валюты («100,00») — для колонок таблицы
+function formatNumber(v: number): string {
+  return v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatShortDate(d: Date | string): string {
+  return new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 /**
@@ -56,64 +78,150 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
   const vatTotal = withVat ? round2(invoice.total * vatRate / 100) : 0;
   const toPay = round2(invoice.total + vatTotal);
 
+  const isPayout = invoice.kind === "PAYOUT";
+  const buyerIsCompany = invoice.buyerKind === "company";
+  const termsUrl = (typeof window !== "undefined" ? window.location.origin : "") + "/terms";
+  const docRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    if (!docRef.current || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadHtmlNodeAsPdf(docRef.current, `invoice-${invoice.number}.pdf`);
+    } catch {
+      // ошибка рендера PDF — просто разблокируем кнопку
+    }
+    setDownloading(false);
+  }
+
   return (
     <div>
-      <div className="flex justify-end mb-3 print:hidden">
-        <Button size="sm" variant="outline" className="gap-1" onClick={() => window.print()}>
+      <div className="flex justify-end gap-2 mb-3 print:hidden">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={() => {
+            if (docRef.current) printHtmlNode(docRef.current, `Счёт № ${invoice.number}`);
+          }}
+        >
           <Printer className="h-4 w-4" /> Печать
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={handleDownload}
+          disabled={downloading}
+        >
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Скачать
         </Button>
       </div>
 
-      <div className="invoice-print border rounded-lg p-6 bg-white text-black text-sm">
+      <div ref={docRef} className="invoice-print border rounded-lg p-6 bg-white text-black text-sm">
         {/* Заголовок */}
-        <div className="text-center mb-6">
-          <p className="text-lg font-bold">Счёт № {invoice.number} от {formatInvoiceDate(invoice.date)}</p>
-          <p className="text-xs text-gray-600">Оплатить до {formatInvoiceDate(invoice.dueDate)}</p>
+        <div className="mb-6">
+          <p className="text-lg font-bold text-center">
+            Счёт на оплату № {invoice.number} от {formatInvoiceDate(invoice.date)}
+          </p>
+          <p className="text-right text-xs text-gray-600 mt-1">
+            Оплатить до: {formatInvoiceDate(invoice.dueDate)}
+          </p>
         </div>
 
-        {/* Продавец и покупатель */}
-        <div className="grid grid-cols-2 gap-6 mb-4">
-          <div>
-            <p className="text-xs text-gray-500 uppercase mb-1">Продавец</p>
+        {/* Продавец */}
+        <div className="flex gap-3">
+          <span className="w-44 shrink-0 font-semibold">ПРОДАВЕЦ:</span>
+          <div className="min-w-0">
             <p className="font-semibold">{requisites.organizationName || "—"}</p>
-            <p className="text-xs text-gray-700">ИНН {requisites.organizationInn || "—"}{requisites.organizationKpp ? ` · КПП ${requisites.organizationKpp}` : ""}</p>
-            <p className="text-xs text-gray-700">Адрес: {requisites.organizationAddress || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase mb-1">Покупатель</p>
-            <p className="font-semibold">{invoice.buyerName || "—"}</p>
-            <p className="text-xs text-gray-700">ИНН {invoice.buyerInn || "—"}{invoice.buyerKpp ? ` · КПП ${invoice.buyerKpp}` : ""}</p>
-            <p className="text-xs text-gray-700">Адрес: {invoice.buyerAddress || "—"}</p>
+            <p>
+              ИНН: {requisites.organizationInn || "—"}
+              {requisites.organizationKpp ? ` / КПП: ${requisites.organizationKpp}` : ""}
+            </p>
+            <p>Адрес: {requisites.organizationAddress || "—"}</p>
           </div>
         </div>
 
-        {/* Банк */}
-        <div className="mb-4 text-xs text-gray-700">
-          <p className="text-gray-500 uppercase mb-1">Банковские реквизиты продавца</p>
-          <p>{requisites.bankName || "—"} · БИК {requisites.bankBik || "—"} · р/с {requisites.bankAccount || "—"} · к/с {requisites.bankCorrAccount || "—"}</p>
+        {/* Банковские реквизиты */}
+        <div className="flex gap-3 mt-2">
+          <span className="w-44 shrink-0 font-semibold">Банковские реквизиты:</span>
+          <div className="min-w-0">
+            <p>Расчётный счёт: {requisites.bankAccount || "—"}</p>
+            <p>Банк: {requisites.bankName || "—"}</p>
+            <p>БИК: {requisites.bankBik || "—"}</p>
+            <p>Корр. счёт: {requisites.bankCorrAccount || "—"}</p>
+          </div>
         </div>
+
+        <hr className="my-4 border-t-2 border-dashed border-gray-400" />
+
+        {/* Покупатель */}
+        <div className="flex gap-3">
+          <span className="w-44 shrink-0 font-semibold">ПОКУПАТЕЛЬ:</span>
+          <div className="min-w-0">
+            <p className="font-semibold">
+              {buyerIsCompany
+                ? `${invoice.buyerName}${invoice.buyerInn ? ` (ИНН ${invoice.buyerInn})` : ""}`
+                : `${invoice.buyerName}${invoice.buyerUserId ? ` (ID пользователя: ${invoice.buyerUserId})` : ""}`}
+            </p>
+            <p>Адрес: {invoice.buyerAddress || "—"}</p>
+          </div>
+        </div>
+
+        {/* Основание */}
+        <div className="flex gap-3 mt-2">
+          <span className="w-44 shrink-0 font-semibold">ОСНОВАНИЕ:</span>
+          <div className="min-w-0">
+            <p>
+              Публичная оферта (Пользовательское соглашение)
+              {requisites.offerDate ? ` от ${formatShortDate(requisites.offerDate)} г.` : ""}
+              , размещённая по адресу:
+            </p>
+            <p>{termsUrl}</p>
+          </div>
+        </div>
+
+        <hr className="my-4 border-t-2 border-dashed border-gray-400" />
 
         {/* Таблица */}
         <table className="w-full border-collapse mb-4">
           <thead>
             <tr className="border-b-2 border-gray-400 text-left text-xs text-gray-600">
-              <th className="py-2 pr-2">Товар/услуга</th>
-              <th className="py-2 px-2 text-right">Кол-во</th>
-              <th className="py-2 px-2 text-right">Цена</th>
-              <th className="py-2 px-2 text-right">Сумма</th>
-              <th className="py-2 pl-2 text-right">НДС</th>
+              <th className="py-2 pr-2 w-8 font-normal">№</th>
+              <th className="py-2 px-2 font-normal">Наименование товара / услуги</th>
+              <th className="py-2 px-2 text-right font-normal">Кол-во</th>
+              <th className="py-2 px-2 text-right font-normal">Ед.</th>
+              <th className="py-2 px-2 text-right font-normal">Цена, руб.</th>
+              <th className="py-2 px-2 text-right font-normal">Сумма, руб.</th>
             </tr>
           </thead>
           <tbody>
             {invoice.items.map((item, i) => (
-              <tr key={i} className="border-b border-gray-200">
-                <td className="py-2 pr-2">{item.description}</td>
-                <td className="py-2 px-2 text-right">{item.quantity}</td>
-                <td className="py-2 px-2 text-right">{formatRub(item.unitPrice)}</td>
-                <td className="py-2 px-2 text-right">{formatRub(item.total)}</td>
-                <td className="py-2 pl-2 text-right">
-                  {withVat ? formatRub(round2(item.total * vatRate / 100)) : "Без НДС"}
+              <tr key={i} className="align-top">
+                <td className="py-2 pr-2">{i + 1}</td>
+                <td className="py-2 px-2">
+                  {isPayout ? (
+                    <p>{item.description}</p>
+                  ) : (
+                    <>
+                      <p>
+                        Предоставление права использования функционала платформы {SITE_NAME}{" "}
+                        (Лицензионное вознаграждение)
+                      </p>
+                      <p>
+                        Объем прав: {item.quantity}{" "}
+                        {pluralRu(item.quantity, "условная единица", "условные единицы", "условных единиц")}{" "}
+                        ({pluralRu(item.quantity, "монета", "монеты", "монет")})
+                      </p>
+                    </>
+                  )}
                 </td>
+                <td className="py-2 px-2 text-right">{item.quantity}</td>
+                <td className="py-2 px-2 text-right">{isPayout ? "шт." : "усл. ед."}</td>
+                <td className="py-2 px-2 text-right">{formatNumber(item.unitPrice)}</td>
+                <td className="py-2 px-2 text-right">{formatNumber(item.total)}</td>
               </tr>
             ))}
           </tbody>
@@ -121,45 +229,70 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
 
         {/* Итоги */}
         <div className="flex justify-end mb-4">
-          <div className="w-64 text-sm">
+          <div className="w-72 text-sm">
             <div className="flex justify-between py-1">
-              <span>Итого</span><span>{formatRub(invoice.total)}</span>
+              <span>Итого без НДС:</span>
+              <span>{formatRub(invoice.total)}</span>
             </div>
-            {withVat && (
-              <div className="flex justify-between py-1">
-                <span>НДС ({vatRate}%)</span><span>{formatRub(vatTotal)}</span>
-              </div>
-            )}
+            <div className="flex justify-between py-1">
+              <span>{withVat ? `НДС (${vatRate}%):` : "НДС (Не облагается*):"}</span>
+              <span>{withVat ? formatRub(vatTotal) : "0,00 ₽"}</span>
+            </div>
             <div className="flex justify-between py-1 border-t-2 border-gray-400 font-bold">
-              <span>К оплате</span><span>{formatRub(toPay)}</span>
+              <span>Всего к оплате:</span>
+              <span>{formatRub(toPay)}</span>
             </div>
           </div>
         </div>
 
-        {/* Основание и срок */}
-        <div className="mb-6 text-xs text-gray-700">
-          {requisites.invoiceBasis && <p>Основание: {requisites.invoiceBasis}</p>}
-          <p>Срок оплаты: до {formatInvoiceDate(invoice.dueDate)}</p>
-          <p className="text-gray-500">Статус: {INVOICE_STATUS_LABELS[invoice.status] || invoice.status}</p>
+        {/* Сумма прописью */}
+        <div className="mb-4 text-xs">
+          <p>
+            Всего наименований {invoice.items.length}, на сумму {formatNumber(toPay)} руб.
+          </p>
+          <p>
+            {rublesInWords(toPay)}, {withVat ? `в том числе НДС ${formatRub(vatTotal)}` : "без НДС"}.
+          </p>
         </div>
 
-        {/* Подпись и печать */}
+        <hr className="my-4 border-t-2 border-dashed border-gray-400" />
+
+        {/* Примечание */}
+        <div className="mb-6 text-xs">
+          <p className="font-semibold mb-1">ВНИМАНИЕ / ПРИМЕЧАНИЕ:</p>
+          <p>
+            Оплата данного счёта означает полное и безоговорочное согласие с условиями Публичной
+            оферты (акцепт оферты согласно ст. 438 ГК РФ).
+          </p>
+          <p>
+            *Упрощенная система налогообложения (УСН) / ст. 346.11 НК РФ (или пп. 26 п. 2 ст. 149 НК
+            РФ, если софт в реестре РФ).
+          </p>
+        </div>
+
+        {/* Подписи */}
         <div className="flex items-end justify-between">
-          <div />
-          <div className="text-center">
-            {requisites.signatureImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={requisites.signatureImage} alt="Подпись" className="h-14 w-auto object-contain mx-auto mb-1" />
-            ) : (
-              <p className="text-gray-500 mb-1">____________</p>
-            )}
-            <div className="border-t border-gray-400 pt-1 mt-2 w-56 text-xs text-center">
-              {requisites.directorName ? `/${requisites.directorName}/` : "/ФИО/"}
+          <div className="flex-1 min-w-0 mr-6">
+            <div className="flex items-end gap-2">
+              <span>Генеральный директор</span>
+              <span className="flex-1 min-w-24 h-16 flex items-end justify-center border-b border-gray-400">
+                {requisites.signatureImage && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={requisites.signatureImage} alt="Подпись" className="h-14 w-auto object-contain" />
+                )}
+              </span>
+              <span>/{requisites.directorName || "____________"}/</span>
             </div>
-            {requisites.stampImage && (
+            
+          </div>
+          <div className="text-center">
+            {requisites.stampImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={requisites.stampImage} alt="Печать" className="h-20 w-auto object-contain mx-auto mt-1" />
+              <img src={requisites.stampImage} alt="Печать" className="h-20 w-auto object-contain mx-auto" />
+            ) : (
+              <p className="font-semibold">[ М.П. ]</p>
             )}
+            <p className="text-xs text-gray-500 mt-1">(при наличии печати)</p>
           </div>
         </div>
       </div>

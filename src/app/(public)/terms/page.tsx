@@ -30,27 +30,39 @@ export default async function TermsPage() {
   return (
     <div className="container-page py-8 max-w-3xl">
       <h1 className="text-3xl font-bold mb-6">Пользовательское соглашение</h1>
-      {doc ? (
-        <div className="space-y-3">
-          <iframe
-            src={doc.fileUrl}
-            title="Пользовательское соглашение"
-            className="w-full h-[80vh] border rounded-lg bg-white"
-          />
-          <div className="flex items-center gap-4 text-sm">
-            <a href={doc.fileUrl} download={doc.fileName} className="text-menthol hover:underline">
-              Скачать PDF
-            </a>
-            <span className="text-xs text-muted-foreground">
-              {doc.fileName} · {formatFileSize(doc.fileSize)}
-            </span>
-          </div>
+      {doc?.text ? (
+        <div className="space-y-4 text-sm leading-relaxed">
+          {doc.text.split(/\n{2,}/).map((paragraph, i) => (
+            <p key={i} className="whitespace-pre-wrap">{paragraph}</p>
+          ))}
+          {doc.fileUrl && (
+            <div className="flex items-center gap-4 text-sm border-t pt-4 mt-6">
+              <a href={doc.fileUrl} download={doc.fileName || "document.pdf"} className="text-menthol hover:underline">
+                Скачать PDF
+              </a>
+              <span className="text-xs text-muted-foreground">
+                {doc.fileName} · {formatFileSize(doc.fileSize)}
+              </span>
+            </div>
+          )}
         </div>
       ) : (
-        <div
-          className="prose prose-gray max-w-none"
-          dangerouslySetInnerHTML={{ __html: content?.content || defaultContent }}
-        />
+        <>
+          <div
+            className="prose prose-gray max-w-none"
+            dangerouslySetInnerHTML={{ __html: content?.content || defaultContent }}
+          />
+          {doc?.fileUrl && (
+            <div className="flex items-center gap-4 text-sm mt-6">
+              <a href={doc.fileUrl} download={doc.fileName || "document.pdf"} className="text-menthol hover:underline">
+                Скачать PDF
+              </a>
+              <span className="text-xs text-muted-foreground">
+                {doc.fileName} · {formatFileSize(doc.fileSize)}
+              </span>
+            </div>
+          )}
+        </>
       )}
       <p className="text-xs text-muted-foreground mt-8 pt-4 border-t">
         Используя настоящую платформу, пользователи подтверждают своё согласие с условиями работы на ней,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,10 @@ interface FinancesPageProps {
   }[];
   userId: string;
   coinPriceRub: number;
+  /** Поля профиля, без которых нельзя выставить счёт (название/ФИО, адрес) */
+  missingInvoiceFields: string[];
+  /** Ссылка на страницу профиля, где эти поля заполняются */
+  profileHref: string;
 }
 
 const typeLabels: Record<string, string> = {
@@ -67,7 +72,7 @@ const typeLabels: Record<string, string> = {
   INVOICE_PAID: "Пополнение счёта",
 };
 
-export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub }: FinancesPageProps) {
+export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub, missingInvoiceFields, profileHref }: FinancesPageProps) {
   const router = useRouter();
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftTo, setGiftTo] = useState("");
@@ -252,10 +257,20 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
                 Стоимость: {buyTotal} ₽ (1 монета = {coinPriceRub} ₽)
               </p>
             </div>
+            {missingInvoiceFields.length > 0 && (
+              <Alert className="border-orange-accent/50 bg-orange-accent/10 text-orange-accent">
+                <AlertDescription>
+                  Для выставления счёта заполните в профиле: {missingInvoiceFields.join(", ")}.{" "}
+                  <Link href={profileHref} className="underline hover:opacity-80">
+                    Заполнить профиль
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
             <Button
               type="submit"
               className="w-full bg-menthol hover:bg-menthol-dark"
-              disabled={buyLoading}
+              disabled={buyLoading || missingInvoiceFields.length > 0}
             >
               {buyLoading ? "Отправка..." : "Отправить заявку"}
             </Button>

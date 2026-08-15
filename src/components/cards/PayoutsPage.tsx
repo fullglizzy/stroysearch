@@ -134,7 +134,7 @@ export function PayoutsPage() {
       <Dialog open={!!invoiceOpen} onOpenChange={(o) => { if (!o) setInvoiceOpen(null); }}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Счёт на выплату</DialogTitle>
+            <DialogTitle>Акт об оказании услуг</DialogTitle>
             <DialogDescription>Документ для получения выплаты по реквизитам</DialogDescription>
           </DialogHeader>
           {invoiceData && requisites ? (

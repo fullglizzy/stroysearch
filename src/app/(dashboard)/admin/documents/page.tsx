@@ -20,7 +20,8 @@ export default async function AdminDocumentsPage() {
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Юридические документы</h1>
       <p className="text-muted-foreground mb-6">
-        PDF-файлы отображаются на страницах /privacy и /terms
+        Текст отображается на страницах /privacy и /terms. Можно ввести текст вручную и загрузить
+        PDF.
       </p>
       <DocumentsManager
         documents={documents.map((d) => ({
@@ -28,6 +29,7 @@ export default async function AdminDocumentsPage() {
           fileName: d.fileName,
           fileUrl: d.fileUrl,
           fileSize: d.fileSize,
+          text: d.text,
           updatedAt: d.updatedAt,
         }))}
       />

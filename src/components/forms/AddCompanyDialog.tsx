@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,13 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MultiSelect } from "@/components/shared/MultiSelect";
 import { FieldError, applyPhoneMask, formatRussianPhone } from "@/components/forms/fields";
+import { useAvailabilityCheck } from "@/components/forms/useAvailabilityCheck";
 import { matchClassifier } from "@/lib/classifier";
 import { isValidInn } from "@/lib/validators";
 import { toastSuccess } from "@/lib/toast";
+import { checkCompanyInnAvailability } from "@/server/suppliers/actions";
 import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
-import { Plus } from "lucide-react";
+import { Loader2, CircleCheck, Plus } from "lucide-react";
 
 // Сообщения совпадают с серверной схемой addCompanySchema
 const addCompanyFormSchema = z.object({
@@ -120,7 +122,23 @@ export function AddCompanyDialog({
     defaultValues: ADD_COMPANY_FORM_DEFAULTS,
   });
 
+  const inn = useWatch({ control, name: "inn" }) ?? "";
+
+  // Моментальная проверка занятости ИНН (с дебаунсом), как при регистрации
+  const innStatus = useAvailabilityCheck({
+    value: inn,
+    whenValid: (v) => isValidInn(v),
+    check: async (v) => (await checkCompanyInnAvailability(v)).available,
+  });
+
   async function onSubmit(values: AddCompanyFormValues) {
+    // Не отправляем, если live-проверка уже нашла занятый ИНН
+    if (innStatus === "taken") {
+      setFieldError("inn", { message: "Компания с таким ИНН уже существует" });
+      setFocus("inn");
+      return;
+    }
+
     setFormError("");
     setLoading(true);
 
@@ -205,7 +223,17 @@ export function AddCompanyDialog({
               maxLength={12}
               disabled={loading}
               aria-invalid={!!errors.inn}
-              aria-describedby={errors.inn ? "inn-error" : "inn-hint"}
+              aria-describedby={
+                errors.inn
+                  ? "inn-error"
+                  : innStatus === "checking"
+                    ? "inn-checking"
+                    : innStatus === "available"
+                      ? "inn-available"
+                      : innStatus === "taken"
+                        ? "inn-taken"
+                        : "inn-hint"
+              }
               {...register("inn", {
                 // Маска: только цифры, не более 12
                 setValueAs: (value: string) => value.replace(/\D/g, "").slice(0, 12),
@@ -216,6 +244,18 @@ export function AddCompanyDialog({
             />
             {errors.inn ? (
               <FieldError id="inn-error" message={errors.inn.message} />
+            ) : innStatus === "checking" ? (
+              <p id="inn-checking" role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Проверка доступности...
+              </p>
+            ) : innStatus === "available" ? (
+              <p id="inn-available" role="status" className="flex items-center gap-1.5 text-xs text-emerald-600">
+                <CircleCheck className="h-3 w-3" />
+                ИНН свободен
+              </p>
+            ) : innStatus === "taken" ? (
+              <FieldError id="inn-taken" message="Компания с таким ИНН уже существует" />
             ) : (
               <p id="inn-hint" className="text-xs text-muted-foreground">
                 10 цифр для организации, 12 — для ИП

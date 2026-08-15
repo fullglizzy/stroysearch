@@ -29,7 +29,6 @@ const STRING_FIELDS = [
   "directorEmail",
   "signatureImage",
   "stampImage",
-  "invoiceBasis",
 ] as const;
 
 export async function POST(request: Request) {
