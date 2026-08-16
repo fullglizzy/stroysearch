@@ -139,6 +139,11 @@ export function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
+                  <Link href={`${dashboardHref}/conferences`} className="w-full">
+                    Мои конференции
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
                   <Link href={`${dashboardHref}/support`} className="w-full flex items-center justify-between">
                     <span>Мои обращения</span>
                     {supportUnread > 0 && (
@@ -197,6 +202,25 @@ export function Header() {
                 {link.label}
               </Link>
             ))}
+            {session?.user && (
+              <div className="mt-2 pt-2 border-t">
+                {[
+                  { href: dashboardHref, label: "Личный кабинет" },
+                  { href: `${dashboardHref}/finances`, label: "Финансы" },
+                  { href: `${dashboardHref}/conferences`, label: "Мои конференции" },
+                  { href: `${dashboardHref}/support`, label: "Мои обращения" },
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="px-3 py-2.5 text-sm font-medium rounded-md hover:bg-secondary transition-colors"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
             {!session?.user && (
               <div className="mt-2 pt-2 border-t">
                 <Link

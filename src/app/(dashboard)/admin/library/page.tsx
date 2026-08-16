@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { LibraryModeration } from "@/components/tables/LibraryModeration";
+import type { SessionUser } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,11 @@ export default async function AdminLibraryPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const userType = (session.user as SessionUser).type;
+  if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
+    redirect(userType === "COMPANY" ? "/company" : "/account");
+  }
 
   const sp = await searchParams;
   const get = (k: string) => {

@@ -77,7 +77,9 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
       else params.set(key, value);
     }
     const qs = params.toString();
-    router.replace(qs ? `/polls?${qs}` : "/polls", { scroll: false });
+    router.replace(qs ? `${window.location.pathname}?${qs}` : window.location.pathname, {
+      scroll: false,
+    });
   }
 
   function handleSearchChange(value: string) {

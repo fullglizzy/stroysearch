@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -100,7 +101,11 @@ export default async function AccountConferencesPage() {
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
           <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">Нет конференций</p>
-          <p className="text-sm mt-2">Создайте конференцию на странице «Конференции»</p>
+          <p className="text-sm mt-2">
+            <Link href="/conferences" className="text-menthol hover:underline">
+              Создайте конференцию на странице «Конференции»
+            </Link>
+          </p>
         </div>
       )}
     </div>

@@ -107,13 +107,28 @@ export async function PATCH(request: Request) {
       },
     });
 
-    // Обновляем сайт и регионы компании (если у пользователя есть компания)
-    if (website !== undefined || regions !== undefined) {
+    // Синхронизируем данные компании: Company — единственный источник данных
+    // для публичного каталога поставщиков, поэтому пишем туда всё, что меняет
+    // компания в профиле (раньше это оставалось только в UserProfile и терялось)
+    if (
+      website !== undefined ||
+      regions !== undefined ||
+      companyName !== undefined ||
+      kpp !== undefined ||
+      legalAddress !== undefined ||
+      phone !== undefined ||
+      classifierIds !== undefined
+    ) {
       await prisma.company.updateMany({
         where: { ownerUserId: userId },
         data: {
           ...(website !== undefined ? { website: normalizedWebsite } : {}),
           ...(regions !== undefined ? { regions: regionsCsv } : {}),
+          ...(companyName && companyName.trim() ? { name: companyName.trim() } : {}),
+          ...(kpp !== undefined ? { kpp: kpp || null } : {}),
+          ...(legalAddress !== undefined ? { legalAddress: legalAddress || null } : {}),
+          ...(phone !== undefined ? { phone: phone || null } : {}),
+          ...(classifierIds !== undefined ? { classifierIds: classifierIdsCsv } : {}),
         },
       });
     }

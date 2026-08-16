@@ -20,6 +20,9 @@ const quickLogins = [
   { label: "Проектировщик", username: "petrov_nik", icon: User, role: "УЧАСТНИК", color: "bg-green-100 text-green-700 hover:bg-green-200" },
 ];
 
+// Демо-вход с общим паролем — только для разработки: NEXT_PUBLIC_DEMO_LOGIN=1
+const showQuickLogins = process.env.NEXT_PUBLIC_DEMO_LOGIN === "1";
+
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -65,7 +68,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Возвращаем пользователя туда, откуда его отправил middleware (защищённая страница)
+      // Возвращаем пользователя туда, откуда его отправил proxy (защищённая страница)
       const params = new URLSearchParams(window.location.search);
       const callbackUrl = params.get("callbackUrl") || "";
       if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") && callbackUrl !== "/login") {
@@ -162,30 +165,32 @@ export default function LoginPage() {
               Войти
             </Button>
 
-            {/* Quick login buttons */}
-            <div className="pt-2">
-              <Separator className="mb-3" />
-              <div className="grid grid-cols-2 gap-1.5">
-                {quickLogins.map((q) => {
-                  const Icon = q.icon;
-                  return (
-                    <button
-                      key={q.username}
-                      type="button"
-                      onClick={() => quickLogin(q.username)}
-                      disabled={loading}
-                      className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all active:scale-95 disabled:opacity-50 ${q.color}`}
-                    >
-                      <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">{q.label}</span>
-                      <Badge variant="secondary" className="ml-auto text-[10px] px-1 py-0 h-4 flex-shrink-0">
-                        {q.role}
-                      </Badge>
-                    </button>
-                  );
-                })}
+            {/* Quick login buttons — только при NEXT_PUBLIC_DEMO_LOGIN=1 */}
+            {showQuickLogins && (
+              <div className="pt-2">
+                <Separator className="mb-3" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  {quickLogins.map((q) => {
+                    const Icon = q.icon;
+                    return (
+                      <button
+                        key={q.username}
+                        type="button"
+                        onClick={() => quickLogin(q.username)}
+                        disabled={loading}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all active:scale-95 disabled:opacity-50 ${q.color}`}
+                      >
+                        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="truncate">{q.label}</span>
+                        <Badge variant="secondary" className="ml-auto text-[10px] px-1 py-0 h-4 flex-shrink-0">
+                          {q.role}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="text-center text-sm text-muted-foreground">
               <p>

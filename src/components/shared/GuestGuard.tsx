@@ -61,13 +61,17 @@ export function GuestGuard({ children, actionLabel }: GuestGuardProps) {
           <div className="flex gap-3 justify-center mt-4">
             <Button
               className="bg-menthol hover:bg-menthol-dark"
-              onClick={() => router.push("/login")}
+              onClick={() =>
+                router.push(
+                  `/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+                )
+              }
             >
               Войти
             </Button>
             <Button
               variant="outline"
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/register")}
             >
               Зарегистрироваться
             </Button>

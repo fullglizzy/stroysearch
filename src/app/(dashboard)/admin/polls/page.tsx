@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { PollsManager } from "@/components/forms/PollsManager";
+import type { SessionUser } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ export default async function AdminPollsPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const userType = (session.user as SessionUser).type;
+  if (!["EDITOR", "SUPER", "ROOT"].includes(userType)) {
+    redirect(userType === "COMPANY" ? "/company" : "/account");
+  }
 
   const sp = await searchParams;
   const get = (k: string) => {
