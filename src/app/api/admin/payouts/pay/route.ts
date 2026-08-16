@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyUser } from "@/lib/notifications";
 
 /**
  * Отметка счёта на выплату как выплаченного (DRAFT → PAID).
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { id: true, kind: true, status: true, sentAt: true },
+    select: { id: true, number: true, userId: true, kind: true, status: true, sentAt: true },
   });
   if (!invoice || (invoice.kind !== "PAYOUT" && invoice.kind !== "ACTIVITY")) {
     return NextResponse.json({ error: "Счёт на выплату не найден" }, { status: 404 });
@@ -47,6 +48,15 @@ export async function POST(request: Request) {
       paidAt: new Date(),
       sentAt: invoice.sentAt ?? new Date(),
     },
+  });
+
+  // Уведомляем компанию о произведённой выплате
+  await notifyUser({
+    userId: invoice.userId,
+    type: "PAYOUT",
+    title: "Выплата произведена",
+    message: `Счёт №${invoice.number} отмечен как выплаченный.`,
+    link: "/company/payouts",
   });
 
   return NextResponse.json({ success: true });

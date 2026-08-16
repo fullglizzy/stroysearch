@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyUser, cabinetHome } from "@/lib/notifications";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
 
@@ -66,7 +67,10 @@ export async function POST(
       return NextResponse.json({ error: "Сообщение не может быть пустым" }, { status: 400 });
     }
 
-    const ticket = await prisma.supportTicket.findUnique({ where: { id } });
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id },
+      select: { userId: true, user: { select: { type: true } } },
+    });
     if (!ticket) {
       return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
     }
@@ -91,6 +95,19 @@ export async function POST(
       });
       return messageRow;
     });
+
+    // Уведомляем автора обращения, когда отвечает поддержка
+    if (isAdmin && ticket.userId) {
+      await notifyUser({
+        userId: ticket.userId,
+        type: "SUPPORT",
+        title: "Ответ поддержки",
+        message: message
+          ? `Служба поддержки ответила: «${message.length > 140 ? `${message.slice(0, 140)}…` : message}»`
+          : "Служба поддержки отправила сообщение в ваше обращение.",
+        link: `${cabinetHome(ticket.user?.type)}/support?ticket=${id}`,
+      });
+    }
 
     return NextResponse.json({
       success: true,

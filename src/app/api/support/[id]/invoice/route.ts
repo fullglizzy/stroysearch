@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { roundWalletBalance } from "@/lib/money";
+import { notifyUser, cabinetHome } from "@/lib/notifications";
 
 const ADMIN_TYPES = ["SUPER", "ROOT"];
 
@@ -35,7 +36,7 @@ export async function POST(
 
     const invoice = await prisma.invoice.findUnique({
       where: { ticketId: id },
-      include: { items: true },
+      include: { items: true, user: { select: { type: true } } },
     });
     if (!invoice) {
       return NextResponse.json({ error: "Счёт не найден" }, { status: 404 });
@@ -87,6 +88,15 @@ export async function POST(
         data: { updatedAt: new Date(), isResolved: true },
       });
       return { invoice: inv, message: msg };
+    });
+
+    // Уведомляем покупателя о начислении монет
+    await notifyUser({
+      userId: invoice.userId,
+      type: "INVOICE",
+      title: "Счёт оплачен",
+      message: `Счёт №${invoice.number} оплачен. Начислено ${coins} монет.`,
+      link: `${cabinetHome(invoice.user?.type)}/finances`,
     });
 
     return NextResponse.json({

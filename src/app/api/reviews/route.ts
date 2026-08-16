@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reviewSchema } from "@/lib/validators";
 import { roundWalletBalance } from "@/lib/money";
+import { notifyUser, cabinetHome } from "@/lib/notifications";
 
 export async function GET(request: Request) {
   try {
@@ -205,6 +206,21 @@ export async function POST(request: Request) {
         }
       }
     });
+
+    // Уведомляем получателя только о новом отзыве (обновление существующего — без шума)
+    if (!updated) {
+      const target = await prisma.user.findUnique({
+        where: { id: resolvedTargetId },
+        select: { type: true },
+      });
+      await notifyUser({
+        userId: resolvedTargetId,
+        type: "REVIEW",
+        title: "Новый отзыв",
+        message: "О вас оставили новый отзыв на платформе.",
+        link: `${cabinetHome(target?.type)}/reviews`,
+      });
+    }
 
     return NextResponse.json({ success: true, updated });
   } catch {

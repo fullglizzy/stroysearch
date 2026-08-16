@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AccountDashboard } from "@/components/cards/AccountDashboard";
 import { getPageContent } from "@/server/admin/content";
+import { computeRating } from "@/lib/rating";
 
 export default async function AccountPage() {
   const session = await auth();
@@ -19,6 +20,7 @@ export default async function AccountPage() {
         include: { roles: true },
       },
       wallet: true,
+      receivedReviews: { select: { weightedAverage: true } },
       _count: {
         select: {
           givenReviews: true,
@@ -33,6 +35,7 @@ export default async function AccountPage() {
   if (!user) redirect("/login");
 
   const walletBalance = user.wallet ? user.wallet.balance.toNumber() : 0;
+  const rating = computeRating(user.receivedReviews);
 
   // Непрочитанные ответы поддержки — одним SQL-запросом вместо загрузки всех сообщений
   const unreadRows = await prisma.$queryRawUnsafe<{ cnt: number | bigint }[]>(`
@@ -70,6 +73,7 @@ export default async function AccountPage() {
           documents: user._count.documents,
           conferences: user._count.conferences,
         },
+        rating,
       }}
       supportUnread={supportUnread}
     />

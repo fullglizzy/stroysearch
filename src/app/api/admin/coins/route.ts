@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { roundWalletBalance } from "@/lib/money";
+import { notifyUser, cabinetHome } from "@/lib/notifications";
 
 const OPERATIONS = ["add", "subtract", "set"] as const;
 type Operation = (typeof OPERATIONS)[number];
@@ -108,6 +109,19 @@ export async function POST(request: Request) {
         description,
         metadata: JSON.stringify({ adminId, adminUsername: adminUsername ?? null }),
       },
+    });
+
+    // Уведомляем пользователя об изменении баланса
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { type: true } });
+    await notifyUser({
+      userId,
+      type: "COINS",
+      title: operation === "add" ? "Начислены монеты" : "Изменение баланса",
+      message:
+        operation === "add"
+          ? `Модератор зачислил ${amount} монет. Текущий баланс: ${newBalance}.`
+          : `Модератор изменил баланс: теперь ${newBalance} монет.`,
+      link: `${cabinetHome(target?.type)}/finances`,
     });
 
     return NextResponse.json({ success: true, balance: newBalance });

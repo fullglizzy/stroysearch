@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { getPageContent } from "@/server/admin/content";
-import { Package, FileText, Calendar, Star, Coins, ArrowRight, LifeBuoy } from "lucide-react";
+import { computeRating } from "@/lib/rating";
+import { Package, FileText, Calendar, Star, Coins, Wallet, ArrowRight, LifeBuoy, Banknote } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -15,20 +16,63 @@ export default async function CompanyDashboardPage() {
 
   const userId = (session.user as any).id as string;
 
-  const supportTickets = await prisma.supportTicket.findMany({
-    where: { userId },
-    include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
-  });
+  const [supportTickets, wallet, productsCount, payoutSum, receivedReviews, pageContent] =
+    await Promise.all([
+      prisma.supportTicket.findMany({
+        where: { userId },
+        include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
+      }),
+      prisma.wallet.findUnique({ where: { userId } }),
+      prisma.product.count({ where: { ownerUserId: userId, deletedAt: null } }),
+      prisma.invoice.aggregate({
+        where: {
+          userId,
+          kind: { in: ["PAYOUT", "ACTIVITY"] },
+          status: { notIn: ["PAID", "CANCELLED", "SKIPPED"] },
+        },
+        _sum: { total: true },
+      }),
+      prisma.review.findMany({
+        where: { targetId: userId },
+        select: { weightedAverage: true },
+      }),
+      getPageContent("company"),
+    ]);
+
   const supportUnread = supportTickets.filter((t) =>
     t.messages.some((m) => m.isStaff && (!t.userLastReadAt || m.createdAt > t.userLastReadAt)),
   ).length;
 
-  const pageContent = await getPageContent("company");
+  const walletBalance = wallet ? wallet.balance.toNumber() : 0;
+  const rating = computeRating(receivedReviews);
+  const payoutTotal = payoutSum._sum.total ? payoutSum._sum.total.toNumber() : 0;
+
+  const stats = [
+    { href: "/company/finances", icon: Wallet, value: `${walletBalance.toFixed(1)} монет`, label: "Баланс" },
+    { href: "/company/products", icon: Package, value: String(productsCount), label: "Активных товаров" },
+    { href: "/company/reviews", icon: Star, value: rating !== null ? `★ ${rating.toFixed(1)}` : "—", label: "Рейтинг компании" },
+    { href: "/company/payouts", icon: Banknote, value: `${payoutTotal.toFixed(2)} ₽`, label: "К выплате" },
+  ];
 
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Личный кабинет компании</h1>
       <p className="text-muted-foreground mb-8">Управление товарами, конференциями и документами</p>
+
+      {/* Сводка */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {stats.map((s) => (
+          <Link key={s.href} href={s.href}>
+            <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
+              <CardContent className="text-center">
+                <s.icon className="h-6 w-6 text-menthol mx-auto mb-2" />
+                <div className="text-2xl font-bold">{s.value}</div>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
 
       {/* Баннер */}
       {pageContent?.bannerUrl && (

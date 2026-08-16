@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyUser } from "@/lib/notifications";
 
 const METRICS = [
   { price: "phonePrice", paid: "phonePaidViews", views: "phoneViews", label: "Просмотры: телефон" },
@@ -110,6 +111,15 @@ export async function POST(request: Request) {
     });
 
     return created;
+  });
+
+  // Уведомляем компанию о выставленном счёте
+  await notifyUser({
+    userId,
+    type: "PAYOUT",
+    title: "Выставлен счёт на выплату",
+    message: `Сформирован счёт №${invoice.number} на ${total} ₽ за просмотры контактов компании.`,
+    link: "/company/payouts",
   });
 
   return NextResponse.json({ success: true, id: invoice.id, number: invoice.number, total });

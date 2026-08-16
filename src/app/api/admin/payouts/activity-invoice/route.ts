@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { notifyUser } from "@/lib/notifications";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -189,6 +190,15 @@ export async function POST(request: Request) {
     });
 
     return created;
+  });
+
+  // Уведомляем компанию о выставленном счёте
+  await notifyUser({
+    userId,
+    type: "PAYOUT",
+    title: "Выставлен счёт за активность",
+    message: `Сформирован счёт №${invoice.number} на ${total} ₽ за активность на платформе.`,
+    link: "/company/payouts",
   });
 
   return NextResponse.json({ success: true, id: invoice.id, number: invoice.number, total });

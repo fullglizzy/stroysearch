@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { SupportDialog } from "@/components/shared/SupportDialog";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import { cn } from "@/lib/utils";
 import { Menu, X, User, Building2, Shield, LogOut, HelpCircle } from "lucide-react";
 
@@ -103,9 +104,11 @@ export function Header() {
           })}
         </nav>
 
-        {/* Right side: ThemeToggle, Auth */}
+        {/* Right side: ThemeToggle, Notifications, Auth */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <ThemeToggle />
+
+          <NotificationBell />
 
           {session?.user ? (
             <DropdownMenu>

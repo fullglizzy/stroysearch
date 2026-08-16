@@ -38,6 +38,7 @@ interface AccountDashboardProps {
       documents: number;
       conferences: number;
     };
+    rating: number | null;
   };
   supportUnread: number;
   bannerUrl: string | null;
@@ -80,6 +81,9 @@ export function AccountDashboard({ user, supportUnread, bannerUrl }: AccountDash
               <Star className="h-6 w-6 text-orange-accent mx-auto mb-2" />
               <div className="text-2xl font-bold">{user.stats.receivedReviews}</div>
               <p className="text-xs text-muted-foreground">Получено отзывов</p>
+              {user.rating !== null && (
+                <p className="text-xs text-orange-accent mt-1">★ {user.rating.toFixed(1)}</p>
+              )}
             </CardContent>
           </Card>
         </Link>
