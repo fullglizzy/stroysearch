@@ -20,6 +20,7 @@ interface LogRow {
   action: string;
   entityType: string | null;
   entityId: string | null;
+  entityName: string | null;
   payload: string | null;
   createdAt: Date;
 }
@@ -35,6 +36,69 @@ const ACTION_LABELS: Record<string, string> = {
   review: "Отзывы",
   tree: "Дерево",
 };
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  user: "пользователь",
+  invoice: "счёт",
+  page: "страница",
+  review: "отзыв",
+  product: "товар",
+  gift: "подарок",
+};
+
+/** Превращает JSON-детали действия в читаемое описание */
+function formatPayload(action: string, raw: string): string | null {
+  let p: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return raw;
+    p = parsed;
+  } catch {
+    return raw;
+  }
+
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+
+  switch (action) {
+    case "coins": {
+      const op =
+        p.operation === "add"
+          ? "зачисление"
+          : p.operation === "subtract"
+            ? "списание"
+            : "установка баланса";
+      const amount = num(p.amount);
+      const after = num(p.balanceAfter);
+      return `Операция: ${op}${amount !== undefined ? ` · Сумма: ${amount}` : ""}${
+        after !== undefined ? ` · Баланс после: ${after}` : ""
+      }`;
+    }
+    case "ban":
+      return `Пользователь: ${p.username || "—"} · Причина: ${p.reason || "—"}`;
+    case "unban":
+      return "Снятие блокировки";
+    case "payout":
+      return `Счёт № ${p.number || "—"}${num(p.total) !== undefined ? ` · ${num(p.total)} ₽` : ""}${
+        p.action === "pay" ? " · отмечен выплаченным" : " · выставлен"
+      }`;
+    case "content":
+      return typeof p.revisionId === "string"
+        ? `Создана ревизия ${p.revisionId.slice(0, 8)}`
+        : "Изменение текста страницы";
+    case "review":
+      return p.action === "hide" ? "Скрытие отзыва" : "Восстановление отзыва";
+    case "gift":
+      return p.name ? `Подарок: ${p.name}` : "Изменение подарков";
+    case "billing":
+      return "Изменение настроек биллинга";
+    case "tree":
+      return "Изменение дерева классификатора";
+    default:
+      return Object.entries(p)
+        .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+        .join(" · ");
+  }
+}
 
 interface Props {
   logs: LogRow[];
@@ -113,16 +177,22 @@ export function AuditLog({ logs, total, page, totalPages, action, q }: Props) {
                     {ACTION_LABELS[l.action] || l.action}
                   </Badge>
                   {l.entityType && (
-                    <span className="text-xs text-muted-foreground">{l.entityType}</span>
-                  )}
-                  {l.entityId && (
-                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">
-                      {l.entityId}
+                    <span className="text-xs text-muted-foreground">
+                      {ENTITY_TYPE_LABELS[l.entityType] || l.entityType}
                     </span>
                   )}
+                  {l.entityName ? (
+                    <span className="text-xs font-medium">{l.entityName}</span>
+                  ) : l.entityId ? (
+                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">
+                      {l.entityId.slice(0, 8)}
+                    </span>
+                  ) : null}
                 </div>
                 {l.payload && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xl">{l.payload}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xl">
+                    {formatPayload(l.action, l.payload)}
+                  </p>
                 )}
               </div>
               <span className="text-xs text-muted-foreground shrink-0">

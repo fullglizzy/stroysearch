@@ -69,7 +69,7 @@ export default async function SupplierPage({ params }: PageProps) {
         </div>
         {rating !== null && (
           <Card>
-            <CardContent className="flex items-center gap-2 py-3">
+            <CardContent className="flex items-center gap-2">
               <StarRating rating={rating} size="md" />
               <span className="text-xl font-bold">{rating.toFixed(1)}</span>
               <span className="text-xs text-muted-foreground">({company.reviews.length} отзывов)</span>
@@ -114,7 +114,7 @@ export default async function SupplierPage({ params }: PageProps) {
                 {company.products.map((p) => (
                   <Link key={p.id} href={`/products/${p.id}`}>
                     <Card className="h-full hover:border-menthol/50 transition-colors cursor-pointer">
-                      <CardContent className="py-3">
+                      <CardContent className="">
                         <p className="font-medium text-sm">{p.name}</p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <Badge variant="secondary" className="font-mono text-[10px]">
@@ -138,7 +138,7 @@ export default async function SupplierPage({ params }: PageProps) {
               <div className="space-y-3">
                 {company.reviews.map((r) => (
                   <Card key={r.id}>
-                    <CardContent className="py-3">
+                    <CardContent className="">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="text-sm font-medium">{r.author.profile?.nick || r.author.username}</span>
                         <div className="flex items-center gap-1">

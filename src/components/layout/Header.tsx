@@ -142,11 +142,6 @@ export function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <Link href={`${dashboardHref}/conferences`} className="w-full">
-                    Мои конференции
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
                   <Link href={`${dashboardHref}/support`} className="w-full flex items-center justify-between">
                     <span>Мои обращения</span>
                     {supportUnread > 0 && (

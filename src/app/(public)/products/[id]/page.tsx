@@ -104,7 +104,7 @@ export default async function ProductPage({ params }: PageProps) {
 
           {chars.length > 0 && (
             <Card>
-              <CardContent className="space-y-1 py-3">
+              <CardContent className="space-y-1">
                 {chars.map((c, i) => (
                   <div key={i} className="flex justify-between gap-2 text-sm">
                     <span className="text-muted-foreground">{c.name}</span>
@@ -116,7 +116,7 @@ export default async function ProductPage({ params }: PageProps) {
           )}
 
           <Card>
-            <CardContent className="space-y-2 py-3 text-sm">
+            <CardContent className="space-y-2 text-sm">
               <Link href={`/suppliers/${product.company.id}`} className="font-medium text-menthol hover:underline">
                 {product.company.name}
               </Link>

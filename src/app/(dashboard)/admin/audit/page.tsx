@@ -45,6 +45,25 @@ export default async function AdminAuditPage({
     prisma.adminActionLog.count({ where }),
   ]);
 
+  // Резолвим имена сущностей (ник/логин вместо сырого UUID)
+  const userEntityIds = [
+    ...new Set(
+      logs
+        .filter((l) => l.entityType === "user" && l.entityId)
+        .map((l) => l.entityId as string),
+    ),
+  ];
+  const entityUsers =
+    userEntityIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userEntityIds } },
+          select: { id: true, username: true, profile: { select: { nick: true } } },
+        })
+      : [];
+  const entityNames = new Map(
+    entityUsers.map((u) => [u.id, u.profile?.nick || u.username]),
+  );
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
@@ -57,6 +76,7 @@ export default async function AdminAuditPage({
           action: l.action,
           entityType: l.entityType,
           entityId: l.entityId,
+          entityName: l.entityId ? entityNames.get(l.entityId) ?? null : null,
           payload: l.payload,
           createdAt: l.createdAt,
         }))}
