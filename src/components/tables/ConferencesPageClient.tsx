@@ -240,7 +240,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
                   <div className="flex items-center gap-2">
                     {conf.coinPrice > 0 ? (
                       <Badge className="gap-1">
-                        <Coins className="h-3 w-3" /> {conf.coinPrice} (~{conf.coinPrice * coinPriceRub} ₽)
+                        <Coins className="h-3 w-3" /> {conf.coinPrice}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-menthol">Бесплатно</Badge>
@@ -287,7 +287,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
         open={!!joinTarget}
         onOpenChange={(v) => { if (!v) setJoinTarget(null); }}
         title="Участвовать в конференции?"
-        message={joinTarget ? `Конференция «${joinTarget.title}» за ${joinTarget.price} монет (~${joinTarget.price * coinPriceRub} ₽). Монеты спишутся с вашего счёта.` : ""}
+        message={joinTarget ? `Конференция «${joinTarget.title}» за ${joinTarget.price} монет. Монеты спишутся с вашего счёта.` : ""}
         variant="info"
         confirmLabel="Участвовать"
         onConfirm={confirmJoin}
