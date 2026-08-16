@@ -19,6 +19,7 @@ import {
   MapPin,
   LifeBuoy,
   Ruler,
+  Star,
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -28,6 +29,11 @@ interface AdminDashboardProps {
     pendingConferences: number;
     totalDocuments: number;
     totalPolls: number;
+    pendingDocuments: number;
+    newReviews: number;
+    newProducts: number;
+    newCompanies: number;
+    pendingGiftClaims: number;
   };
   userType: string;
   supportUnread: number;
@@ -52,6 +58,7 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       title: "Пользователи",
       desc: `${stats.totalUsers} пользователей, ${stats.totalCompanies} компаний`,
       show: isSuper(userType),
+      badge: stats.newCompanies > 0 ? `+${stats.newCompanies}` : undefined,
     },
     {
       href: "/admin/products",
@@ -59,6 +66,7 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       title: "Продуктовые решения",
       desc: "Редактирование дерева классификатора",
       show: isEditor(userType),
+      badge: stats.newProducts > 0 ? `+${stats.newProducts}` : undefined,
     },
     {
       href: "/admin/conferences",
@@ -74,6 +82,15 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       title: "Библиотека",
       desc: `${stats.totalDocuments} документов`,
       show: true,
+      badge: stats.pendingDocuments > 0 ? stats.pendingDocuments : undefined,
+    },
+    {
+      href: "/admin/reviews",
+      icon: Star,
+      title: "Модерация отзывов",
+      desc: "Отзывы и жалобы пользователей",
+      show: true,
+      badge: stats.newReviews > 0 ? `+${stats.newReviews}` : undefined,
     },
     {
       href: "/admin/polls",
@@ -88,6 +105,7 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       title: "Финансы и биллинг",
       desc: "Настройка экономики, реквизиты, подарки",
       show: isSuper(userType),
+      badge: stats.pendingGiftClaims > 0 ? stats.pendingGiftClaims : undefined,
     },
     {
       href: "/admin/regions",

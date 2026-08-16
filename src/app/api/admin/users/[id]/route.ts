@@ -26,25 +26,32 @@ export async function GET(
     return NextResponse.json({ error: "Некорректный идентификатор пользователя" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: {
-      profile: { include: { roles: true } },
-      serviceFields: true,
-      wallet: true,
-      admin: true,
-      ownedCompany: { include: { metrics: true } },
-      _count: {
-        select: {
-          givenReviews: true,
-          receivedReviews: true,
-          documents: true,
-          conferences: true,
-          products: true,
+  const [user, banLogs] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id },
+      include: {
+        profile: { include: { roles: true } },
+        serviceFields: true,
+        wallet: true,
+        admin: true,
+        ownedCompany: { include: { metrics: true } },
+        _count: {
+          select: {
+            givenReviews: true,
+            receivedReviews: true,
+            documents: true,
+            conferences: true,
+            products: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.banLog.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ]);
 
   if (!user) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
@@ -60,6 +67,12 @@ export async function GET(
     createdAt: user.createdAt,
     deletedAt: user.deletedAt,
     banReason: user.serviceFields?.banReason ?? null,
+    banHistory: banLogs.map((b) => ({
+      action: b.action,
+      reason: b.reason,
+      adminId: b.adminId,
+      createdAt: b.createdAt,
+    })),
     isEmailVerified: user.serviceFields?.isEmailVerified ?? false,
     isPhoneVerified: user.serviceFields?.isPhoneVerified ?? false,
     balance: user.wallet ? user.wallet.balance.toNumber() : 0,

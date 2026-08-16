@@ -14,7 +14,8 @@ import { getRegions } from "@/server/admin/regions";
 async function getReviewData(userId: string) {
   const [receivedReviews, givenReviews, companies, participants] = await Promise.all([
     prisma.review.findMany({
-      where: { targetId: userId },
+      // Отзывы о себе (цель — сам пользователь) не показываем как «полученные»
+      where: { targetId: userId, status: "ACTIVE", authorId: { not: userId } },
       include: {
         author: { select: { username: true, profile: { select: { nick: true, firstName: true, lastName: true } } } },
         company: { select: { id: true, name: true, inn: true } },
@@ -31,13 +32,19 @@ async function getReviewData(userId: string) {
       },
       orderBy: { createdAt: "desc" },
     }),
-    // Кандидаты для вкладки «Оставить отзыв»
+    // Кандидаты для вкладки «Оставить отзыв»:
+    // исключаем компании, которыми пользователь ВЛАДЕЕТ, но оставляем компании
+    // без владельца (в т.ч. добавленные самим пользователем) и чужие.
+    // NULL-семантика SQL: простое NOT { ownerUserId } исключило бы и пустые значения.
     prisma.company.findMany({
+      where: {
+        OR: [{ ownerUserId: { not: userId } }, { ownerUserId: null }],
+      },
       select: { id: true, name: true, inn: true },
       orderBy: { name: "asc" },
     }),
     prisma.user.findMany({
-      where: { status: "ACTIVE", type: "COMMON" },
+      where: { status: "ACTIVE", type: "COMMON", id: { not: userId } },
       select: {
         id: true,
         username: true,
@@ -153,13 +160,18 @@ export default async function AccountReviewsPage() {
               <ReviewCard
                 key={review.id}
                 id={review.id}
-                targetName={review.target?.profile?.nick || review.target?.profile?.firstName || review.target?.username || "?"}
+                targetName={
+                  review.companyId
+                    ? null // отзыв о компании — цель видна по бейджу
+                    : review.target?.profile?.nick || review.target?.profile?.firstName || review.target?.username || "?"
+                }
                 comment={review.comment}
                 weightedAverage={review.weightedAverage}
                 createdAt={review.createdAt}
                 criteria={review.criteria || []}
                 companyName={review.company?.name || null}
                 companyId={review.companyId}
+                hidden={review.status === "HIDDEN"}
               />
             ))
           )}

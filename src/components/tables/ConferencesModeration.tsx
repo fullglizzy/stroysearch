@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/shared/Pagination";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { ExpandableText } from "@/components/shared/ExpandableText";
-import { Calendar, Clock, Users, Eye, CheckCircle, XCircle, Loader2, Coins, ExternalLink } from "lucide-react";
+import { Calendar, Clock, Users, Eye, CheckCircle, XCircle, Loader2, Coins, ExternalLink, Search } from "lucide-react";
 
 interface ConfRow {
   id: string;
@@ -35,7 +35,14 @@ interface ConfRow {
   treeItemName: string | null;
 }
 
-interface Props { conferences: ConfRow[]; total: number; page: number; totalPages: number; }
+interface Props {
+  conferences: ConfRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  q: string;
+  statusFilter: string;
+}
 
 const statusLabels: Record<string, string> = {
   PENDING: "Ожидает", APPROVED: "Одобрена", REJECTED: "Отклонена", CANCELLED: "Отменена",
@@ -45,12 +52,33 @@ const statusBadge: Record<string, string> = {
   REJECTED: "bg-red-100 text-red-700", CANCELLED: "bg-gray-100 text-gray-700",
 };
 
-export function ConferencesModeration({ conferences, total, page, totalPages }: Props) {
+export function ConferencesModeration({ conferences, total, page, totalPages, q, statusFilter }: Props) {
   const router = useRouter();
   const [noteOpen, setNoteOpen] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConfRow | null>(null);
+  const [search, setSearch] = useState(q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Поиск и фильтр по статусу живут в URL (серверная фильтрация)
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/admin/conferences?${qs}` : "/admin/conferences", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value, page: null });
+    }, 300);
+  }
 
   async function handleModerate(confId: string, status: string) {
     if (status === "REJECTED" && !note.trim()) return;
@@ -79,6 +107,37 @@ export function ConferencesModeration({ conferences, total, page, totalPages }: 
 
   return (
     <>
+      {/* Поиск + фильтр по статусу */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Поиск по названию или организатору..."
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { value: "", label: "Все" },
+            { value: "PENDING", label: "Ожидают" },
+            { value: "APPROVED", label: "Одобрены" },
+            { value: "REJECTED", label: "Отклонены" },
+            { value: "CANCELLED", label: "Отменены" },
+          ].map((f) => (
+            <Button
+              key={f.value}
+              size="sm"
+              variant={statusFilter === f.value ? "default" : "outline"}
+              onClick={() => updateQuery({ status: f.value, page: null })}
+            >
+              {f.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>

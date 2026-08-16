@@ -44,3 +44,8 @@ next-env.d.ts
 
 # загруженные пользователями файлы
 /public/uploads
+
+# Playwright e2e
+/test-results/
+/playwright-report/
+/tests/e2e/.auth/

@@ -30,12 +30,14 @@ import { MultiSelect } from "@/components/shared/MultiSelect";
 import { FieldError } from "@/components/forms/fields";
 import { matchClassifier } from "@/lib/classifier";
 import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
-import { toastError, toastWarning } from "@/lib/toast";
-import { Plus, Edit, Trash2, Eye, Package, Upload, X, Loader2, Search } from "lucide-react";
+import { toastError, toastWarning, toastSuccess } from "@/lib/toast";
+import { Plus, Edit, Trash2, Eye, Package, Upload, X, Loader2, Search, Copy, Download, UploadCloud } from "lucide-react";
 
 interface ProductRow {
   id: string;
   name: string;
+  description: string | null;
+  status: string;
   treeItemId: string;
   treeItemPath: string;
   treeItemName: string;
@@ -96,6 +98,8 @@ const productFormSchema = z.object({
     .regex(/^\d+(\.\d{1,2})?$/, "Некорректная цена")
     .optional()
     .or(z.literal("")),
+  description: z.string().max(2000, "Описание не более 2000 символов").optional(),
+  status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -126,6 +130,15 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [shown, setShown] = useState(12);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const emptyForm = useMemo<ProductFormValues>(
     () => ({
@@ -136,6 +149,8 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
       regions: [],
       unit: "",
       price: "",
+      description: "",
+      status: "PUBLISHED",
     }),
     [isAdmin, companyId],
   );
@@ -165,17 +180,20 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
     [treeItems],
   );
 
-  // Фильтрация: категории + поиск по названию, категории и компании
+  // Фильтрация: категории + поиск по названию, категории и компании + статус
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
       if (categoryFilter.length > 0 && !categoryFilter.includes(p.treeItemId)) return false;
+      if (statusFilter && p.status !== statusFilter) return false;
       if (!q) return true;
       return [p.name, p.treeItemPath, p.treeItemName, p.companyName ?? ""].some((f) =>
         f.toLowerCase().includes(q),
       );
     });
-  }, [products, categoryFilter, search]);
+  }, [products, categoryFilter, search, statusFilter]);
+
+  const visibleProducts = filteredProducts.slice(0, shown);
 
   const categoryUnits = useMemo(
     () => treeItems.find((t) => t.id === category)?.units || [],
@@ -185,6 +203,26 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
     () => treeItems.find((t) => t.id === category)?.characteristics || [],
     [category, treeItems],
   );
+
+  // Живые значения для предпросмотра карточки
+  const previewName = useWatch({ control, name: "name" }) ?? "";
+  const previewClasses = useWatch({ control, name: "classes" }) ?? [];
+  const previewPrice = useWatch({ control, name: "price" });
+  const previewUnit = useWatch({ control, name: "unit" }) ?? "";
+
+  const previewCharacteristics = useMemo(() => {
+    if (categoryChars.length > 0) {
+      return categoryChars
+        .map((c, i) => {
+          const v = (charInputs[i]?.value || "").trim();
+          if (!v) return null;
+          const u = (charInputs[i]?.unit || c.unit || "").trim();
+          return `${c.name}: ${v}${u ? ` ${u}` : ""}`;
+        })
+        .filter((x): x is string => !!x);
+    }
+    return freeChars.split("\n").map((s) => s.trim()).filter(Boolean);
+  }, [categoryChars, charInputs, freeChars]);
 
   function resetFormState() {
     reset(emptyForm);
@@ -263,6 +301,8 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
       characteristics,
       imageUrl: imageUrl || null,
       price: values.price ? parseFloat(values.price) : null,
+      description: values.description?.trim() || null,
+      status: values.status ?? "PUBLISHED",
     };
 
     try {
@@ -305,6 +345,198 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
   }
 
   const classesError = (errors.classes as { message?: string } | undefined)?.message;
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const allIds = visibleProducts.map((p) => p.id);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+    setSelected(allSelected ? new Set() : new Set(allIds));
+  }
+
+  async function handleDuplicate(p: ProductRow) {
+    setFormError("");
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: isAdmin ? undefined : companyId,
+          treeItemId: p.treeItemId,
+          name: `${p.name} (копия)`,
+          classes: p.classes,
+          regions: p.regions,
+          unit: p.unit,
+          characteristics: p.characteristics,
+          imageUrl: p.imageUrl,
+          price: p.price,
+          description: p.description,
+          status: "DRAFT",
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setFormError(d.error || "Не удалось создать копию");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setFormError("Ошибка соединения");
+    }
+  }
+
+  async function handleBulk(action: "publish" | "draft" | "delete") {
+    setBulkError("");
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/products/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ids: Array.from(selected) }),
+      });
+      if (res.ok) {
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setBulkError(d.error || "Ошибка");
+      }
+    } catch {
+      setBulkError("Ошибка соединения");
+    }
+    setBulkLoading(false);
+  }
+
+  function exportCsv() {
+    const header = ["Название", "Категория", "Цена", "Ед.", "Классы", "Регионы", "Статус", "Описание"];
+    const escapeCell = (v: string) => {
+      if (v.includes(";") || v.includes('"') || v.includes("\n")) {
+        return `"${v.replace(/"/g, '""')}"`;
+      }
+      return v;
+    };
+    const rows = filteredProducts.map((p) =>
+      [
+        p.name,
+        `${p.treeItemPath} — ${p.treeItemName}`,
+        p.price != null ? String(p.price) : "",
+        p.unit || "",
+        p.classes.join("|"),
+        p.regions.join("|"),
+        p.status === "DRAFT" ? "Черновик" : "Опубликован",
+        p.description || "",
+      ]
+        .map(escapeCell)
+        .join(";"),
+    );
+    const csv = "\uFEFF" + [header.join(";"), ...rows].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCsvLine(line: string): string[] {
+    const cells: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          cur += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ";") {
+        cells.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells;
+  }
+
+  async function handleImport(file: File) {
+    setImportError("");
+    setImportLoading(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        setImportError("Файл пуст или содержит только заголовок");
+        setImportLoading(false);
+        return;
+      }
+      const dataLines = lines.slice(1);
+      const byPath = new Map<string, string>();
+      const byName = new Map<string, string>();
+      for (const t of treeItems) {
+        byPath.set(`${t.fullNumberPath} — ${t.name}`, t.id);
+        byName.set(t.name.toLowerCase(), t.id);
+      }
+
+      let created = 0;
+      let skipped = 0;
+      for (const line of dataLines) {
+        const [name, categoryRaw, priceRaw, unit, classesRaw, regionsRaw, , description] = parseCsvLine(line);
+        if (!name) { skipped++; continue; }
+        const category = (categoryRaw || "").trim();
+        const treeItemId = byPath.get(category) || (byName.get(category.toLowerCase()) ?? "");
+        if (!treeItemId) { skipped++; continue; }
+        const price = parseFloat((priceRaw || "").replace(",", "."));
+        const classes = (classesRaw || "")
+          .split("|")
+          .map((c) => c.trim().toUpperCase())
+          .filter((c) => CLASS_VALUES.includes(c as ClassValue));
+        const regions = (regionsRaw || "").split("|").map((r) => r.trim()).filter(Boolean);
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyId: isAdmin ? undefined : companyId,
+            treeItemId,
+            name: name.slice(0, 511),
+            classes: classes.length > 0 ? classes : ["STANDARD"],
+            regions,
+            unit: unit || null,
+            price: Number.isFinite(price) && price > 0 ? price : null,
+            description: description || null,
+            status: "DRAFT",
+          }),
+        });
+        if (res.ok) created++;
+        else skipped++;
+      }
+      setImportOpen(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+      toastSuccess(
+        "Импорт завершён",
+        `Создано товаров: ${created}${skipped > 0 ? `, пропущено: ${skipped}` : ""}. Товары добавлены как черновики.`,
+      );
+      router.refresh();
+    } catch {
+      setImportError("Не удалось прочитать файл");
+    }
+    setImportLoading(false);
+  }
 
   // Форма вставляется как обычный JSX (без вложенного компонента),
   // чтобы ре-рендеры родителя не перемонтировали форму и не сбрасывали значения.
@@ -528,6 +760,44 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="desc">Описание товара</Label>
+        <Textarea
+          id="desc"
+          rows={3}
+          maxLength={2000}
+          placeholder="Краткое описание для покупателей (необязательно)"
+          {...register("description")}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Статус</Label>
+        <Controller
+          name="status"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value ?? "PUBLISHED"}
+              items={{ PUBLISHED: "Опубликован", DRAFT: "Черновик" }}
+              onValueChange={(v) => field.onChange(v ?? "PUBLISHED")}
+            >
+              <SelectTrigger className="w-full justify-between">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PUBLISHED" label="Опубликован">
+                  Опубликован — виден в матрице материалов
+                </SelectItem>
+                <SelectItem value="DRAFT" label="Черновик">
+                  Черновик — не виден покупателям
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       {category && (categoryChars.length > 0 ? (
         <div className="space-y-2">
           <Label>Характеристики</Label>
@@ -572,6 +842,23 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
           />
         </div>
       ))}
+
+      {/* Предпросмотр карточки — как увидят покупатели */}
+      <div className="rounded-lg border p-3">
+        <p className="text-xs font-medium text-muted-foreground mb-2">Предпросмотр карточки</p>
+        <ProductCard
+          data={{
+            name: previewName || "Название товара",
+            classes: previewClasses as string[],
+            regions: [],
+            unit: previewUnit || null,
+            characteristics: previewCharacteristics,
+            price: previewPrice ? parseFloat(previewPrice) : null,
+            imageUrl: imageUrl || null,
+          }}
+          classLabels={classLabels}
+        />
+      </div>
 
       <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={loading}>
         {loading ? "Сохранение..." : isEdit ? "Сохранить" : "Добавить товар"}
@@ -635,13 +922,69 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
             />
           </div>
 
+          {/* Статус, выбор всех, CSV */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { value: "", label: "Все" },
+              { value: "PUBLISHED", label: "Опубликованные" },
+              { value: "DRAFT", label: "Черновики" },
+            ].map((f) => (
+              <Button
+                key={f.value}
+                variant={statusFilter === f.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setStatusFilter(f.value);
+                  setShown(12);
+                  setSelected(new Set());
+                }}
+              >
+                {f.label}
+              </Button>
+            ))}
+            <div className="flex items-center gap-2 ml-2">
+              <Checkbox
+                checked={visibleProducts.length > 0 && visibleProducts.every((p) => selected.has(p.id))}
+                onCheckedChange={() => toggleSelectAll()}
+                aria-label="Выбрать все товары на странице"
+              />
+              <span className="text-xs text-muted-foreground">Все на странице</span>
+            </div>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" onClick={exportCsv}>
+                <Download className="h-3 w-3 mr-1" /> Экспорт CSV
+              </Button>
+            </div>
+          </div>
+
+          {/* Панель массовых операций */}
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-menthol/50 bg-menthol/5 p-3">
+              <span className="text-sm font-medium">Выбрано: {selected.size}</span>
+              <Button size="sm" className="bg-menthol hover:bg-menthol-dark" onClick={() => handleBulk("publish")} disabled={bulkLoading}>
+                Опубликовать
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleBulk("draft")} disabled={bulkLoading}>
+                В черновик
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => handleBulk("delete")} disabled={bulkLoading}>
+                Удалить
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={bulkLoading}>
+                Сбросить
+              </Button>
+              {bulkError && <span className="text-xs text-destructive">{bulkError}</span>}
+              {bulkLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+          )}
+
           {filteredProducts.length === 0 ? (
             <div className="border rounded-lg p-8 text-center text-muted-foreground">
               <p className="text-sm">По вашему запросу ничего не найдено</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProducts.map((p) => (
+              {visibleProducts.map((p) => (
             <ProductCard
               key={p.id}
               data={p}
@@ -649,12 +992,27 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
               companyName={isAdmin ? p.companyName : undefined}
               companyInn={isAdmin ? p.companyInn : undefined}
               badge={
-                <Badge variant="secondary" className="font-mono text-[10px]">
-                  {p.treeItemPath} — {p.treeItemName}
-                </Badge>
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {p.treeItemPath}
+                    </Badge>
+                    {p.status === "DRAFT" && (
+                      <Badge variant="outline" className="text-[10px] text-orange-accent">
+                        Черновик
+                      </Badge>
+                    )}
+                  </div>
+                  {p.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{p.description}</p>
+                  )}
+                </>
               }
               actions={
                 <>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" title="Дублировать" onClick={() => handleDuplicate(p)}>
+                    <Copy className="h-3 w-3" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                     setEditId(p.id);
                     const item = treeItems.find(t => t.id === p.treeItemId);
@@ -667,6 +1025,8 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
                       regions: p.regions,
                       unit: p.unit ?? "",
                       price: p.price != null ? String(p.price) : "",
+                      description: p.description ?? "",
+                      status: p.status === "DRAFT" ? "DRAFT" : "PUBLISHED",
                     });
                     if (item) applyCategory(itemId, p.characteristics);
                     setImageUrl(p.imageUrl || "");
@@ -680,16 +1040,66 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
                 </>
               }
               footer={
-                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-auto pt-2 border-t">
-                  <Eye className="h-3 w-3" /> {p.views} просмотров
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mt-auto pt-2 border-t">
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" /> {p.views} просмотров
+                  </span>
+                  <span
+                    className="flex items-center gap-1.5 cursor-pointer select-none"
+                    title="Выбрать для массовых операций"
+                  >
+                    <Checkbox
+                      checked={selected.has(p.id)}
+                      onCheckedChange={() => toggleSelect(p.id)}
+                      aria-label={`Выбрать товар ${p.name}`}
+                    />
+                    Выбрать
+                  </span>
                 </div>
               }
             />
               ))}
             </div>
           )}
+
+          {filteredProducts.length > shown && (
+            <div className="flex justify-center">
+              <Button variant="outline" size="sm" onClick={() => setShown((s) => s + 12)}>
+                Показать ещё ({filteredProducts.length - shown})
+              </Button>
+            </div>
+          )}
         </>
       )}
+
+      {/* Импорт CSV */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Импорт товаров из CSV</DialogTitle>
+            <DialogDescription>
+              Колонки через «;»: Название;Категория;Цена;Ед.;Классы;Регионы;Статус;Описание.
+              Категорию можно указать как «1.2 — Название» или просто название.
+              Товары импортируются как черновики.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {importError && <Alert variant="destructive"><AlertDescription>{importError}</AlertDescription></Alert>}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="text-sm"
+              disabled={importLoading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImport(file);
+              }}
+            />
+            {importLoading && <p className="text-xs text-muted-foreground">Импорт выполняется...</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteId}

@@ -168,7 +168,8 @@ export function AddReviewSection({ companies, participants, canReview }: AddRevi
           <DialogHeader>
             <DialogTitle>Оставить отзыв</DialogTitle>
             <DialogDescription>
-              Оцените по 9 критериям (☆1–5). За отзыв начисляется +1 монета.
+              Оцените по 9 критериям (☆1–5) и оставьте комментарий от 100 знаков.
+              За отзыв начисляется +1 монета.
             </DialogDescription>
           </DialogHeader>
           {target && (

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -33,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { SearchSelect, type SearchSelectOption } from "@/components/shared/SearchSelect";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Search, Coins, Loader2, Users, Ban, RotateCcw, X } from "lucide-react";
+import { Search, Coins, Loader2, Users, Ban, RotateCcw, X, Download } from "lucide-react";
 import { roleLabel } from "@/lib/roles";
 
 interface UserRow {
@@ -64,6 +65,7 @@ interface UserDetail {
   createdAt: string;
   deletedAt: string | null;
   banReason: string | null;
+  banHistory: { action: string; reason: string | null; adminId: string; createdAt: string }[];
   isEmailVerified: boolean;
   isPhoneVerified: boolean;
   balance: number;
@@ -230,6 +232,10 @@ export function UsersManager({
   const [banReason, setBanReason] = useState("");
   const [banLoading, setBanLoading] = useState(false);
   const [banError, setBanError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBanOpen, setBulkBanOpen] = useState(false);
+  const [bulkBanReason, setBulkBanReason] = useState("");
+  const [bulkBanLoading, setBulkBanLoading] = useState(false);
 
   // ── Монеты ──
   const [addCoinsOpen, setAddCoinsOpen] = useState(false);
@@ -238,6 +244,59 @@ export function UsersManager({
   const [coinLoading, setCoinLoading] = useState(false);
   const [coinError, setCoinError] = useState("");
   const [coinOperation, setCoinOperation] = useState<"add" | "subtract" | "set">("add");
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exportCsv() {
+    const escapeCell = (v: string) =>
+      v.includes(";") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+    const header = ["Логин", "ФИО", "Тип", "Статус", "Email", "Монеты", "Причина бана"];
+    const rows = users.map((u) =>
+      [
+        u.username,
+        u.lastName && u.firstName ? `${u.lastName} ${u.firstName}` : "",
+        typeLabel[u.type] || u.type,
+        statusLabel[u.status] || u.status,
+        u.email,
+        u.balance.toFixed(1),
+        u.banReason || "",
+      ]
+        .map(escapeCell)
+        .join(";"),
+    );
+    const csv = "\uFEFF" + [header.join(";"), ...rows].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "users.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleBulkBan() {
+    if (!bulkBanReason.trim()) return;
+    setBulkBanLoading(true);
+    for (const id of Array.from(selectedIds)) {
+      await fetch(`/api/admin/users/${id}/ban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: bulkBanReason.trim() }),
+      }).catch(() => {});
+    }
+    setBulkBanLoading(false);
+    setBulkBanOpen(false);
+    setBulkBanReason("");
+    setSelectedIds(new Set());
+    router.refresh();
+  }
 
   async function openUser(id: string) {
     setUserOpen(true);
@@ -442,7 +501,27 @@ export function UsersManager({
             Сбросить
           </Button>
         )}
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="h-3 w-3 mr-1" />
+            Экспорт CSV
+          </Button>
+        </div>
       </div>
+
+      {/* Панель массовых операций */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-300/50 bg-red-50/50 p-3 mb-4">
+          <span className="text-sm font-medium">Выбрано: {selectedIds.size}</span>
+          <Button size="sm" variant="destructive" onClick={() => setBulkBanOpen(true)}>
+            <Ban className="h-3 w-3 mr-1" />
+            Забанить выбранных
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Сбросить выбор
+          </Button>
+        </div>
+      )}
 
       {users.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground">
@@ -455,6 +534,19 @@ export function UsersManager({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={users.length > 0 && users.every((u) => selectedIds.has(u.id))}
+                  onCheckedChange={() =>
+                    setSelectedIds(
+                      users.every((u) => selectedIds.has(u.id))
+                        ? new Set()
+                        : new Set(users.map((u) => u.id)),
+                    )
+                  }
+                  aria-label="Выбрать всех пользователей"
+                />
+              </TableHead>
               <TableHead>Логин</TableHead>
               <TableHead>ФИО</TableHead>
               <TableHead>Тип</TableHead>
@@ -471,6 +563,13 @@ export function UsersManager({
                 className="cursor-pointer hover:bg-secondary/50"
                 onClick={() => openUser(user.id)}
               >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.has(user.id)}
+                    onCheckedChange={() => toggleSelect(user.id)}
+                    aria-label={`Выбрать пользователя ${user.username}`}
+                  />
+                </TableCell>
                 <TableCell className="font-medium">
                   {user.username}
                   {user.banReason && (
@@ -519,6 +618,38 @@ export function UsersManager({
       </div>
       )}
 
+      {/* Диалог массового бана */}
+      <Dialog open={bulkBanOpen} onOpenChange={setBulkBanOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Забанить {selectedIds.size} пользователей?</DialogTitle>
+            <DialogDescription>
+              Укажите причину — она будет показана каждому забаненному при входе.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="bulk-ban-reason">Причина</Label>
+            <Textarea
+              id="bulk-ban-reason"
+              rows={3}
+              maxLength={500}
+              value={bulkBanReason}
+              onChange={(e) => setBulkBanReason(e.target.value)}
+              placeholder="Например: нарушение правил платформы"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setBulkBanOpen(false)} disabled={bulkBanLoading}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={handleBulkBan} disabled={bulkBanLoading || !bulkBanReason.trim()}>
+              {bulkBanLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Забанить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Попап с информацией об аккаунте */}
       <Dialog open={userOpen} onOpenChange={setUserOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -564,6 +695,20 @@ export function UsersManager({
                     Аккаунт заблокирован. Причина: {detail.banReason || "не указана"}
                   </AlertDescription>
                 </Alert>
+              )}
+              {detail.banHistory && detail.banHistory.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">История блокировок</p>
+                  <div className="space-y-1">
+                    {detail.banHistory.map((b, i) => (
+                      <p key={i} className="text-xs text-muted-foreground">
+                        {b.action === "BAN" ? "Бан" : "Разбан"} ·{" "}
+                        {new Date(b.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+                        {b.reason ? ` · ${b.reason}` : ""}
+                      </p>
+                    ))}
+                  </div>
+                </div>
               )}
               {banError && (
                 <Alert variant="destructive">

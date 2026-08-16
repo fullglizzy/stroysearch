@@ -32,7 +32,7 @@ interface PollData {
   treeItem: { id: string; fullNumberPath: string; name: string } | null;
   _count: { votes: number };
   options: { id: string; text: string; _count: { votes: number } }[];
-  votes: { user: { username: string; profile: { nick: string } | null } }[];
+  votes: { user: { username: string; profile: { nick: string | null } | null } }[];
 }
 
 interface TreeItem {

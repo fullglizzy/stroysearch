@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/shared/Pagination";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -11,13 +15,14 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Eye, Download, Trash2, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { FileText, Eye, Download, Trash2, CheckCircle, XCircle, Loader2, Search } from "lucide-react";
 
 interface DocRow {
   id: string;
   title: string;
   coinPrice: number;
   isApproved: boolean;
+  moderatorNote: string | null;
   views: number;
   purchasesCount: number;
   fileUrl: string;
@@ -28,13 +33,68 @@ interface DocRow {
   treeItem: { fullNumberPath: string; name: string } | null;
 }
 
-interface Props { documents: DocRow[]; total: number; page: number; totalPages: number; }
+interface Props {
+  documents: DocRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  q: string;
+  statusFilter: string;
+}
 
-export function LibraryModeration({ documents, total, page, totalPages }: Props) {
+export function LibraryModeration({ documents, total, page, totalPages, q, statusFilter }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DocRow | null>(null);
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejectLoading, setRejectLoading] = useState(false);
+  const [search, setSearch] = useState(q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  function updateQuery(next: Record<string, string | null>) {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/admin/library?${qs}` : "/admin/library", { scroll: false });
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      updateQuery({ q: value, page: null });
+    }, 300);
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkApprove() {
+    setBulkLoading(true);
+    for (const id of Array.from(selected)) {
+      await fetch(`/api/library/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isApproved: true }),
+      });
+    }
+    setBulkLoading(false);
+    setSelected(new Set());
+    router.refresh();
+  }
 
   async function toggleApprove(docId: string, approved: boolean) {
     setLoading(docId);
@@ -45,6 +105,20 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
     });
     router.refresh();
     setLoading(null);
+  }
+
+  async function handleReject() {
+    if (!rejectId) return;
+    setRejectLoading(true);
+    await fetch(`/api/library/${rejectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isApproved: false, moderatorNote: rejectNote.trim() || undefined }),
+    });
+    setRejectLoading(false);
+    setRejectId(null);
+    setRejectNote("");
+    router.refresh();
   }
 
   async function handleDelete(docId: string) {
@@ -72,10 +146,66 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
 
   return (
     <>
+      {/* Поиск + фильтр по статусу + массовое одобрение */}
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Поиск по названию или автору..."
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { value: "", label: "Все" },
+              { value: "pending", label: "На модерации" },
+              { value: "approved", label: "Одобрены" },
+            ].map((f) => (
+              <Button
+                key={f.value}
+                size="sm"
+                variant={statusFilter === f.value ? "default" : "outline"}
+                onClick={() => {
+                  updateQuery({ status: f.value, page: null });
+                  setSelected(new Set());
+                }}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-menthol/50 bg-menthol/5 p-3">
+            <span className="text-sm font-medium">Выбрано: {selected.size}</span>
+            <Button size="sm" className="bg-menthol hover:bg-menthol-dark" onClick={handleBulkApprove} disabled={bulkLoading}>
+              {bulkLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Одобрить выбранные
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={bulkLoading}>
+              Сбросить
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={documents.length > 0 && documents.every((d) => selected.has(d.id))}
+                  onCheckedChange={() => {
+                    const all = documents.every((d) => selected.has(d.id));
+                    setSelected(all ? new Set() : new Set(documents.map((d) => d.id)));
+                  }}
+                  aria-label="Выбрать все"
+                />
+              </TableHead>
               <TableHead>Название</TableHead>
               <TableHead>Автор</TableHead>
               <TableHead>Класс.</TableHead>
@@ -92,6 +222,13 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => setDetail(d)}
               >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selected.has(d.id)}
+                    onCheckedChange={() => toggleSelect(d.id)}
+                    aria-label={`Выбрать документ ${d.title}`}
+                  />
+                </TableCell>
                 <TableCell className="font-medium max-w-[200px] truncate">
                   <FileText className="h-3 w-3 inline mr-1 text-menthol" />{d.title}
                 </TableCell>
@@ -111,7 +248,14 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
                     <Button
                       size="sm" variant="outline"
                       className={d.isApproved ? "text-yellow-600" : "text-green-600"}
-                      onClick={() => toggleApprove(d.id, !d.isApproved)}
+                      onClick={() => {
+                        if (d.isApproved) {
+                          setRejectId(d.id);
+                          setRejectNote("");
+                        } else {
+                          toggleApprove(d.id, true);
+                        }
+                      }}
                       disabled={loading === d.id}
                     >
                       {loading === d.id
@@ -165,6 +309,12 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
                 <p className="text-sm text-muted-foreground">
                   Размер файла: {formatSize(detail.fileSize)}
                 </p>
+                {!detail.isApproved && detail.moderatorNote && (
+                  <div className="border border-orange-accent/40 bg-orange-accent/5 rounded-md p-3">
+                    <p className="text-xs font-medium text-orange-accent mb-1">Причина снятия с публикации</p>
+                    <p className="text-sm">{detail.moderatorNote}</p>
+                  </div>
+                )}
                 <a
                   href={detail.fileUrl}
                   target="_blank"
@@ -177,6 +327,36 @@ export function LibraryModeration({ documents, total, page, totalPages }: Props)
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Снятие с публикации: причина */}
+      <Dialog open={!!rejectId} onOpenChange={(v) => { if (!v) setRejectId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Снять документ с публикации?</DialogTitle>
+            <DialogDescription>
+              Укажите причину — автор увидит её в своей библиотеке.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reject-note">Причина (необязательно)</Label>
+            <Textarea
+              id="reject-note"
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              placeholder="Например: файл не открывается, не соответствует категории"
+              rows={3}
+              maxLength={500}
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setRejectId(null)} disabled={rejectLoading}>Отмена</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={rejectLoading}>
+              {rejectLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Снять с публикации
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

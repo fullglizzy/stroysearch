@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdminDashboard } from "@/components/cards/AdminDashboard";
+import { AdminCharts } from "@/components/cards/AdminCharts";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -22,6 +23,17 @@ export default async function AdminPage() {
   const totalDocuments = await prisma.libraryDocument.count();
   const totalPolls = await prisma.poll.count();
 
+  // Активность за 24 часа и очереди модерации — для бейджей на дашборде
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [pendingDocuments, newReviews, newProducts, newCompanies, pendingGiftClaims] =
+    await Promise.all([
+      prisma.libraryDocument.count({ where: { isApproved: false, deletedAt: null } }),
+      prisma.review.count({ where: { createdAt: { gte: dayAgo } } }),
+      prisma.product.count({ where: { createdAt: { gte: dayAgo }, deletedAt: null } }),
+      prisma.company.count({ where: { createdAt: { gte: dayAgo } } }),
+      prisma.giftClaim.count(),
+    ]);
+
   // Счётчик непрочитанных обращений считаем одним SQL-запросом,
   // а не загрузкой всех тикетов со всеми сообщениями
   const unreadRows = await prisma.$queryRawUnsafe<{ cnt: number | bigint }[]>(`
@@ -32,6 +44,26 @@ export default async function AdminPage() {
       AND (t."adminLastReadAt" IS NULL OR m."createdAt" > t."adminLastReadAt")
     )`);
   const supportUnread = Number(unreadRows[0]?.cnt ?? 0);
+
+  // Динамика за 30 дней для графика.
+  // Prisma хранит DateTime в SQLite как INTEGER (мс), поэтому делим на 1000 и работаем с unixepoch.
+  const [usersByDay, txByDay] = await Promise.all([
+    prisma.$queryRawUnsafe<{ day: string; cnt: number | bigint }[]>(`
+      SELECT date("createdAt" / 1000, 'unixepoch') AS day, COUNT(*) AS cnt FROM users
+      WHERE "createdAt" / 1000 >= strftime('%s', 'now') - 30 * 86400
+      GROUP BY day ORDER BY day`),
+    prisma.$queryRawUnsafe<{ day: string; cnt: number | bigint }[]>(`
+      SELECT date("createdAt" / 1000, 'unixepoch') AS day, COUNT(*) AS cnt FROM transactions
+      WHERE "createdAt" / 1000 >= strftime('%s', 'now') - 30 * 86400
+      GROUP BY day ORDER BY day`),
+  ]);
+
+  const txByDayMap = new Map(txByDay.map((r) => [String(r.day), Number(r.cnt)]));
+  const chartData = usersByDay.map((r) => ({
+    day: String(r.day).slice(5),
+    users: Number(r.cnt),
+    transactions: txByDayMap.get(String(r.day)) ?? 0,
+  }));
 
   return (
     <div className="container-page py-8">
@@ -46,10 +78,16 @@ export default async function AdminPage() {
           pendingConferences,
           totalDocuments,
           totalPolls,
+          pendingDocuments,
+          newReviews,
+          newProducts,
+          newCompanies,
+          pendingGiftClaims,
         }}
         userType={userType}
         supportUnread={supportUnread}
       />
+      <AdminCharts data={chartData} />
     </div>
   );
 }

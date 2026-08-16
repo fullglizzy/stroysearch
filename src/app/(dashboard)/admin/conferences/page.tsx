@@ -27,9 +27,20 @@ export default async function AdminConferencesPage({
     return Array.isArray(v) ? v[0] : v;
   };
   const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
+  const q = (get("q") || "").trim();
+  const status =
+    ["PENDING", "APPROVED", "REJECTED", "CANCELLED"].includes(get("status") || "")
+      ? get("status")!
+      : "";
+
+  const where = {
+    ...(q ? { title: { contains: q } } : {}),
+    ...(status ? { status } : {}),
+  };
 
   const [conferences, total] = await Promise.all([
     prisma.conference.findMany({
+      where,
       include: {
         organizer: {
           select: { username: true, profile: { select: { nick: true, companyName: true } } },
@@ -41,7 +52,7 @@ export default async function AdminConferencesPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.conference.count(),
+    prisma.conference.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -67,7 +78,14 @@ export default async function AdminConferencesPage({
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Модерация конференций</h1>
-      <ConferencesModeration conferences={rows} total={total} page={page} totalPages={totalPages} />
+      <ConferencesModeration
+        conferences={rows}
+        total={total}
+        page={page}
+        totalPages={totalPages}
+        q={q}
+        statusFilter={status}
+      />
     </div>
   );
 }

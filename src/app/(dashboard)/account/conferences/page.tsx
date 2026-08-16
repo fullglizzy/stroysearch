@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExpandableText } from "@/components/shared/ExpandableText";
+import { CreateConferenceButton, CancelConferenceButton, EditConferenceButton } from "@/components/forms/ConferenceCabinetActions";
 import { Calendar, Clock, Users, Eye, Coins, ExternalLink } from "lucide-react";
 
 async function getConferencesData(userId: string) {
@@ -33,7 +34,15 @@ export default async function AccountConferencesPage() {
   if (!session?.user) redirect("/login");
 
   const userId = (session.user as any).id as string;
-  const { organized, participated } = await getConferencesData(userId);
+  const [data, treeItems] = await Promise.all([
+    getConferencesData(userId),
+    prisma.productTreeItem.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, fullNumberPath: true },
+      orderBy: { fullNumberPath: "asc" },
+    }),
+  ]);
+  const { organized, participated } = data;
 
   const formatDate = (d: Date) =>
     new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -49,6 +58,9 @@ export default async function AccountConferencesPage() {
           <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {conf.views}</span>
         </div>
         <ExpandableText text={conf.description} />
+        {conf.status === "REJECTED" && conf.moderatorNote && (
+          <p className="text-xs text-orange-accent mt-2">Причина отклонения: {conf.moderatorNote}</p>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {conf.coinPrice > 0 ? (
@@ -62,13 +74,37 @@ export default async function AccountConferencesPage() {
               </Badge>
             )}
           </div>
-          {conf.connectionLink && (
-            <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="gap-1">
-                <ExternalLink className="h-3 w-3" /> Подключиться
-              </Button>
-            </a>
-          )}
+          <div className="flex items-center gap-2">
+            {showStatus && ["PENDING", "REJECTED", "APPROVED"].includes(conf.status) && (
+              <>
+                <EditConferenceButton
+                  treeItems={treeItems}
+                  conference={{
+                    id: conf.id,
+                    title: conf.title,
+                    date: conf.date,
+                    time: conf.time,
+                    description: conf.description,
+                    treeItemId: conf.treeItemId,
+                    coinPrice: conf.coinPrice,
+                    isPublic: conf.isPublic,
+                    connectionLink: conf.connectionLink,
+                    logoUrl: conf.logoUrl,
+                  }}
+                />
+                {(conf.status === "PENDING" || conf.status === "APPROVED") && (
+                  <CancelConferenceButton confId={conf.id} title={conf.title} />
+                )}
+              </>
+            )}
+            {conf.connectionLink && (
+              <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="gap-1">
+                  <ExternalLink className="h-3 w-3" /> Подключиться
+                </Button>
+              </a>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -76,8 +112,13 @@ export default async function AccountConferencesPage() {
 
   return (
     <div className="container-page py-8">
-      <h1 className="text-3xl font-bold mb-2">Мои конференции</h1>
-      <p className="text-muted-foreground mb-6">Конференции, которые вы организовали и в которых участвуете</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Мои конференции</h1>
+          <p className="text-muted-foreground">Конференции, которые вы организовали и в которых участвуете</p>
+        </div>
+        <CreateConferenceButton treeItems={treeItems} />
+      </div>
 
       {organized.length > 0 && (
         <section className="mb-8">

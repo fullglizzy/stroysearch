@@ -21,7 +21,7 @@ export default async function CompanyReviewsPage() {
   const [receivedReviews, givenReviews, companies, participants] = await Promise.all([
     company
       ? prisma.review.findMany({
-          where: { companyId: company.id },
+          where: { companyId: company.id, status: "ACTIVE" },
           include: {
             author: { select: { username: true, profile: { select: { nick: true, firstName: true, lastName: true } } } },
             criteria: true,
@@ -38,13 +38,18 @@ export default async function CompanyReviewsPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    // Кандидаты для вкладки «Оставить отзыв»
+    // Кандидаты для вкладки «Оставить отзыв»:
+    // исключаем компании, которыми пользователь ВЛАДЕЕТ, но оставляем компании
+    // без владельца (в т.ч. добавленные самим пользователем) и чужие.
     prisma.company.findMany({
+      where: {
+        OR: [{ ownerUserId: { not: userId } }, { ownerUserId: null }],
+      },
       select: { id: true, name: true, inn: true },
       orderBy: { name: "asc" },
     }),
     prisma.user.findMany({
-      where: { status: "ACTIVE", type: "COMMON" },
+      where: { status: "ACTIVE", type: "COMMON", id: { not: userId } },
       select: {
         id: true,
         username: true,

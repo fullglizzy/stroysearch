@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,18 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
-import { cn, telHref, mailtoHref } from "@/lib/utils";
+import { cn, telHref, mailtoHref, parseCharacteristic } from "@/lib/utils";
 import { Phone, Mail, MapPin } from "lucide-react";
-
-/** Разбирает строку характеристики «Название: значение ед.» на пару */
-export function parseCharacteristic(raw: string): { name: string; value: string } {
-  const idx = raw.indexOf(": ");
-  if (idx === -1) return { name: raw, value: "" };
-  return { name: raw.slice(0, idx), value: raw.slice(idx + 2).trim() };
-}
 
 export interface ProductCardData {
   name: string;
+  description?: string | null;
   classes: string[];
   regions: string[];
   unit: string | null;
@@ -52,6 +47,8 @@ interface ProductCardProps {
   actions?: React.ReactNode;
   /** Дополнительный футер (например, просмотры — для ЛК) */
   footer?: React.ReactNode;
+  /** Ссылка на публичную страницу товара (название станет ссылкой) */
+  nameHref?: string;
 }
 
 /**
@@ -72,6 +69,7 @@ export function ProductCard({
   badge,
   actions,
   footer,
+  nameHref,
 }: ProductCardProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const chars = data.characteristics.map(parseCharacteristic);
@@ -100,7 +98,13 @@ export function ProductCard({
                 </div>
               )}
               <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-sm">{data.name}</h3>
+                {nameHref ? (
+                  <Link href={nameHref} className="font-semibold text-sm hover:text-menthol transition-colors">
+                    {data.name}
+                  </Link>
+                ) : (
+                  <h3 className="font-semibold text-sm">{data.name}</h3>
+                )}
                 {actions && <div className="flex gap-1 shrink-0">{actions}</div>}
               </div>
               {badge && <div className="mt-1">{badge}</div>}
@@ -126,6 +130,10 @@ export function ProductCard({
                 </>
               )}
             </div>
+          )}
+
+          {data.description && (
+            <p className="text-xs text-muted-foreground mb-2 line-clamp-3">{data.description}</p>
           )}
 
           <div className="flex items-baseline gap-1 mb-2">

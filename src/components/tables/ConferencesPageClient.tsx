@@ -3,34 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { Pagination } from "@/components/shared/Pagination";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SearchSelect } from "@/components/shared/SearchSelect";
-import { FieldError } from "@/components/forms/fields";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { ExpandableText } from "@/components/shared/ExpandableText";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { toastError, toastSuccess, toastWarning } from "@/lib/toast";
-import { Search, Calendar, Clock, Plus, Coins, ExternalLink, Loader2, AlertCircle, Upload, X } from "lucide-react";
+import { ConferenceCreateDialog } from "@/components/forms/ConferenceCreateDialog";
+import { toastError, toastSuccess } from "@/lib/toast";
+import { Search, Calendar, Clock, Plus, Coins, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 
 interface ConfRow {
   id: string;
@@ -65,56 +52,11 @@ interface Props {
   moderatorText: string | null;
   pageTitle: string | null;
   bannerUrl: string | null;
+  initialQuery: { q: string };
+  coinPriceRub: number;
 }
 
-// Сообщения совпадают с серверной схемой conferenceSchema
-const conferenceFormSchema = z.object({
-  title: z
-    .string()
-    .trim()
-    .min(1, "Название обязательно")
-    .max(511, "Название должно быть не более 511 символов"),
-  date: z.string().min(1, "Укажите дату"),
-  time: z.string().regex(/^\d{2}:\d{2}$/, "Формат времени: ЧЧ:ММ"),
-  description: z
-    .string()
-    .trim()
-    .min(1, "Описание обязательно")
-    .max(2500, "Описание должно быть не более 2500 символов"),
-  treeItemId: z
-    .string()
-    .uuid("Некорректная категория")
-    .optional()
-    .or(z.literal("")),
-  coinPrice: z
-    .string()
-    .trim()
-    .regex(/^\d+$/, "Цена — целое число монет")
-    .optional()
-    .or(z.literal("")),
-  isPublic: z.boolean(),
-  connectionLink: z
-    .string()
-    .trim()
-    .url("Введите корректную ссылку (https://...)")
-    .optional()
-    .or(z.literal("")),
-});
-
-type ConferenceFormValues = z.infer<typeof conferenceFormSchema>;
-
-const CONFERENCE_FORM_DEFAULTS: ConferenceFormValues = {
-  title: "",
-  date: "",
-  time: "10:00",
-  description: "",
-  treeItemId: "",
-  coinPrice: "0",
-  isPublic: true,
-  connectionLink: "",
-};
-
-export function ConferencesPageClient({ conferences, total, page, totalPages, showPast, treeItems, moderatorText, pageTitle, bannerUrl }: Props) {
+export function ConferencesPageClient({ conferences, total, page, totalPages, showPast, treeItems, moderatorText, pageTitle, bannerUrl, initialQuery, coinPriceRub }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();
@@ -129,13 +71,9 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
       .catch(() => {});
     return () => { cancelled = true; };
   }, [session?.user]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialQuery.q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createLogo, setCreateLogo] = useState("");
-  const [logoLoading, setLogoLoading] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [joinError, setJoinError] = useState("");
   const [joinTarget, setJoinTarget] = useState<{ id: string; title: string; price: number } | null>(null);
@@ -151,80 +89,11 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
     router.replace(qs ? `/conferences?${qs}` : "/conferences", { scroll: false });
   }
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors },
-  } = useForm<ConferenceFormValues>({
-    resolver: zodResolver(conferenceFormSchema),
-    // Валидируем после первого «касания» поля, а не сразу при наборе
-    mode: "onTouched",
-    defaultValues: CONFERENCE_FORM_DEFAULTS,
-  });
-
-  async function handleLogoUpload(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toastWarning("Проверьте файл", "Фото должно быть изображением");
-      return;
-    }
-    setLogoLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setCreateLogo(data.fileUrl);
-      } else {
-        toastError("Ошибка загрузки", data.error || "Не удалось загрузить фото");
-      }
-    } catch {
-      toastError("Ошибка соединения");
-    }
-    setLogoLoading(false);
-  }
-
   const filtered = conferences.filter((c) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return c.title.toLowerCase().includes(s) || c.organizerName.toLowerCase().includes(s);
   });
-
-  async function handleCreate(data: ConferenceFormValues) {
-    if (!session?.user) { setCreateError("Требуется авторизация"); return; }
-    setCreateLoading(true);
-    setCreateError("");
-    try {
-      const res = await fetch("/api/conferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: data.title,
-          date: data.date,
-          time: data.time,
-          description: data.description,
-          treeItemId: data.treeItemId || null,
-          coinPrice: data.coinPrice ? parseInt(data.coinPrice, 10) : 0,
-          isPublic: data.isPublic,
-          connectionLink: data.connectionLink || null,
-          logoUrl: createLogo || null,
-        }),
-      });
-      if (res.ok) {
-        setCreateOpen(false);
-        setCreateLogo("");
-        reset(CONFERENCE_FORM_DEFAULTS);
-        toastSuccess("Конференция создана", "Конференция отправлена на модерацию");
-        router.refresh();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setCreateError(d.error || "Ошибка");
-      }
-    } catch { setCreateError("Ошибка соединения"); }
-    setCreateLoading(false);
-  }
 
   async function handleJoinFree(confId: string) {
     setJoinLoading(confId);
@@ -234,6 +103,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
         // Моментальное обновление кнопки без ожидания перезагрузки
         setJoinedConfIds((prev) => (prev.includes(confId) ? prev : [...prev, confId]));
         setJoinError("");
+        fetch(`/api/conferences/${confId}/view`, { method: "POST" }).catch(() => {});
         router.refresh();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -255,6 +125,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
         setJoinedConfIds((prev) => (prev.includes(joinTarget.id) ? prev : [...prev, joinTarget.id]));
         setJoinTarget(null);
         setJoinError("");
+        fetch(`/api/conferences/${joinTarget.id}/view`, { method: "POST" }).catch(() => {});
         toastSuccess("Вы участвуете", `Вы записаны на «${joinTarget.title}»`);
         router.refresh();
       } else {
@@ -287,200 +158,17 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
             {showPast ? "Показать предстоящие" : "Показать прошедшие"}
           </Button>
         </div>
-        <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) { setCreateLogo(""); reset(CONFERENCE_FORM_DEFAULTS); } }}>
-          <Button
-            className="bg-orange-accent hover:bg-orange-accent/90 gap-2"
-            onClick={guard(() => setCreateOpen(true))}
-          >
-            <Plus className="h-4 w-4" /> Создать конференцию
-          </Button>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Создать конференцию</DialogTitle>
-              <DialogDescription>После создания конференция будет отправлена на модерацию</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(handleCreate)} className="space-y-4" noValidate>
-              {createError && <Alert variant="destructive"><AlertDescription>{createError}</AlertDescription></Alert>}
-
-              <div className="space-y-2">
-                <Label htmlFor="title">Название</Label>
-                <Input
-                  id="title"
-                  maxLength={511}
-                  aria-invalid={!!errors.title}
-                  aria-describedby={errors.title ? "title-error" : undefined}
-                  {...register("title", {
-                    setValueAs: (value: string) => value.replace(/\s{2,}/g, " "),
-                    onChange: (e) => {
-                      e.target.value = e.target.value.replace(/\s{2,}/g, " ");
-                    },
-                    onBlur: (e) => {
-                      e.target.value = e.target.value.trim();
-                    },
-                  })}
-                />
-                {errors.title && <FieldError id="title-error" message={errors.title.message} />}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Дата</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    aria-invalid={!!errors.date}
-                    aria-describedby={errors.date ? "date-error" : undefined}
-                    {...register("date")}
-                  />
-                  {errors.date && <FieldError id="date-error" message={errors.date.message} />}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time">Время (МСК)</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    aria-invalid={!!errors.time}
-                    aria-describedby={errors.time ? "time-error" : undefined}
-                    {...register("time")}
-                  />
-                  {errors.time && <FieldError id="time-error" message={errors.time.message} />}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Описание</Label>
-                <Textarea
-                  id="description"
-                  rows={3}
-                  maxLength={2500}
-                  aria-invalid={!!errors.description}
-                  aria-describedby={errors.description ? "description-error" : undefined}
-                  {...register("description")}
-                />
-                {errors.description && (
-                  <FieldError id="description-error" message={errors.description.message} />
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="coinPrice">Цена (монет, 0 = бесплатно)</Label>
-                  <Input
-                    id="coinPrice"
-                    type="number"
-                    min={0}
-                    aria-invalid={!!errors.coinPrice}
-                    aria-describedby={errors.coinPrice ? "coinPrice-error" : undefined}
-                    {...register("coinPrice")}
-                  />
-                  {errors.coinPrice && (
-                    <FieldError id="coinPrice-error" message={errors.coinPrice.message} />
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Категория</Label>
-                  <Controller
-                    name="treeItemId"
-                    control={control}
-                    render={({ field }) => (
-                      <SearchSelect
-                        options={[
-                          { value: "", label: "Без категории" },
-                          ...treeItems.map(t => ({ value: t.id, label: `${t.fullNumberPath} — ${t.name}` })),
-                        ]}
-                        value={field.value ?? ""}
-                        onChange={field.onChange}
-                        placeholder="Выбрать"
-                        searchPlaceholder="Поиск категории..."
-                        ariaInvalid={!!errors.treeItemId}
-                      />
-                    )}
-                  />
-                  {errors.treeItemId && (
-                    <FieldError id="treeItemId-error" message={errors.treeItemId.message} />
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Фото конференции</Label>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleLogoUpload(file);
-                    e.target.value = "";
-                  }}
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={logoLoading}
-                  >
-                    {logoLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    {createLogo ? "Заменить фото" : "Загрузить фото"}
-                  </Button>
-                  {createLogo && (
-                    <>
-                      <img src={createLogo} alt="Фото конференции" className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setCreateLogo("")}>
-                        <X className="h-4 w-4 mr-1" />
-                        Убрать
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="connectionLink">Ссылка для подключения</Label>
-                <Input
-                  id="connectionLink"
-                  placeholder="https://..."
-                  aria-invalid={!!errors.connectionLink}
-                  aria-describedby={errors.connectionLink ? "connectionLink-error" : undefined}
-                  {...register("connectionLink", {
-                    onChange: (e) => {
-                      e.target.value = e.target.value.replace(/\s/g, "");
-                    },
-                  })}
-                />
-                {errors.connectionLink && (
-                  <FieldError id="connectionLink-error" message={errors.connectionLink.message} />
-                )}
-              </div>
-
-              <Controller
-                name="isPublic"
-                control={control}
-                render={({ field }) => (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      id="isPublic"
-                      checked={field.value}
-                      onCheckedChange={(checked) => field.onChange(checked === true)}
-                    />
-                    <Label htmlFor="isPublic" className="cursor-pointer font-normal">
-                      Только для зарегистрированных
-                    </Label>
-                  </div>
-                )}
-              />
-
-              <Button type="submit" className="w-full bg-menthol hover:bg-menthol-dark" disabled={createLoading}>{createLoading ? "Создание..." : "Создать"}</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button
+          className="bg-orange-accent hover:bg-orange-accent/90 gap-2"
+          onClick={guard(() => setCreateOpen(true))}
+        >
+          <Plus className="h-4 w-4" /> Создать конференцию
+        </Button>
+        <ConferenceCreateDialog
+          treeItems={treeItems}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+        />
       </div>
 
       {/* Info banner */}
@@ -501,7 +189,19 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Поиск конференций..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        <Input
+          placeholder="Поиск конференций..."
+          value={search}
+          onChange={(e) => {
+            const value = e.target.value;
+            setSearch(value);
+            if (searchTimer.current) clearTimeout(searchTimer.current);
+            searchTimer.current = setTimeout(() => {
+              updateQuery({ q: value, page: null });
+            }, 300);
+          }}
+          className="pl-9"
+        />
       </div>
 
       {joinError && <Alert variant="destructive" className="mb-4"><AlertDescription>{joinError}</AlertDescription></Alert>}
@@ -539,7 +239,9 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
                   </div>
                   <div className="flex items-center gap-2">
                     {conf.coinPrice > 0 ? (
-                      <Badge className="gap-1"><Coins className="h-3 w-3" /> {conf.coinPrice}</Badge>
+                      <Badge className="gap-1">
+                        <Coins className="h-3 w-3" /> {conf.coinPrice} (~{conf.coinPrice * coinPriceRub} ₽)
+                      </Badge>
                     ) : (
                       <Badge variant="outline" className="text-menthol">Бесплатно</Badge>
                     )}
@@ -585,7 +287,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
         open={!!joinTarget}
         onOpenChange={(v) => { if (!v) setJoinTarget(null); }}
         title="Участвовать в конференции?"
-        message={joinTarget ? `Конференция «${joinTarget.title}» за ${joinTarget.price} монет. Монеты спишутся с вашего счёта.` : ""}
+        message={joinTarget ? `Конференция «${joinTarget.title}» за ${joinTarget.price} монет (~${joinTarget.price * coinPriceRub} ₽). Монеты спишутся с вашего счёта.` : ""}
         variant="info"
         confirmLabel="Участвовать"
         onConfirm={confirmJoin}

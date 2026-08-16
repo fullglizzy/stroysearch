@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const tickets = await prisma.supportTicket.findMany({
       where: all ? {} : { userId },
       include: {
-        messages: { select: { id: true, createdAt: true } },
+        messages: { select: { id: true, isStaff: true, createdAt: true } },
       },
       orderBy: [{ isResolved: "asc" }, { updatedAt: "desc" }],
     });
@@ -39,6 +39,9 @@ export async function GET(request: Request) {
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
         replyCount: t.messages.length,
+        hasUnread: t.messages.some(
+          (m) => m.isStaff && (!t.userLastReadAt || m.createdAt > t.userLastReadAt),
+        ),
       })),
     });
   } catch {

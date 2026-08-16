@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/shared/StarRating";
+import { ReportReviewButton } from "@/components/shared/ReportReviewButton";
 import { Building2 } from "lucide-react";
 
 // Те же наборы критериев, что и на /suppliers
@@ -50,6 +51,8 @@ export interface ReviewCardProps {
   companyName?: string | null;
   /** null — отзыв об участнике (набор критериев участника) */
   companyId?: string | null;
+  /** Отзыв скрыт модератором (видно только автору) */
+  hidden?: boolean;
 }
 
 /**
@@ -57,6 +60,7 @@ export interface ReviewCardProps {
  * такой же вид, как в попапе отзывов на /suppliers.
  */
 export function ReviewCard({
+  id,
   authorNick,
   targetName,
   comment,
@@ -65,6 +69,7 @@ export function ReviewCard({
   criteria,
   companyName,
   companyId,
+  hidden = false,
 }: ReviewCardProps) {
   const [expanded, setExpanded] = useState(false);
   const criteriaLabels = companyId ? COMPANY_CRITERIA_LABELS : PARTICIPANT_CRITERIA_LABELS;
@@ -91,9 +96,17 @@ export function ReviewCard({
           </div>
         </div>
         <p className="text-sm mb-1 wrap-anywhere whitespace-pre-wrap">{comment}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-1">
+          <p className="text-xs text-muted-foreground">
+            {new Date(createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <div className="flex items-center gap-2">
+            {hidden && (
+              <Badge variant="destructive" className="text-[10px]">Скрыт модератором</Badge>
+            )}
+            <ReportReviewButton reviewId={id} />
+          </div>
+        </div>
         {criteria.length > 0 && (
           <div className="mt-2">
             <button

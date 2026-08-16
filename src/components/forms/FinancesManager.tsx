@@ -9,6 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -51,12 +52,20 @@ interface GiftItem {
   imageUrl: string | null;
 }
 
+interface GiftClaimItem {
+  id: string;
+  giftName: string;
+  userNick: string;
+  claimDate: Date;
+}
+
 interface Props {
   config: BillingConfig | null;
   gifts: GiftItem[];
+  claims: GiftClaimItem[];
 }
 
-export function FinancesManager({ config, gifts }: Props) {
+export function FinancesManager({ config, gifts, claims }: Props) {
   const router = useRouter();
   const [coinPriceRub, setCoinPriceRub] = useState(String(config?.coinPriceRub ?? 100));
   const [addCompanyCoins, setAddCompanyCoins] = useState(String(config?.addCompanyCoins ?? 1));
@@ -484,6 +493,26 @@ export function FinancesManager({ config, gifts }: Props) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Очередь заявок на получение сувениров */}
+            {claims.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Заявки на получение ({claims.length})</p>
+                <div className="space-y-2">
+                  {claims.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <p className="text-sm">{c.giftName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.userNick} · {new Date(c.claimDate).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">Ожидает выдачи</Badge>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

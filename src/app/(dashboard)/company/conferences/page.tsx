@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExpandableText } from "@/components/shared/ExpandableText";
+import { CreateConferenceButton, CancelConferenceButton, EditConferenceButton } from "@/components/forms/ConferenceCabinetActions";
 import { Calendar, Clock, Users, Eye, Coins, ExternalLink } from "lucide-react";
 
 export default async function CompanyConferencesPage() {
@@ -15,7 +16,7 @@ export default async function CompanyConferencesPage() {
 
   const userId = (session.user as any).id as string;
 
-  const [organized, participated] = await Promise.all([
+  const [organized, participated, treeItems] = await Promise.all([
     prisma.conference.findMany({
       where: { organizerId: userId },
       include: { _count: { select: { participants: true } } },
@@ -26,6 +27,11 @@ export default async function CompanyConferencesPage() {
       include: { _count: { select: { participants: true } } },
       orderBy: { date: "desc" },
     }),
+    prisma.productTreeItem.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, fullNumberPath: true },
+      orderBy: { fullNumberPath: "asc" },
+    }),
   ]);
 
   const formatDate = (d: Date) =>
@@ -33,8 +39,13 @@ export default async function CompanyConferencesPage() {
 
   return (
     <div className="container-page py-8">
-      <h1 className="text-3xl font-bold mb-2">Мои конференции</h1>
-      <p className="text-muted-foreground mb-6">Презентация продуктов, проведение лекций</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Мои конференции</h1>
+          <p className="text-muted-foreground">Презентация продуктов, проведение лекций</p>
+        </div>
+        <CreateConferenceButton treeItems={treeItems} />
+      </div>
 
       {organized.length > 0 && (
         <section className="mb-8">
@@ -51,6 +62,9 @@ export default async function CompanyConferencesPage() {
                     <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {conf.views}</span>
                   </div>
                   <ExpandableText text={conf.description} />
+                  {conf.status === "REJECTED" && conf.moderatorNote && (
+                    <p className="text-xs text-orange-accent mt-2">Причина отклонения: {conf.moderatorNote}</p>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {conf.coinPrice > 0 ? <Badge className="gap-1"><Coins className="h-3 w-3" />{conf.coinPrice}</Badge> : <Badge variant="outline" className="text-menthol">Бесплатно</Badge>}
@@ -58,11 +72,35 @@ export default async function CompanyConferencesPage() {
                         {conf.status === "APPROVED" ? "Одобрено" : conf.status === "PENDING" ? "На модерации" : conf.status === "REJECTED" ? "Отклонено" : "Отменено"}
                       </Badge>
                     </div>
-                    {conf.connectionLink && (
-                      <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="sm"><ExternalLink className="h-3 w-3 mr-1" />Подключиться</Button>
-                      </a>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {["PENDING", "REJECTED", "APPROVED"].includes(conf.status) && (
+                        <>
+                          <EditConferenceButton
+                            treeItems={treeItems}
+                            conference={{
+                              id: conf.id,
+                              title: conf.title,
+                              date: conf.date,
+                              time: conf.time,
+                              description: conf.description,
+                              treeItemId: conf.treeItemId,
+                              coinPrice: conf.coinPrice,
+                              isPublic: conf.isPublic,
+                              connectionLink: conf.connectionLink,
+                              logoUrl: conf.logoUrl,
+                            }}
+                          />
+                          {(conf.status === "PENDING" || conf.status === "APPROVED") && (
+                            <CancelConferenceButton confId={conf.id} title={conf.title} />
+                          )}
+                        </>
+                      )}
+                      {conf.connectionLink && (
+                        <a href={conf.connectionLink} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm"><ExternalLink className="h-3 w-3 mr-1" />Подключиться</Button>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

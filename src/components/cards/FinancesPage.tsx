@@ -21,6 +21,14 @@ import { toastSuccess } from "@/lib/toast";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { InvoicePrint, type InvoicePrintData, type BillingRequisites } from "@/components/shared/InvoicePrint";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_BADGE, formatRub } from "@/lib/invoices";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Coins,
   Gift,
@@ -31,6 +39,7 @@ import {
   Receipt,
   ShoppingCart,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 
 interface FinancesPageProps {
@@ -55,6 +64,8 @@ interface FinancesPageProps {
   missingInvoiceFields: string[];
   /** Ссылка на страницу профиля, где эти поля заполняются */
   profileHref: string;
+  /** Ссылка на раздел поддержки кабинета (для связи счёта с тикетом) */
+  supportHref: string;
 }
 
 const typeLabels: Record<string, string> = {
@@ -72,13 +83,15 @@ const typeLabels: Record<string, string> = {
   INVOICE_PAID: "Пополнение счёта",
 };
 
-export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub, missingInvoiceFields, profileHref }: FinancesPageProps) {
+export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub, missingInvoiceFields, profileHref, supportHref }: FinancesPageProps) {
   const router = useRouter();
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftTo, setGiftTo] = useState("");
   const [giftAmount, setGiftAmount] = useState("");
   const [giftError, setGiftError] = useState("");
   const [giftLoading, setGiftLoading] = useState(false);
+  const [confirmGift, setConfirmGift] = useState<{ to: string; amount: number } | null>(null);
+  const [confirmClaim, setConfirmClaim] = useState<(typeof gifts)[number] | null>(null);
   const [claimLoading, setClaimLoading] = useState<string | null>(null);
   const [claimError, setClaimError] = useState("");
   const [buyOpen, setBuyOpen] = useState(false);
@@ -88,11 +101,18 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
 
   // Счета пользователя (догружаются клиентом)
   const [invoices, setInvoices] = useState<
-    { id: string; number: string; date: string; dueDate: string; status: string; total: number }[]
+    { id: string; number: string; date: string; dueDate: string; status: string; total: number; ticketId: string | null }[]
   >([]);
   const [invoiceOpen, setInvoiceOpen] = useState<string | null>(null);
   const [invoiceData, setInvoiceData] = useState<InvoicePrintData | null>(null);
   const [requisites, setRequisites] = useState<BillingRequisites | null>(null);
+
+  // История операций: стартовая порция из сервера, дальше догружается
+  const [txList, setTxList] = useState(transactions);
+  const [txPage, setTxPage] = useState(1);
+  const [txHasMore, setTxHasMore] = useState(transactions.length >= 20);
+  const [txType, setTxType] = useState("");
+  const [txLoading, setTxLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,7 +155,13 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
       if (res.ok) {
         setBuyOpen(false);
         setBuyAmount("");
-        toastSuccess("Заявка отправлена", "Счёт появится в разделе «Счета» — статус в «Поддержке»");
+        toastSuccess("Заявка отправлена", "Счёт появится в разделе «Требуется оплата»");
+        // Обновляем список счетов сразу, без перезагрузки страницы —
+        // карточка «Требуется оплата» появляется мгновенно
+        fetch("/api/invoices")
+          .then((r) => r.json())
+          .then((d) => { if (Array.isArray(d.invoices)) setInvoices(d.invoices); })
+          .catch(() => {});
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
@@ -147,8 +173,31 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
     setBuyLoading(false);
   }
 
+  async function loadTransactions(page: number, type: string, append: boolean) {
+    setTxLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (type) params.set("type", type);
+      const res = await fetch(`/api/transactions?${params}`);
+      const data = await res.json().catch(() => ({}));
+      const rows = data.transactions || [];
+      setTxList((prev) => (append ? [...prev, ...rows] : rows));
+      setTxPage(page);
+      setTxHasMore(!!data.hasMore);
+    } catch {
+      // silent
+    }
+    setTxLoading(false);
+  }
+
   async function handleGiftCoins(e: React.FormEvent) {
     e.preventDefault();
+    setGiftError("");
+    setConfirmGift({ to: giftTo, amount: parseFloat(giftAmount) });
+  }
+
+  async function doGiftTransfer() {
+    if (!confirmGift) return;
     setGiftError("");
     setGiftLoading(true);
 
@@ -157,13 +206,15 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          targetUsername: giftTo,
-          amount: parseFloat(giftAmount),
+          targetUsername: confirmGift.to,
+          amount: confirmGift.amount,
         }),
       });
 
       if (res.ok) {
         setGiftOpen(false);
+        setGiftTo("");
+        setGiftAmount("");
         router.refresh();
       } else {
         const data = await res.json();
@@ -191,7 +242,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
   }
 
   return (
-    <div className="space-y-6">
+  <div className="space-y-6">
       {/* Balance Card */}
       <Card className="bg-gradient-to-r from-menthol/10 to-menthol/5 border-menthol/20">
         <CardContent>
@@ -225,8 +276,53 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
         </CardContent>
       </Card>
 
-      {/* Buy Coins Dialog */}
-      <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
+      {/* Счета, ожидающие оплаты */}
+      {(() => {
+        const pending = invoices.filter((inv) => ["DRAFT", "SENT", "OVERDUE"].includes(inv.status));
+        if (pending.length === 0) return null;
+        return (
+          <Card className="border-orange-accent/50 bg-orange-accent/5">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-accent" />
+                Требуется оплата
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {pending.map((inv) => (
+                <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">Счёт № {inv.number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      от {new Date(inv.date).toLocaleDateString("ru-RU")} · оплатить до{" "}
+                      {new Date(inv.dueDate).toLocaleDateString("ru-RU")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className={INVOICE_STATUS_BADGE[inv.status] || ""}>
+                      {INVOICE_STATUS_LABELS[inv.status] || inv.status}
+                    </Badge>
+                    <span className="text-sm font-medium">{formatRub(inv.total)}</span>
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openInvoice(inv.id)}>
+                      <FileText className="h-3 w-3" /> Показать
+                    </Button>
+                    {inv.ticketId && (
+                      <Link
+                        href={`${supportHref}?ticket=${inv.ticketId}`}
+                        className="text-xs text-menthol hover:underline"
+                      >
+                        Обсудить с поддержкой
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Buy Coins Dialog */}      <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Покупка монет</DialogTitle>
@@ -364,7 +460,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
                     size="sm"
                     variant="outline"
                     className="mt-2 w-full text-xs"
-                    onClick={() => handleClaimGift(gift.id)}
+                    onClick={() => setConfirmClaim(gift)}
                     disabled={claimLoading === gift.id || balance < gift.coinPrice}
                   >
                     {claimLoading === gift.id ? (
@@ -413,17 +509,43 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
       {/* Transactions History */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">История операций</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-lg">История операций</CardTitle>
+            <Select
+              value={txType}
+              items={Object.fromEntries([
+                ["", "Все операции"],
+                ...Object.entries(typeLabels),
+              ])}
+              onValueChange={(v) => {
+                const value = v ?? "";
+                setTxType(value);
+                loadTransactions(1, value, false);
+              }}
+            >
+              <SelectTrigger className="w-56 justify-between">
+                <SelectValue placeholder="Все операции" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" label="Все операции">Все операции</SelectItem>
+                {Object.entries(typeLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value} label={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
-          {transactions.length === 0 ? (
+          {txList.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p>Нет операций</p>
               </div>
           ) : (
             <div className="space-y-2">
-              {transactions.map((t) => (
+              {txList.map((t) => (
                 <div
                   key={t.id}
                   className="flex items-center justify-between py-2 border-b last:border-0"
@@ -464,8 +586,58 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
               ))}
             </div>
           )}
+          {txHasMore && (
+            <div className="flex justify-center mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadTransactions(txPage + 1, txType, true)}
+                disabled={txLoading}
+              >
+                {txLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Показать ещё
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Подтверждение перевода монет */}
+      <ConfirmDialog
+        open={!!confirmGift}
+        onOpenChange={(o) => { if (!o) setConfirmGift(null); }}
+        title="Подтверждение перевода"
+        message={
+          confirmGift
+            ? `Перевести ${confirmGift.amount} монет пользователю «${confirmGift.to}»? Операция необратима.`
+            : ""
+        }
+        confirmLabel="Перевести"
+        variant="info"
+        onConfirm={doGiftTransfer}
+        loading={giftLoading}
+      />
+
+      {/* Подтверждение получения сувенира */}
+      <ConfirmDialog
+        open={!!confirmClaim}
+        onOpenChange={(o) => { if (!o) setConfirmClaim(null); }}
+        title="Получение сувенира"
+        message={
+          confirmClaim
+            ? `Получить сувенир «${confirmClaim.name}» за ${confirmClaim.coinPrice} монет? Монеты будут списаны.`
+            : ""
+        }
+        confirmLabel="Получить"
+        variant="info"
+        onConfirm={async () => {
+          if (confirmClaim) {
+            await handleClaimGift(confirmClaim.id);
+            setConfirmClaim(null);
+          }
+        }}
+        loading={!!claimLoading}
+      />
 
       {/* Печатный вид счёта */}
       <Dialog open={!!invoiceOpen} onOpenChange={(o) => { if (!o) setInvoiceOpen(null); }}>

@@ -21,11 +21,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StarRating } from "@/components/shared/StarRating";
+import { ReportReviewButton } from "@/components/shared/ReportReviewButton";
+import { GuestGuard } from "@/components/shared/GuestGuard";
 import { cn } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
 import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { PageBanner } from "@/components/shared/PageBanner";
-import { Search, SlidersHorizontal, Plus, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, AlertCircle, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 
 interface ProductRow {
   id: string; companyName: string; companyInn: string; companyId: string;
@@ -88,6 +90,9 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
   const canAddProduct =
     !!session?.user &&
     (userType === "COMPANY" || ["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType));
+  // Карточку «Дать аналог» видят гости (с модалкой регистрации) и компании/админы,
+  // но не зарегистрированные участники (COMMON).
+  const showGiveCard = !session?.user || canAddProduct;
 
   // Фильтры приходят из URL, сервер уже отфильтровал и отсортировал данные
   const classifiers = initialQuery.classifier.split(",").filter(Boolean);
@@ -233,12 +238,22 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
     try { await fetch(`/api/suppliers/metrics/${companyId}/click`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ field }) }); } catch { /* */ }
   };
 
+  // Счётчик просмотров товара: один раз за сессию, при первом раскрытии контакта
+  const viewedRef = useRef<Record<string, boolean>>({});
+
+  function handleProductView(productId: string) {
+    if (viewedRef.current[productId]) return;
+    viewedRef.current[productId] = true;
+    fetch(`/api/products/${productId}/view`, { method: "POST" }).catch(() => {});
+  }
+
   const renderProductCard = (product: ProductRow, className?: string) => (
     <ProductCard
       key={product.id}
       className={className}
       data={product}
       classLabels={classLabels}
+      nameHref={`/products/${product.id}`}
       companyName={product.companyName}
       companyInn={product.companyInn}
       rating={product.companyRating}
@@ -246,17 +261,30 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
       phone={product.companyPhone}
       email={product.companyEmail}
       revealed={revals[product.companyId] || {}}
-      onReveal={(field) => handleReveal(product.companyId, field)}
+      onReveal={(field) => {
+        handleReveal(product.companyId, field);
+        handleProductView(product.id);
+      }}
     />
   );
 
   const renderGiveCard = (className?: string) => (
     <Card key="give-analog" className={cn("flex flex-col border-dashed border-menthol/50 bg-menthol/5", className)}>
       <CardContent className="flex-1 flex flex-col items-center justify-center text-center">
-        <Plus className="h-8 w-8 text-menthol mb-2" />
-        <p className="text-sm font-medium text-menthol mb-1">Дать аналог</p>
-        <p className="text-xs text-muted-foreground mb-3">Добавьте свой продукт</p>
-        <Link href="/company/products" className={cn(buttonVariants({ size: "sm" }), "bg-menthol hover:bg-menthol-dark")}>Добавить</Link>
+        {/* Вариант Б из ТЗ: вся карточка кликабельна, гостей встречает модалка */}
+        <GuestGuard actionLabel="Дать аналог">
+          <div className="flex flex-col items-center justify-center cursor-pointer w-full">
+            <Plus className="h-8 w-8 text-menthol mb-2" />
+            <p className="text-sm font-medium text-menthol mb-1">Дать аналог</p>
+            <p className="text-xs text-muted-foreground mb-3">Добавьте свой продукт</p>
+            <Link
+              href={canAddProduct ? "/company/products" : "/register/company"}
+              className={cn(buttonVariants({ size: "sm" }), "bg-menthol hover:bg-menthol-dark")}
+            >
+              Добавить
+            </Link>
+          </div>
+        </GuestGuard>
       </CardContent>
     </Card>
   );
@@ -345,6 +373,12 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
             <SelectItem value="name" label="По названию">По названию</SelectItem>
           </SelectContent>
         </Select>
+        {activeFiltersCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => router.replace("/matrix")}>
+            <X className="h-3 w-3 mr-1" />
+            Сбросить фильтры
+          </Button>
+        )}
       </div>
 
       {/* Results */}
@@ -386,7 +420,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
                     className="flex gap-3 overflow-x-auto pb-2 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
                   >
                     {items.map((product) => renderProductCard(product, "w-72 shrink-0"))}
-                    {canAddProduct && renderGiveCard("w-72 shrink-0")}
+                    {showGiveCard && renderGiveCard("w-72 shrink-0")}
                   </div>
                   {scrollerState[path]?.canRight && (
                     <button
@@ -403,7 +437,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
                 /* Одна категория — вертикальная сетка по 5 в строке */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {items.map((product) => renderProductCard(product))}
-                  {canAddProduct && renderGiveCard()}
+                  {showGiveCard && renderGiveCard()}
                 </div>
               )}
             </div>
@@ -444,9 +478,12 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
                         <StarRating rating={r.weightedAverage} size="sm" />
                       </div>
                       <p className="text-sm mb-1 wrap-anywhere whitespace-pre-wrap">{r.comment}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
-                      </p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                        </p>
+                        <ReportReviewButton reviewId={r.id} />
+                      </div>
                       {r.criteria.length > 0 && (
                         <div className="mt-2">
                           <button

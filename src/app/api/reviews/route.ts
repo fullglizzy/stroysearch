@@ -12,9 +12,9 @@ export async function GET(request: Request) {
     const targetId = searchParams.get("targetId");
 
     const where = companyId
-      ? { companyId }
+      ? { companyId, status: "ACTIVE" }
       : targetId
-        ? { targetId, companyId: null }
+        ? { targetId, companyId: null, status: "ACTIVE" }
         : null;
 
     if (!where) {

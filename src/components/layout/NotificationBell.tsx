@@ -87,7 +87,7 @@ function NotificationBellInner() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-[26rem] max-w-[92vw]">
         <DropdownMenuGroup>
           <div className="flex items-center justify-between gap-2 px-2 py-1.5">
             <DropdownMenuLabel className="py-0">Уведомления</DropdownMenuLabel>
@@ -119,7 +119,7 @@ function NotificationBellInner() {
                   {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ru })}
                 </span>
               </div>
-              <span className="text-xs text-muted-foreground line-clamp-2 pl-4">{n.message}</span>
+              <span className="text-xs text-muted-foreground line-clamp-3 pl-4">{n.message}</span>
             </DropdownMenuItem>
           ))
         )}

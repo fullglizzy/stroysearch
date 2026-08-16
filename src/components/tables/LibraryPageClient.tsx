@@ -297,12 +297,12 @@ export function LibraryPageClient({ documents, total, page, totalPages, treeItem
                   {purchasedDocIds.includes(doc.id) ? (
                     <div className="flex items-center gap-2">
                       <Badge className="bg-green-100 text-green-700 gap-1"><CheckCircle className="h-3 w-3" /> Куплено</Badge>
-                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                      <a href={`/api/library/${doc.id}/open`} target="_blank" rel="noopener noreferrer">
                         <Button size="sm" variant="outline" className="gap-1"><Download className="h-3 w-3" /> Открыть</Button>
                       </a>
                     </div>
                   ) : doc.coinPrice === 0 ? (
-                    <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={`/api/library/${doc.id}/open`} target="_blank" rel="noopener noreferrer">
                       <Button size="sm" variant="outline" className="gap-1"><Download className="h-3 w-3" /> Открыть</Button>
                     </a>
                   ) : (

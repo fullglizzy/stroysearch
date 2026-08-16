@@ -56,6 +56,8 @@ export default async function CompanyProductsPage() {
   const rows = products.map((p) => ({
     id: p.id,
     name: p.name,
+    description: p.description,
+    status: p.status,
     treeItemId: p.treeItem.id,
     treeItemPath: p.treeItem.fullNumberPath,
     treeItemName: p.treeItem.name,

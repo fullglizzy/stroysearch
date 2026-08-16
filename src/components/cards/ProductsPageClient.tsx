@@ -93,15 +93,16 @@ export function ProductsPageClient({ items }: { items: FlatItem[] }) {
 
       {/* Action buttons per TZ 5.1 */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {isCompany && (
-          <Link href="/company/products">
+        {/* Вариант Б из ТЗ: кнопка видна всем, гостей встречает модалка */}
+        <GuestGuard actionLabel="Добавить свой продукт">
+          <Link href={isCompany ? "/company/products" : "/register/company"}>
             <Button size="sm" className="bg-menthol hover:bg-menthol-dark gap-1">
               <Plus className="h-4 w-4" /> Добавить свой продукт
             </Button>
           </Link>
-        )}
+        </GuestGuard>
         <GuestGuard actionLabel="Добавить документ">
-          <Link href="/account/library">
+          <Link href={isCompany ? "/company/library" : "/account/library"}>
             <Button size="sm" variant="outline" className="gap-1">
               <FilePlus className="h-4 w-4" /> Добавить документ
             </Button>

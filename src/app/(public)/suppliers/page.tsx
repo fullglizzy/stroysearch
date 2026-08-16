@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SuppliersPageClient } from "@/components/tables/SuppliersPageClient";
 import { getPageContent } from "@/server/admin/content";
 import { getRegions } from "@/server/admin/regions";
+import { JsonLd } from "@/components/shared/JsonLd";
 import { ALL_REGIONS } from "@/lib/regions";
 
 export const revalidate = 60; // страница кэшируется на 60 сек
@@ -105,14 +106,15 @@ function buildCombinedQuery(params: {
       ? ` ORDER BY name ${dir === "desc" ? "DESC" : "ASC"}`
       : ` ORDER BY COALESCE(rating, 0) ${dir === "desc" ? "DESC" : "ASC"}, name ASC`;
 
-  // Рейтинги считаются агрегатом один раз, а не загрузкой всех отзывов
+  // Рейтинги считаются агрегатом один раз, а не загрузкой всех отзывов.
+  // Скрытые модераторами отзывы в рейтинге не участвуют.
   const ratingCtes = `
     WITH company_rating AS (
       SELECT "companyId", AVG("weightedAverage") AS rating, COUNT(*) AS cnt
-      FROM reviews WHERE "companyId" IS NOT NULL GROUP BY "companyId"
+      FROM reviews WHERE "companyId" IS NOT NULL AND status = 'ACTIVE' GROUP BY "companyId"
     ), user_rating AS (
       SELECT "targetId", AVG("weightedAverage") AS rating, COUNT(*) AS cnt
-      FROM reviews WHERE "companyId" IS NULL GROUP BY "targetId"
+      FROM reviews WHERE "companyId" IS NULL AND status = 'ACTIVE' GROUP BY "targetId"
     )`;
 
   if (countOnly) {
@@ -232,24 +234,34 @@ export default async function SuppliersPage({
   }));
 
   return (
-    <SuppliersPageClient
-      rows={companyRows}
-      total={total}
-      page={page}
-      pageSize={PAGE_SIZE}
-      treeItems={treeItems}
-      regions={regions.map((r) => r.name)}
-      pageTitle={pageContent?.title || null}
-      moderatorText={pageContent?.content || null}
-      bannerUrl={pageContent?.bannerUrl || null}
-      initialQuery={{
-        q: get("q") || "",
-        type,
-        region: region.join(","),
-        classifier: classifier.join(","),
-        sort,
-        dir,
-      }}
-    />
+    <>
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "ЕНЦПР — База поставщиков и заказчиков",
+          url: "https://encpr.ru/suppliers",
+        }}
+      />
+      <SuppliersPageClient
+        rows={companyRows}
+        total={total}
+        page={page}
+        pageSize={PAGE_SIZE}
+        treeItems={treeItems}
+        regions={regions.map((r) => r.name)}
+        pageTitle={pageContent?.title || null}
+        moderatorText={pageContent?.content || null}
+        bannerUrl={pageContent?.bannerUrl || null}
+        initialQuery={{
+          q: get("q") || "",
+          type,
+          region: region.join(","),
+          classifier: classifier.join(","),
+          sort,
+          dir,
+        }}
+      />
+    </>
   );
 }

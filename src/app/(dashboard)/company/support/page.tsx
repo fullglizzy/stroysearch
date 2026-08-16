@@ -13,7 +13,7 @@ export default async function CompanySupportPage() {
 
   const tickets = await prisma.supportTicket.findMany({
     where: { userId },
-    include: { messages: { select: { id: true } } },
+    include: { messages: { select: { id: true, isStaff: true, createdAt: true } } },
     orderBy: [{ isResolved: "asc" }, { updatedAt: "desc" }],
   });
 
@@ -31,6 +31,9 @@ export default async function CompanySupportPage() {
           createdAt: t.createdAt,
           updatedAt: t.updatedAt,
           replyCount: t.messages.length,
+          hasUnread: t.messages.some(
+            (m) => m.isStaff && (!t.userLastReadAt || m.createdAt > t.userLastReadAt),
+          ),
         }))}
         mode="user"
       />

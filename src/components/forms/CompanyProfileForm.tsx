@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -164,6 +165,12 @@ export function CompanyProfileForm({
                 <span className="text-sm">Отзывы: <strong>{metrics.reviewsViews}</strong> просмотров</span>
               </div>
             </div>
+            <Link
+              href={`/suppliers?q=${encodeURIComponent(initialData.inn)}`}
+              className="inline-block mt-3 text-sm text-menthol hover:underline"
+            >
+              Посмотреть карточку в базе поставщиков
+            </Link>
           </CardContent>
         </Card>
       )}

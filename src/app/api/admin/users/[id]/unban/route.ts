@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
+import { logAdminAction } from "@/lib/audit";
 
 /**
  * Разбан пользователя. Доступно только SUPER и ROOT.
@@ -43,7 +44,18 @@ export async function POST(
       update: { banReason: null },
       create: { userId: id },
     }),
+    prisma.banLog.create({
+      data: { userId: id, adminId: admin.id, action: "UNBAN" },
+    }),
   ]);
+
+  await logAdminAction({
+    adminId: admin.id,
+    adminName: admin.username,
+    action: "unban",
+    entityType: "user",
+    entityId: id,
+  });
 
   return NextResponse.json({ success: true });
 }

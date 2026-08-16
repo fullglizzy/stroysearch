@@ -53,18 +53,30 @@ export async function PATCH(
     );
   }
 
+  const data: Record<string, unknown> = {
+    name: body.name,
+    treeItemId: body.treeItemId,
+    classes: JSON.stringify(body.classes || []),
+    regions: (body.regions ?? []).join(","),
+    unit: body.unit || null,
+    characteristics: JSON.stringify(body.characteristics || []),
+    price: body.price || null,
+    imageUrl: body.imageUrl || null,
+  };
+
+  if (body.status === "DRAFT" || body.status === "PUBLISHED") {
+    data.status = body.status;
+  }
+  if (body.description !== undefined) {
+    data.description =
+      typeof body.description === "string" && body.description.trim()
+        ? body.description.trim().slice(0, 2000)
+        : null;
+  }
+
   await prisma.product.update({
     where: { id },
-    data: {
-      name: body.name,
-      treeItemId: body.treeItemId,
-      classes: JSON.stringify(body.classes || []),
-      regions: (body.regions ?? []).join(","),
-      unit: body.unit || null,
-      characteristics: JSON.stringify(body.characteristics || []),
-      price: body.price || null,
-      imageUrl: body.imageUrl || null,
-    },
+    data,
   });
 
   return NextResponse.json({ success: true });

@@ -44,3 +44,10 @@ export function telHref(phone: string): string {
 export function mailtoHref(email: string): string {
   return `mailto:${email}`;
 }
+
+/** Разбирает строку характеристики «Название: значение ед.» на пару */
+export function parseCharacteristic(raw: string): { name: string; value: string } {
+  const idx = raw.indexOf(": ");
+  if (idx === -1) return { name: raw, value: "" };
+  return { name: raw.slice(0, idx), value: raw.slice(idx + 2).trim() };
+}

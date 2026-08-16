@@ -25,12 +25,14 @@ interface HomePageProps {
     date: Date;
     time: string;
   }[];
+  upcomingCount: number;
 }
 
 export function HomePageClient({
   pageContent,
   bannerUrl,
   upcomingConferences,
+  upcomingCount,
 }: HomePageProps) {
   // Высота одной копии ленты конференций: подгоняем контейнер под неё,
   // чтобы дубль списка всегда был за пределами видимой области и не «появлялся» на глазах
@@ -157,6 +159,11 @@ export function HomePageClient({
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-orange-accent" />
                 Ближайшие конференции
+                {upcomingCount > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    · всего {upcomingCount}
+                  </span>
+                )}
               </h3>
               {upcomingConferences.length > 0 ? (
                 <div

@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,11 +29,12 @@ import { EyeButton } from "@/components/shared/EyeButton";
 import { GuestGuard } from "@/components/shared/GuestGuard";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { StarRating } from "@/components/shared/StarRating";
+import { ReportReviewButton } from "@/components/shared/ReportReviewButton";
 import { ReviewForm } from "@/components/forms/ReviewForm";
 import { Pagination } from "@/components/shared/Pagination";
 import { MultiSelect } from "@/components/shared/MultiSelect";
 import { AddCompanyDialog } from "@/components/forms/AddCompanyDialog";
-import { Plus, Search, MessageSquare, AlertCircle, Loader2, ArrowUpDown, Phone, Mail, Globe } from "lucide-react";
+import { Plus, Search, MessageSquare, AlertCircle, Loader2, ArrowUpDown, Phone, Mail, Globe, X } from "lucide-react";
 import { roleLabel } from "@/lib/roles";
 import { telHref, mailtoHref } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
@@ -134,6 +136,13 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
   const classifierFilter = initialQuery.classifier.split(",").filter(Boolean);
   const sortBy = initialQuery.sort;
   const sortDir = initialQuery.dir;
+
+  const hasActiveFilters = !!(
+    initialQuery.q ||
+    typeFilter ||
+    regionFilter.length > 0 ||
+    classifierFilter.length > 0
+  );
 
   // Все фильтры/пагинация живут в URL — сервер отдаёт только нужную страницу
   function updateQuery(next: Record<string, string | null>) {
@@ -359,6 +368,12 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
         >
           {sortDir === "asc" ? "↑" : "↓"}
         </Button>
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" className="h-10 gap-1" onClick={() => router.replace("/suppliers")}>
+            <X className="h-3 w-3 mr-1" />
+            Сбросить
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -401,7 +416,19 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       {company.inn || "—"}
                     </TableCell>
                     <TableCell className="font-medium max-w-[180px] truncate">
-                      {hiddenContacts ? "Скрыто" : company.name}
+                      {hiddenContacts ? (
+                        "Скрыто"
+                      ) : company.kind === "company" ? (
+                        <Link
+                          href={`/suppliers/${company.id}`}
+                          className="hover:text-menthol transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {company.name}
+                        </Link>
+                      ) : (
+                        company.name
+                      )}
                     </TableCell>
                     <TableCell>
                       {company.rating !== null ? (
@@ -657,9 +684,12 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                         <StarRating rating={r.weightedAverage} size="sm" />
                       </div>
                       <p className="text-sm mb-1 wrap-anywhere whitespace-pre-wrap">{r.comment}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
-                      </p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                        </p>
+                        <ReportReviewButton reviewId={r.id} />
+                      </div>
                       {r.criteria.length > 0 && (
                         <div className="mt-2">
                           <button

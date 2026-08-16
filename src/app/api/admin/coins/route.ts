@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { roundWalletBalance } from "@/lib/money";
 import { notifyUser, cabinetHome } from "@/lib/notifications";
+import { logAdminAction } from "@/lib/audit";
 
 const OPERATIONS = ["add", "subtract", "set"] as const;
 type Operation = (typeof OPERATIONS)[number];
@@ -109,6 +110,15 @@ export async function POST(request: Request) {
         description,
         metadata: JSON.stringify({ adminId, adminUsername: adminUsername ?? null }),
       },
+    });
+
+    await logAdminAction({
+      adminId,
+      adminName: adminUsername ?? adminId,
+      action: "coins",
+      entityType: "user",
+      entityId: userId,
+      payload: { operation, amount, balanceAfter: newBalance },
     });
 
     // Уведомляем пользователя об изменении баланса

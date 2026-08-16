@@ -22,6 +22,7 @@ export async function GET() {
       dueDate: true,
       status: true,
       total: true,
+      ticketId: true,
     },
   });
 
@@ -33,6 +34,7 @@ export async function GET() {
       dueDate: i.dueDate,
       status: i.status,
       total: i.total.toNumber(),
+      ticketId: i.ticketId,
     })),
   });
 }

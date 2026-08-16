@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -59,15 +58,6 @@ export function AccountDashboard({ user, supportUnread, bannerUrl }: AccountDash
             Добро пожаловать, {displayName}
           </p>
         </div>
-        <Link href="/account/finances">
-          <Badge
-            variant="secondary"
-            className="w-fit text-sm px-3 py-1 hover:border-menthol/50 transition-colors cursor-pointer"
-          >
-            <Coins className="h-4 w-4 mr-1" />
-            Баланс: {user.walletBalance.toFixed(1)} монет
-          </Badge>
-        </Link>
       </div>
 
       {/* Баннер */}
@@ -75,6 +65,15 @@ export function AccountDashboard({ user, supportUnread, bannerUrl }: AccountDash
 
       {/* Stats Grid — карточки ведут в соответствующие разделы */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Link href="/account/finances">
+          <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
+            <CardContent className="text-center">
+              <Coins className="h-6 w-6 text-orange-accent mx-auto mb-2" />
+              <div className="text-2xl font-bold">{user.walletBalance.toFixed(1)} монет</div>
+              <p className="text-xs text-muted-foreground">Баланс</p>
+            </CardContent>
+          </Card>
+        </Link>
         <Link href="/account/reviews">
           <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
             <CardContent className="text-center">
@@ -93,15 +92,6 @@ export function AccountDashboard({ user, supportUnread, bannerUrl }: AccountDash
               <FileText className="h-6 w-6 text-menthol mx-auto mb-2" />
               <div className="text-2xl font-bold">{user.stats.documents}</div>
               <p className="text-xs text-muted-foreground">Документов</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/account/conferences">
-          <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
-            <CardContent className="text-center">
-              <Calendar className="h-6 w-6 text-menthol mx-auto mb-2" />
-              <div className="text-2xl font-bold">{user.stats.conferences}</div>
-              <p className="text-xs text-muted-foreground">Конференций</p>
             </CardContent>
           </Card>
         </Link>

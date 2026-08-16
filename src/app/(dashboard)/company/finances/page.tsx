@@ -16,7 +16,7 @@ export default async function CompanyFinancesPage() {
   const transactions = await prisma.transaction.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 20,
   });
   const gifts = await prisma.gift.findMany({
     where: { limit: { gt: 0 }, deletedAt: null },
@@ -62,6 +62,7 @@ export default async function CompanyFinancesPage() {
           linkedCompanyAddress: ownedCompany?.legalAddress || null,
         })}
         profileHref="/company/profile"
+        supportHref="/company/support"
       />
     </div>
   );

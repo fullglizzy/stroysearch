@@ -45,6 +45,7 @@ export default async function FinancesPageServer() {
         coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
         missingInvoiceFields={getMissingInvoiceProfileFields(profile)}
         profileHref="/account/profile"
+        supportHref="/account/support"
       />
     </div>
   );

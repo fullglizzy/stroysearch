@@ -15,11 +15,17 @@ export async function POST(request: Request) {
   const userType = (session.user as { type?: string }).type ?? "";
 
   const body = await request.json();
-  const { companyId, treeItemId, name, classes, regions, unit, characteristics, price, imageUrl } = body;
+  const { companyId, treeItemId, name, classes, regions, unit, characteristics, price, imageUrl, description, status } = body;
 
   if (!companyId || !treeItemId || !name) {
     return NextResponse.json({ error: "Поля companyId, treeItemId, name обязательны" }, { status: 400 });
   }
+
+  const productStatus = status === "DRAFT" ? "DRAFT" : "PUBLISHED";
+  const productDescription =
+    typeof description === "string" && description.trim()
+      ? description.trim().slice(0, 2000)
+      : null;
 
   // Товар можно создать только в живом разделе классификатора
   if (!(await isLiveTreeItem(treeItemId))) {
@@ -46,6 +52,8 @@ export async function POST(request: Request) {
       companyId,
       treeItemId,
       name,
+      description: productDescription,
+      status: productStatus,
       classes: JSON.stringify(classes || []),
       regions: (regions ?? []).join(","),
       unit: unit || null,
@@ -56,7 +64,7 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({ success: true, id: product.id });
+  return NextResponse.json({ success: true, id: product.id, status: product.status });
 }
 
 export async function GET(request: Request) {

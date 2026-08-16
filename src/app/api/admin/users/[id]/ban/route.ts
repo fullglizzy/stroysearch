@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
+import { notifyUser, cabinetHome } from "@/lib/notifications";
+import { logAdminAction } from "@/lib/audit";
 
 /**
  * Бан пользователя с причиной. Доступно только SUPER и ROOT.
@@ -47,7 +49,7 @@ export async function POST(
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, type: true },
+    select: { id: true, type: true, username: true },
   });
   if (!target) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
@@ -66,7 +68,27 @@ export async function POST(
       update: { banReason: reason },
       create: { userId: id, banReason: reason },
     }),
+    prisma.banLog.create({
+      data: { userId: id, adminId: admin.id, action: "BAN", reason },
+    }),
   ]);
+
+  // Уведомляем забаненного с причиной и пишем в журнал аудита
+  await notifyUser({
+    userId: id,
+    type: "SUPPORT",
+    title: "Аккаунт заблокирован",
+    message: `Ваш аккаунт заблокирован модератором. Причина: ${reason}`,
+    link: cabinetHome(target.type),
+  });
+  await logAdminAction({
+    adminId: admin.id,
+    adminName: admin.username,
+    action: "ban",
+    entityType: "user",
+    entityId: id,
+    payload: { username: target.username, reason },
+  });
 
   return NextResponse.json({ success: true });
 }

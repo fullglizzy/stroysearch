@@ -8,7 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Save, Upload } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Save, Upload, Eye, History, AlertCircle } from "lucide-react";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 
 interface ContentManagerProps {
@@ -54,6 +61,12 @@ export function ContentManager({ pages }: ContentManagerProps) {
   const [content, setContent] = useState(pagesByKey.get(activePage)?.content || "");
   const [bannerUrl, setBannerUrl] = useState(pagesByKey.get(activePage)?.bannerUrl || "");
   const [loading, setLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [revisions, setRevisions] = useState<
+    { id: string; content: string; changedBy: string; createdAt: string }[]
+  >([]);
+  const [revLoading, setRevLoading] = useState(false);
   const [contentError, setContentError] = useState("");
   const [bannerUploading, setBannerUploading] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +135,32 @@ export function ContentManager({ pages }: ContentManagerProps) {
       toastError("Ошибка соединения");
     }
     setLoading(false);
+  }
+
+  async function loadHistory() {
+    setHistoryOpen(true);
+    setRevLoading(true);
+    try {
+      const res = await fetch(`/api/admin/content/revisions?pageKey=${encodeURIComponent(activePage)}`);
+      const d = await res.json().catch(() => ({}));
+      setRevisions(d.revisions || []);
+    } catch {
+      setRevisions([]);
+    }
+    setRevLoading(false);
+  }
+
+  function restoreRevision(raw: string) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.title === "string") setTitle(parsed.title);
+      if (typeof parsed.content === "string") setContent(parsed.content);
+      if (parsed.bannerUrl !== undefined) setBannerUrl(parsed.bannerUrl || "");
+      toastSuccess("Версия восстановлена", "Не забудьте нажать «Сохранить»");
+    } catch {
+      toastError("Не удалось прочитать версию");
+    }
+    setHistoryOpen(false);
   }
 
   return (
@@ -216,20 +255,80 @@ export function ContentManager({ pages }: ContentManagerProps) {
               />
             )}
           </div>
-          <Button
-            onClick={handleSave}
-            className="bg-menthol hover:bg-menthol-dark"
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Сохранить
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={handleSave}
+              className="bg-menthol hover:bg-menthol-dark"
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Сохранить
+            </Button>
+            <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+              <Eye className="h-4 w-4 mr-2" />
+              Предпросмотр
+            </Button>
+            <Button variant="outline" onClick={loadHistory}>
+              <History className="h-4 w-4 mr-2" />
+              История версий
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Предпросмотр HTML — точная копия информационного блока со страниц */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Предпросмотр: {pageLabels[activePage] || activePage}</DialogTitle>
+            <DialogDescription>Блок выглядит на странице точно так же</DialogDescription>
+          </DialogHeader>
+          <div className="bg-menthol/5 border border-menthol/20 rounded-lg p-3 mb-4 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-menthol flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              {title && <p className="font-medium text-menthol">{title}</p>}
+              <div className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: content }} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* История версий */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>История версий</DialogTitle>
+            <DialogDescription>Последние 20 сохранений. Восстановление подставит текст в форму.</DialogDescription>
+          </DialogHeader>
+          {revLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : revisions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Версий пока нет</p>
+          ) : (
+            <div className="space-y-2">
+              {revisions.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-2 border rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-sm">{r.changedBy}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => restoreRevision(r.content)}>
+                    Восстановить
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -23,11 +23,16 @@ export default async function HomePage() {
     },
   });
 
+  const upcomingCount = await prisma.conference.count({
+    where: { status: "APPROVED", date: { gte: new Date() } },
+  });
+
   return (
     <HomePageClient
       pageContent={pageContent?.content || "<p>Добро пожаловать на платформу ЕНЦПР</p>"}
       bannerUrl={pageContent?.bannerUrl || null}
       upcomingConferences={upcomingConferences}
+      upcomingCount={upcomingCount}
     />
   );
 }

@@ -96,11 +96,7 @@ export default async function AccountPollsPage({
   }));
 
   return (
-    <div className="container-page py-8">
-      <h1 className="text-3xl font-bold mb-2">Статистика и опросы</h1>
-      <p className="text-muted-foreground mb-6">
-        Голосуйте в опросах и получайте монеты за каждый ответ
-      </p>
+    <div className="container-page py-2">
       <PollsPageClient
         polls={pollRows}
         total={total}

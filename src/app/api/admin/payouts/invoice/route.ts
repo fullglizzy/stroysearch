@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
+import { logAdminAction } from "@/lib/audit";
 
 const METRICS = [
   { price: "phonePrice", paid: "phonePaidViews", views: "phoneViews", label: "Просмотры: телефон" },
@@ -120,6 +121,16 @@ export async function POST(request: Request) {
     title: "Выставлен счёт на выплату",
     message: `Сформирован счёт №${invoice.number} на ${total} ₽ за просмотры контактов компании.`,
     link: "/company/payouts",
+  });
+
+  const admin = session.user as { id: string; username: string };
+  await logAdminAction({
+    adminId: admin.id,
+    adminName: admin.username,
+    action: "payout",
+    entityType: "invoice",
+    entityId: invoice.id,
+    payload: { number: invoice.number, total },
   });
 
   return NextResponse.json({ success: true, id: invoice.id, number: invoice.number, total });

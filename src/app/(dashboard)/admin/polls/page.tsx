@@ -75,11 +75,30 @@ export default async function AdminPollsPage({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Decimal нельзя передавать в клиентские компоненты — маппим в plain-объекты
+  const pollRows = polls.map((p) => ({
+    id: p.id,
+    question: p.question,
+    pollType: p.pollType,
+    coinReward: p.coinReward.toNumber(),
+    isActive: p.isActive,
+    treeItem: p.treeItem,
+    _count: { votes: p._count.votes },
+    options: p.options.map((o) => ({
+      id: o.id,
+      text: o.text,
+      _count: { votes: o._count.votes },
+    })),
+    votes: p.votes.map((v) => ({
+      user: { username: v.user.username, profile: { nick: v.user.profile?.nick ?? null } },
+    })),
+  }));
+
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Управление опросами</h1>
       <PollsManager
-        polls={polls as any}
+        polls={pollRows}
         treeItems={treeItems}
         total={total}
         page={page}

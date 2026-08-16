@@ -205,12 +205,27 @@ model Review {
   signatureType   String           @default("nick")
   criteria        ReviewCriteria[]
   weightedAverage Float
+  status          String           @default("ACTIVE") // ACTIVE | HIDDEN
+  reports         ReviewReport[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   @@map("reviews")
   @@index([companyId])
   @@index([targetId])
+  @@index([status])
+}
+
+model ReviewReport {
+  id        String   @id @default(uuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String?
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@map("review_reports")
+  @@index([reviewId])
 }
 
 model ReviewCriteria {
@@ -234,6 +249,8 @@ model Product {
   treeItemId      String
   treeItem        ProductTreeItem  @relation(fields: [treeItemId], references: [id])
   name            String
+  description     String? // описание товара (показывается в карточке)
+  status          String           @default("PUBLISHED") // DRAFT | PUBLISHED
   classes         String           @default("[]") // JSON array: ["STANDARD","COMFORT",...]
   regions         String           @default("") // comma-separated; «Все регионы» — все регионы
   imageUrl        String?
@@ -263,6 +280,7 @@ model LibraryDocument {
   fileUrl        String
   fileSize       Int
   isApproved     Boolean            @default(false)
+  moderatorNote  String? // причина отклонения модератором
   views          Int                @default(0)
   purchasesCount Int                @default(0)
   createdAt      DateTime           @default(now())
@@ -614,4 +632,44 @@ model Notification {
 
   @@index([userId, isRead, createdAt])
   @@map("notifications")
+}
+
+// ─────────────────────────── БАНЫ И АУДИТ ───────────────────────────
+
+model BanLog {
+  id        String   @id @default(uuid())
+  userId    String
+  adminId   String
+  action    String // BAN | UNBAN
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("ban_logs")
+}
+
+model AdminActionLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  adminName  String
+  action     String // ban | unban | coins | content | billing | gift | payout | tree | review
+  entityType String?
+  entityId   String?
+  payload    String? // JSON
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+  @@map("admin_action_logs")
+}
+
+model ContentRevision {
+  id        String   @id @default(uuid())
+  pageKey   String
+  content   String
+  changedBy String
+  createdAt DateTime @default(now())
+
+  @@index([pageKey, createdAt])
+  @@map("content_revisions")
 }

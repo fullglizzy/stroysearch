@@ -51,7 +51,12 @@ export default async function MatrixPage({
     return "?";
   };
 
-  const where: string[] = [`p."deletedAt" IS NULL`, `t."deletedAt" IS NULL`];
+  const where: string[] = [
+    `p."deletedAt" IS NULL`,
+    `t."deletedAt" IS NULL`,
+    // Черновики компаний в публичной матрице не показываются
+    `p.status = 'PUBLISHED'`,
+  ];
   for (const token of q) {
     const like = `%${token}%`;
     where.push(`(lower(p.name) LIKE ${push(like)} OR lower(c.name) LIKE ${push(like)})`);
@@ -83,12 +88,12 @@ export default async function MatrixPage({
     JOIN product_tree_items t ON t.id = p."treeItemId"
     LEFT JOIN (
       SELECT "companyId", AVG("weightedAverage") AS rating
-      FROM reviews WHERE "companyId" IS NOT NULL GROUP BY "companyId"
+      FROM reviews WHERE "companyId" IS NOT NULL AND status = 'ACTIVE' GROUP BY "companyId"
     ) cr ON cr."companyId" = c.id
     WHERE ${where.join(" AND ")}`;
 
   const selectSql = `
-    SELECT p.id, p.name, p.classes, p."regions", p."imageUrl", p.unit, p.characteristics,
+    SELECT p.id, p.name, p.description, p.classes, p."regions", p."imageUrl", p.unit, p.characteristics,
       p.price, p.views, p."companyId",
       c.name AS "companyName", c.inn AS "companyInn", c.phone AS "companyPhone", c.email AS "companyEmail",
       t."fullNumberPath" AS "treeItemPath", t.name AS "treeItemName",
@@ -114,6 +119,7 @@ export default async function MatrixPage({
     characteristics: string;
     price: number | null;
     views: number;
+    description: string | null;
     companyId: string;
     companyName: string;
     companyInn: string;
@@ -130,6 +136,7 @@ export default async function MatrixPage({
     companyInn: p.companyInn,
     companyId: p.companyId,
     name: p.name,
+    description: p.description ?? null,
     classes: parseJsonArray(p.classes),
     regions: p.regions ? p.regions.split(",").map((r) => r.trim()).filter(Boolean) : [],
     imageUrl: p.imageUrl,

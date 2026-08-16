@@ -38,7 +38,8 @@ export default async function AccountLibraryPage() {
         myDocs={myDocs.map((d) => ({
           id: d.id, title: d.title, coinPrice: d.coinPrice, fileUrl: d.fileUrl,
           fileSize: d.fileSize, views: d.views, purchasesCount: d.purchasesCount,
-          isApproved: d.isApproved, createdAt: d.createdAt,
+          isApproved: d.isApproved, moderatorNote: d.moderatorNote, treeItemId: d.treeItemId,
+          createdAt: d.createdAt,
         }))}
         treeItems={treeItems}
         purchases={purchases.map((p) => ({

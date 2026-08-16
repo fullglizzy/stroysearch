@@ -21,17 +21,22 @@ export default async function ConferencesPage({
 
   const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
   const showPast = get("past") === "1";
+  const q = (get("q") || "").trim();
 
   const pageContent = await getPageContent("conferences");
 
-  const treeItems = await prisma.productTreeItem.findMany({
-    where: { deletedAt: null },
-    select: { id: true, name: true, fullNumberPath: true },
-  });
+  const [treeItems, billing] = await Promise.all([
+    prisma.productTreeItem.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, fullNumberPath: true },
+    }),
+    prisma.billingConfig.findUnique({ where: { id: "default" } }),
+  ]);
 
   // По умолчанию показываем только предстоящие; архив — отдельным переключателем
   const where = {
     status: "APPROVED",
+    ...(q ? { OR: [{ title: { contains: q } }] } : {}),
     ...(showPast ? { date: { lt: new Date() } } : { date: { gte: new Date() } }),
   };
 
@@ -85,6 +90,8 @@ export default async function ConferencesPage({
       moderatorText={pageContent?.content || null}
       pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
+      initialQuery={{ q }}
+      coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
     />
   );
 }

@@ -87,13 +87,14 @@ export function CompanyReviewsClient({
               <ReviewCard
                 key={r.id}
                 id={r.id}
-                targetName={r.target?.profile?.nick || r.target?.username || "?"}
+                targetName={r.companyId ? null : r.target?.profile?.nick || r.target?.username || "?"}
                 comment={r.comment}
                 weightedAverage={r.weightedAverage}
                 createdAt={r.createdAt}
                 criteria={r.criteria || []}
                 companyName={r.company?.name || null}
                 companyId={r.companyId}
+                hidden={r.status === "HIDDEN"}
               />
             ))
           )}

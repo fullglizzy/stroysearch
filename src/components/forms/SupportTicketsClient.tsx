@@ -34,6 +34,7 @@ interface TicketRow {
   createdAt: Date;
   updatedAt: Date;
   replyCount: number;
+  hasUnread?: boolean;
 }
 
 interface DetailMessage {
@@ -73,6 +74,9 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Отменён",
 };
 
+// Пагинация списка обращений в личном кабинете (в админке — серверная)
+const USER_PAGE_SIZE = 10;
+
 interface SupportTicketsClientProps {
   initialTickets: TicketRow[];
   /** user — личный кабинет (мои обращения), staff — админка (все обращения) */
@@ -110,6 +114,7 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
   const [listLoading, setListLoading] = useState(false);
   const [topicFilter, setTopicFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [userPage, setUserPage] = useState(1);
 
   const visibleTickets = useMemo(
     () =>
@@ -121,6 +126,13 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
       ),
     [tickets, topicFilter, statusFilter],
   );
+
+  // В личном кабинете — клиентская пагинация списка обращений
+  const userTotalPages = Math.max(1, Math.ceil(visibleTickets.length / USER_PAGE_SIZE));
+  const pagedTickets =
+    mode === "user"
+      ? visibleTickets.slice((userPage - 1) * USER_PAGE_SIZE, userPage * USER_PAGE_SIZE)
+      : visibleTickets;
 
   async function refreshList() {
     setListLoading(true);
@@ -142,6 +154,8 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
     setDetail(null);
     setMessages([]);
     setInvoice(null);
+    // Помечаем тикет прочитанным в списке
+    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, hasUnread: false } : t)));
     try {
       const res = await fetch(`/api/support/${id}`);
       if (res.ok) {
@@ -342,7 +356,7 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
             <p>{mode === "staff" ? "Обращений не найдено" : "У вас пока нет обращений"}</p>
           </div>
         ) : (
-          visibleTickets.map((t) => (
+          pagedTickets.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -352,7 +366,12 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="text-sm font-medium break-words">{t.subject}</span>
+                <span className="text-sm font-medium break-words">
+                  {t.hasUnread && (
+                    <span className="inline-block h-2 w-2 rounded-full bg-orange-accent mr-1.5 align-middle" />
+                  )}
+                  {t.subject}
+                </span>
                 {t.isResolved ? (
                   <Badge variant="secondary" className="shrink-0 text-[10px]">Закрыто</Badge>
                 ) : (
@@ -587,6 +606,16 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
         onOpenChange={setCreateOpen}
         onSuccess={refreshList}
       />
+
+      {mode === "user" && userTotalPages > 1 && (
+        <div className="flex items-center justify-center">
+          <Pagination
+            currentPage={userPage}
+            totalPages={userTotalPages}
+            onPageChange={(p) => setUserPage(p)}
+          />
+        </div>
+      )}
 
       {mode === "staff" && totalPages && totalPages > 1 && (
         <div className="flex items-center justify-end mt-4">

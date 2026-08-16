@@ -27,19 +27,26 @@ export default async function AdminLibraryPage({
     return Array.isArray(v) ? v[0] : v;
   };
   const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
+  const q = (get("q") || "").trim();
+  const status = get("status");
+  const where = {
+    deletedAt: null,
+    ...(q ? { title: { contains: q } } : {}),
+    ...(status === "approved" ? { isApproved: true } : status === "pending" ? { isApproved: false } : {}),
+  };
 
   const [documents, total] = await Promise.all([
     prisma.libraryDocument.findMany({
-      where: { deletedAt: null },
+      where,
       include: {
         user: { select: { username: true, profile: { select: { nick: true } } } },
         treeItem: { select: { fullNumberPath: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isApproved: "asc" }, { createdAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.libraryDocument.count({ where: { deletedAt: null } }),
+    prisma.libraryDocument.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -47,7 +54,14 @@ export default async function AdminLibraryPage({
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Модерация библиотеки</h1>
-      <LibraryModeration documents={documents as any} total={total} page={page} totalPages={totalPages} />
+      <LibraryModeration
+        documents={documents as any}
+        total={total}
+        page={page}
+        totalPages={totalPages}
+        q={q}
+        statusFilter={status || ""}
+      />
     </div>
   );
 }

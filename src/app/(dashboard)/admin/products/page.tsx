@@ -8,6 +8,7 @@ import { getRegions } from "@/server/admin/regions";
 import { TreeConstructor } from "@/components/forms/TreeConstructor";
 import { TreeBackups } from "@/components/forms/TreeBackups";
 import { ProductsManager } from "@/components/forms/ProductsManager";
+import { DeletedProductsList } from "@/components/forms/DeletedProductsList";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { SessionUser } from "@/types";
 
@@ -62,6 +63,8 @@ export default async function AdminProductsPage() {
   const rows = products.map((p) => ({
     id: p.id,
     name: p.name,
+    description: p.description,
+    status: p.status,
     treeItemId: p.treeItem.id,
     treeItemPath: p.treeItem.fullNumberPath,
     treeItemName: p.treeItem.name,
@@ -88,6 +91,7 @@ export default async function AdminProductsPage() {
         <TabsList>
           <TabsTrigger value="products">Товары</TabsTrigger>
           <TabsTrigger value="tree">Дерево решений</TabsTrigger>
+          <TabsTrigger value="deleted">Удалённые</TabsTrigger>
           {isBackupsAllowed && <TabsTrigger value="backups">Резервные копии</TabsTrigger>}
         </TabsList>
         <TabsContent value="products" className="pt-4">
@@ -100,6 +104,9 @@ export default async function AdminProductsPage() {
         </TabsContent>
         <TabsContent value="tree" className="pt-4">
           <TreeConstructor items={treeConstructorItems} />
+        </TabsContent>
+        <TabsContent value="deleted" className="pt-4">
+          <DeletedProductsList />
         </TabsContent>
         {isBackupsAllowed && (
           <TabsContent value="backups" className="pt-4">

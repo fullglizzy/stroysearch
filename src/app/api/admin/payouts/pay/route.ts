@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
+import { logAdminAction } from "@/lib/audit";
 
 /**
  * Отметка счёта на выплату как выплаченного (DRAFT → PAID).
@@ -57,6 +58,16 @@ export async function POST(request: Request) {
     title: "Выплата произведена",
     message: `Счёт №${invoice.number} отмечен как выплаченный.`,
     link: "/company/payouts",
+  });
+
+  const admin = session.user as { id: string; username: string };
+  await logAdminAction({
+    adminId: admin.id,
+    adminName: admin.username,
+    action: "payout",
+    entityType: "invoice",
+    entityId: invoice.id,
+    payload: { number: invoice.number, action: "pay" },
   });
 
   return NextResponse.json({ success: true });
