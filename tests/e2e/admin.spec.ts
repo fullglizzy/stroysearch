@@ -26,7 +26,8 @@ test.describe("Админ-панель", () => {
       "/admin/reviews",
       "/admin/polls",
       "/admin/finances",
-      "/admin/payouts",
+      "/admin/finances?tab=companies",
+      "/admin/finances?tab=invoices",
       "/admin/audit",
       "/admin/support",
     ]) {

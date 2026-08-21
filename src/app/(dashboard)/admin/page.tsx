@@ -31,7 +31,7 @@ export default async function AdminPage() {
       prisma.review.count({ where: { createdAt: { gte: dayAgo } } }),
       prisma.product.count({ where: { createdAt: { gte: dayAgo }, deletedAt: null } }),
       prisma.company.count({ where: { createdAt: { gte: dayAgo } } }),
-      prisma.giftClaim.count(),
+      prisma.giftClaim.count({ where: { issuedAt: null } }),
     ]);
 
   // Счётчик непрочитанных обращений считаем одним SQL-запросом,

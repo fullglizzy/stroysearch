@@ -56,7 +56,7 @@ export function useAuthGuard() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => router.push("/register")}
+            onClick={() => router.push("/login")}
           >
             Зарегистрироваться
           </Button>

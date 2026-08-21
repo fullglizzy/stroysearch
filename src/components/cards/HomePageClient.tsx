@@ -113,13 +113,15 @@ export function HomePageClient({
       <section className="bg-gradient-to-b from-menthol/10 via-menthol/5 to-background">
         <div className="pt-4 md:pt-2">
           <div className="container-page">
-            <div className="mx-auto max-w-4xl rounded-2xl border bg-orange-accent border-orange-accent/30 px-6 py-4 md:py-2 shadow-sm flex flex-col items-center text-center">
+            <div className="mx-auto max-w-4xl rounded-2xl border-2 border-menthol/70 px-6 py-4 md:py-2 flex flex-col items-center text-center">
               <p className="max-w-4xl font-semibold uppercase tracking-[0.18em] leading-relaxed text-foreground">
                 <span className="block text-xl md:text-2xl">
-                  Единый независимый центр продуктовых решений
+                  Единый независимый центр{" "}
+                  <span className="text-menthol">продуктовых решений</span>
                 </span>
                 <span className="mt-1 block text-sm md:text-base">
-                 закупок и технических заданий строительной отрасли
+                  закупок и технических заданий{" "}
+                  <span className="text-menthol">строительной отрасли</span>
                 </span>
               </p>
             </div>
@@ -128,7 +130,7 @@ export function HomePageClient({
 
         {/* Hero Section — 3 columns: text | photo | conferences */}
         <div className="container-page py-4 md:py-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 items-start">
             {/* Column 1: Text */}
             <div>
               <div

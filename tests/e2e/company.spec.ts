@@ -18,7 +18,7 @@ test.describe("Кабинет компании", () => {
       "/company/profile",
       "/company/products",
       "/company/finances",
-      "/company/payouts",
+      "/company/finances?tab=invoices",
       "/company/library",
       "/company/conferences",
       "/company/reviews",
@@ -32,10 +32,10 @@ test.describe("Кабинет компании", () => {
     await errors.assertNoErrors();
   });
 
-  test("дашборд: сводка с балансом и «К выплате»", async ({ page }) => {
+  test("дашборд: сводка с балансом и «К оплате»", async ({ page }) => {
     await page.goto("/company");
     await expect(page.getByText("Баланс").first()).toBeVisible();
-    await expect(page.getByText("К выплате").first()).toBeVisible();
+    await expect(page.getByText("К оплате").first()).toBeVisible();
     await expect(page.getByText("Активных товаров").first()).toBeVisible();
   });
 

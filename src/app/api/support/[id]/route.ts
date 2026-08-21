@@ -64,6 +64,8 @@ export async function GET(
         id: ticket.id,
         subject: ticket.subject,
         email: ticket.email,
+        phone: ticket.phone,
+        inn: ticket.inn,
         isResolved: ticket.isResolved,
         createdAt: ticket.createdAt,
         message: ticket.message,

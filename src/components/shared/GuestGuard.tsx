@@ -71,7 +71,7 @@ export function GuestGuard({ children, actionLabel }: GuestGuardProps) {
             </Button>
             <Button
               variant="outline"
-              onClick={() => router.push("/register")}
+              onClick={() => router.push("/login")}
             >
               Зарегистрироваться
             </Button>

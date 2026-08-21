@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { addCompanySchema } from "@/lib/validators";
 import { auth } from "@/lib/auth";
 import { roundWalletBalance } from "@/lib/money";
+import { companySearchText } from "@/lib/company";
+import type { SessionUser } from "@/types";
 
 export async function GET() {
   const companies = await prisma.company.findMany({
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = (session.user as any).id;
+    const userId = (session.user as SessionUser).id;
 
     // Нормализуем сайт: добавляем https://, если протокол не указан
     let normalizedWebsite: string | null = website?.trim() || null;
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
         data: {
           inn,
           name: name.trim(),
+          searchText: companySearchText(name.trim(), inn),
           email: email.trim(),
           phone: phone.trim(),
           website: normalizedWebsite,

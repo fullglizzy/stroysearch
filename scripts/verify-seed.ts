@@ -66,11 +66,11 @@ async function main() {
   console.log(`polls: ${polls.length}, votes: ${totalVotes}`);
   if (polls.length !== 5) fail("опросы: ожидалось 5");
 
-  // 8. Кошелёк и ставки
+  // 8. Кошелёк и тарифы биллинга
   const wallets = await prisma.wallet.count();
-  const rates = await prisma.metricsPayoutRate.count();
-  console.log(`wallets=${wallets}, payout rates=${rates}`);
-  if (wallets !== 17 || rates !== 3) fail("кошельки/ставки: неверное количество");
+  const billings = await prisma.companyBilling.count();
+  console.log(`wallets=${wallets}, company billings=${billings}`);
+  if (wallets !== 17 || billings !== 3) fail("кошельки/биллинг: неверное количество");
 
   console.log("\n✅ Seed verification passed");
 }

@@ -36,10 +36,12 @@ function buildCombinedQuery(params: {
       COALESCE(c."ownerUserId", '') AS "roleUserId",
       COALESCE(c."classifierIds", '') AS "classifierIds",
       0 AS "isContactsHidden",
+      COALESCE(cb.status, 'INACTIVE') AS "billingStatus",
       cr.rating AS rating, COALESCE(cr.cnt, 0) AS "reviewCount"
     FROM companies c
     LEFT JOIN users ou ON ou.id = c."ownerUserId"
     LEFT JOIN user_profiles pr ON pr."userId" = ou.id
+    LEFT JOIN company_billing cb ON cb."companyId" = c.id
     LEFT JOIN company_rating cr ON cr."companyId" = c.id`;
 
   const participantSelect = `
@@ -55,6 +57,7 @@ function buildCombinedQuery(params: {
       u.id AS "roleUserId",
       COALESCE(pr2."classifierIds", '') AS "classifierIds",
       COALESCE(pr2."isContactsHidden", 1) AS "isContactsHidden",
+      'INACTIVE' AS "billingStatus",
       ur.rating AS rating, COALESCE(ur.cnt, 0) AS "reviewCount"
     FROM users u
     LEFT JOIN user_profiles pr2 ON pr2."userId" = u.id
@@ -183,6 +186,7 @@ export default async function SuppliersPage({
     roleUserId: string;
     classifierIds: string;
     isContactsHidden: number;
+    billingStatus: string;
     rating: number | null;
     reviewCount: number;
   };
@@ -221,6 +225,8 @@ export default async function SuppliersPage({
     regions: r.regions ? r.regions.split(",").map((x) => x.trim()).filter(Boolean) : [],
     classifierIds: r.classifierIds ? r.classifierIds.split(",").filter(Boolean) : [],
     isContactsHidden: !!r.isContactsHidden,
+    // Санкция: администратор скрыл контакты компании в базе за неуплату
+    billingHidden: r.billingStatus === "HIDDEN",
     // Рейтинг — одна цифра после запятой (как раньше делал computeRating)
     rating: r.rating !== null ? Math.round(r.rating * 10) / 10 : null,
     reviewCount: r.reviewCount,

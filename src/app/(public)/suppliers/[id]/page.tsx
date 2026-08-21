@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StarRating } from "@/components/shared/StarRating";
 import { JsonLd } from "@/components/shared/JsonLd";
 import { computeRating } from "@/lib/rating";
-import { Phone, Mail, Globe, MapPin, Building2 } from "lucide-react";
+import { Phone, Mail, Globe, MapPin, Building2, Lock } from "lucide-react";
 
 export const revalidate = 60;
 
@@ -20,6 +20,7 @@ export default async function SupplierPage({ params }: PageProps) {
   const company = await prisma.company.findUnique({
     where: { id },
     include: {
+      billing: { select: { status: true } },
       metrics: true,
       reviews: {
         where: { status: "ACTIVE" },
@@ -40,6 +41,7 @@ export default async function SupplierPage({ params }: PageProps) {
   if (!company) notFound();
 
   const rating = computeRating(company.reviews);
+  const contactsHidden = company.billing?.status === "HIDDEN";
 
   return (
     <div className="container-page py-8">
@@ -49,9 +51,9 @@ export default async function SupplierPage({ params }: PageProps) {
           "@type": "Organization",
           name: company.name,
           taxID: company.inn,
-          telephone: company.phone || undefined,
-          email: company.email || undefined,
-          url: company.website || undefined,
+          telephone: contactsHidden ? undefined : company.phone || undefined,
+          email: contactsHidden ? undefined : company.email || undefined,
+          url: contactsHidden ? undefined : company.website || undefined,
           aggregateRating: rating !== null ? { "@type": "AggregateRating", ratingValue: rating, reviewCount: company.reviews.length } : undefined,
         }}
       />
@@ -83,16 +85,24 @@ export default async function SupplierPage({ params }: PageProps) {
           <Card>
             <CardHeader><CardTitle className="text-base">Контакты</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {company.phone && (
-                <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {company.phone}</p>
-              )}
-              {company.email && (
-                <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {company.email}</p>
-              )}
-              {company.website && (
-                <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-menthol hover:underline">
-                  <Globe className="h-4 w-4 text-muted-foreground" /> {company.website.replace(/^https?:\/\//, "")}
-                </a>
+              {contactsHidden ? (
+                <p className="flex items-center gap-2 text-muted-foreground" title="Контакты скрыты администратором">
+                  <Lock className="h-4 w-4" /> Контакты скрыты
+                </p>
+              ) : (
+                <>
+                  {company.phone && (
+                    <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {company.phone}</p>
+                  )}
+                  {company.email && (
+                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {company.email}</p>
+                  )}
+                  {company.website && (
+                    <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-menthol hover:underline">
+                      <Globe className="h-4 w-4 text-muted-foreground" /> {company.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                </>
               )}
               {company.legalAddress && (
                 <p className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> {company.legalAddress}</p>

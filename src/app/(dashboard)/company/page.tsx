@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import type { SessionUser } from "@/types";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageBanner } from "@/components/shared/PageBanner";
@@ -14,9 +15,9 @@ export default async function CompanyDashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = (session.user as SessionUser).id as string;
 
-  const [supportTickets, wallet, productsCount, payoutSum, receivedReviews, pageContent] =
+  const [supportTickets, wallet, productsCount, billingDebt, receivedReviews, pageContent] =
     await Promise.all([
       prisma.supportTicket.findMany({
         where: { userId },
@@ -27,8 +28,8 @@ export default async function CompanyDashboardPage() {
       prisma.invoice.aggregate({
         where: {
           userId,
-          kind: { in: ["PAYOUT", "ACTIVITY"] },
-          status: { notIn: ["PAID", "CANCELLED", "SKIPPED"] },
+          kind: "BILLING",
+          status: { in: ["DRAFT", "SENT", "OVERDUE"] },
         },
         _sum: { total: true },
       }),
@@ -45,13 +46,13 @@ export default async function CompanyDashboardPage() {
 
   const walletBalance = wallet ? wallet.balance.toNumber() : 0;
   const rating = computeRating(receivedReviews);
-  const payoutTotal = payoutSum._sum.total ? payoutSum._sum.total.toNumber() : 0;
+  const debtTotal = billingDebt._sum.total ? billingDebt._sum.total.toNumber() : 0;
 
   const stats = [
     { href: "/company/finances", icon: Wallet, value: `${walletBalance.toFixed(1)} монет`, label: "Баланс" },
     { href: "/company/products", icon: Package, value: String(productsCount), label: "Активных товаров" },
     { href: "/company/reviews", icon: Star, value: rating !== null ? `★ ${rating.toFixed(1)}` : "—", label: "Рейтинг компании" },
-    { href: "/company/payouts", icon: Banknote, value: `${payoutTotal.toFixed(2)} ₽`, label: "К выплате" },
+    { href: "/company/finances", icon: Banknote, value: `${debtTotal.toFixed(2)} ₽`, label: "К оплате" },
   ];
 
   return (
@@ -62,7 +63,7 @@ export default async function CompanyDashboardPage() {
       {/* Сводка */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {stats.map((s) => (
-          <Link key={s.href} href={s.href}>
+          <Link key={`${s.href}-${s.label}`} href={s.href}>
             <Card className="h-full hover:shadow-md hover:border-menthol/50 transition-all cursor-pointer">
               <CardContent className="text-center">
                 <s.icon className="h-6 w-6 text-menthol mx-auto mb-2" />
@@ -85,8 +86,7 @@ export default async function CompanyDashboardPage() {
           { href: "/company/conferences", icon: Calendar, title: "Мои конференции", desc: "Презентация продуктов, проведение лекций", color: "text-menthol" },
           { href: "/company/library", icon: FileText, title: "Моя библиотека", desc: "Загрузка технических заданий и спецификаций", color: "text-menthol" },
           { href: "/company/reviews", icon: Star, title: "Мои отзывы", desc: "Отзывы о компании и поставках", color: "text-orange-accent" },
-          { href: "/company/finances", icon: Coins, title: "Мои финансы", desc: "Баланс монет, счета и подарки", color: "text-orange-accent" },
-          { href: "/company/payouts", icon: Coins, title: "Мои выплаты", desc: "Счета на выплату за просмотры контактов", color: "text-menthol" },
+          { href: "/company/finances", icon: Coins, title: "Мои финансы", desc: "Баланс монет, тариф, счета и акты", color: "text-orange-accent" },
           { href: "/company/profile", icon: Package, title: "Личные данные", desc: "Профиль компании, ИНН, контакты", color: "text-menthol" },
           { href: "/company/support", icon: LifeBuoy, title: "Поддержка", desc: "Обращения и переписка со службой поддержки", color: "text-menthol", badge: supportUnread },
         ].map((item) => (

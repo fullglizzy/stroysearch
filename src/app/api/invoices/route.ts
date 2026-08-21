@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // Список счетов текущего пользователя (для раздела «Счета» в финансах).
-// Счета на выплату (kind: PAYOUT) показываются в отдельном разделе «Выплаты».
+// Счета биллинга (kind: BILLING) компания видит в единой вкладке «Финансы».
 export async function GET() {
   const session = await auth();
   if (!session?.user) {

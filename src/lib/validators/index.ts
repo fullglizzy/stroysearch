@@ -168,9 +168,28 @@ export const pollSchema = z.object({
 
 // ────────────── Support ──────────────
 
+export const PHONE_REGEX = /^(\+7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/;
+
 export const supportTicketSchema = z.object({
   subject: z.string().min(1, "Тема обязательна").max(511),
   message: z.string().min(1, "Сообщение обязательно"),
+  // Контактные данные: обязательны для гостей (проверяется в API), у авторизованных не используются
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Некорректный email")
+    .optional()
+    .or(z.literal("")),
+  phone: z
+    .string()
+    .regex(PHONE_REGEX, "Неверный формат телефона. Пример: +7 (999) 123-45-67")
+    .optional()
+    .or(z.literal("")),
+  inn: z
+    .string()
+    .optional()
+    .or(z.literal("")),
 });
 
 // ────────────── Coins ──────────────

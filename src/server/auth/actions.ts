@@ -5,6 +5,7 @@ import * as argon2 from "@node-rs/argon2";
 import { registerSchema, registerCompanySchema } from "@/lib/validators";
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
+import { companySearchText } from "@/lib/company";
 
 /**
  * Проверка доступности логина при регистрации (live-валидация формы).
@@ -44,6 +45,26 @@ export async function checkInnAvailability(inn: string) {
     select: { ownerUserId: true },
   });
   return { available: !company?.ownerUserId };
+}
+
+/**
+ * Сведения о приглашении для регистрации компании по ссылке от администратора.
+ * Отдаёт ИНН и название карточки, к которой будет привязан аккаунт.
+ */
+export async function getInviteInfo(token: string) {
+  const invite = await prisma.companyInvite.findUnique({
+    where: { token },
+    select: {
+      usedAt: true,
+      expiresAt: true,
+      company: { select: { inn: true, name: true, ownerUserId: true } },
+    },
+  });
+  if (!invite) return { error: "Приглашение не найдено" };
+  if (invite.usedAt) return { error: "Приглашение уже использовано" };
+  if (invite.expiresAt.getTime() < Date.now()) return { error: "Срок действия приглашения истёк" };
+  if (invite.company.ownerUserId) return { error: "У компании уже есть владелец" };
+  return { inn: invite.company.inn, companyName: invite.company.name };
 }
 
 export async function registerUser(formData: FormData) {
@@ -114,6 +135,7 @@ export async function registerCompany(formData: FormData) {
     companyName: formData.get("companyName") as string,
     agreeTerms: formData.get("agreeTerms") === "on",
   };
+  const inviteToken = ((formData.get("invite") as string | null) ?? "").trim() || null;
 
   const parsed = registerCompanySchema.safeParse(raw);
   if (!parsed.success) {
@@ -135,6 +157,30 @@ export async function registerCompany(formData: FormData) {
           ? "Пользователь с таким логином уже существует"
           : "Пользователь с таким email уже существует",
     };
+  }
+
+  // Регистрация по приглашению: карточка компании привязывается к создаваемому аккаунту
+  let invite: { id: string; expiresAt: Date; usedAt: Date | null; company: { inn: string; ownerUserId: string | null } } | null = null;
+  if (inviteToken) {
+    const found = await prisma.companyInvite.findUnique({
+      where: { token: inviteToken },
+      select: {
+        id: true,
+        expiresAt: true,
+        usedAt: true,
+        company: { select: { inn: true, ownerUserId: true } },
+      },
+    });
+    if (!found || found.usedAt || found.expiresAt.getTime() < Date.now()) {
+      return { error: "Приглашение недействительно или истекло" };
+    }
+    if (found.company.ownerUserId) {
+      return { error: "У компании уже есть владелец" };
+    }
+    if (found.company.inn !== inn) {
+      return { error: `По приглашению нужно регистрироваться с ИНН ${found.company.inn}` };
+    }
+    invite = found;
   }
 
   // Check if company with this INN already has an owner
@@ -172,22 +218,35 @@ export async function registerCompany(formData: FormData) {
     },
   });
 
-  // Link existing company or create new one
+  // Link existing company or create new one. Передача карточки владельцу
+  // (в т.ч. по ссылке-приглашению) включает биллинг — так же, как выдача
+  // доступа в админке; иначе компания навсегда останется «Без владельца».
   if (existingCompany) {
     await prisma.company.update({
       where: { inn },
       data: { ownerUserId: user.id },
+    });
+    await prisma.companyBilling.upsert({
+      where: { companyId: existingCompany.id },
+      update: { status: "ACTIVE" },
+      create: { companyId: existingCompany.id, status: "ACTIVE", billingStartedAt: new Date() },
     });
   } else {
     await prisma.company.create({
       data: {
         inn,
         name: companyName,
+        searchText: companySearchText(companyName, inn),
         email,
         ownerUserId: user.id,
         metrics: { create: {} },
+        billing: { create: { status: "ACTIVE", billingStartedAt: new Date() } },
       },
     });
+  }
+
+  if (invite) {
+    await prisma.companyInvite.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
   }
 
   // Для приветствия отдаём реальное название компании (в т.ч. при привязке к существующей)

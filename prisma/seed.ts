@@ -433,22 +433,22 @@ async function main() {
   });
   console.log(`  ✅ Доп. компания: ${EXTRA_COMPANY.name}`);
 
-  // ── Демо-ставки выплат по метрикам (₽ за 1 просмотр) ──
+  // ── Демо-тарифы биллинга компаний (индивидуальные ставки, ₽) ──
   const DEMO_RATES: Record<string, Record<string, number>> = {
-    stroy_boss: { phonePrice: 2, emailPrice: 1, websitePrice: 1.5 },
-    keram_facade: { phonePrice: 1, emailPrice: 0.5, websitePrice: 1, ratingPrice: 0.5, reviewsPrice: 0.5 },
-    ural_steel: { phonePrice: 3, emailPrice: 1, websitePrice: 2 },
+    stroy_boss: { maintenanceFee: 1500, phonePrice: 50, emailPrice: 30, websitePrice: 20, monthlyCap: 5000 },
+    keram_facade: { maintenanceFee: 800, phonePrice: 30, emailPrice: 20, websitePrice: 15, monthlyCap: 3000 },
+    ural_steel: { maintenanceFee: 2000, phonePrice: 80, emailPrice: 40, websitePrice: 30, monthlyCap: 8000 },
   };
-  for (const [username, prices] of Object.entries(DEMO_RATES)) {
-    const uid = userIdMap.get(username);
-    if (!uid) continue;
-    await prisma.metricsPayoutRate.upsert({
-      where: { userId: uid },
-      update: prices,
-      create: { userId: uid, ...prices },
+  for (const [username, rates] of Object.entries(DEMO_RATES)) {
+    const cid = companyIdMap.get(username);
+    if (!cid) continue;
+    await prisma.companyBilling.upsert({
+      where: { companyId: cid },
+      update: { ...rates, status: "ACTIVE", billingStartedAt: new Date(), billedThrough: null, hiddenReason: null },
+      create: { companyId: cid, ...rates, status: "ACTIVE", billingStartedAt: new Date() },
     });
   }
-  console.log(`  ✅ Ставки выплат по метрикам: ${Object.keys(DEMO_RATES).length} компании`);
+  console.log(`  ✅ Тарифы биллинга: ${Object.keys(DEMO_RATES).length} компании`);
 
   // ── 6. Товары ──
   for (const p of PRODUCTS) {
@@ -640,7 +640,6 @@ async function main() {
       coinPriceRub: 100,
       addCompanyCoins: 1,
       reviewCoins: 1,
-      maxMonthlyLimit: 1000,
     },
   });
   console.log("  ✅ Billing config");

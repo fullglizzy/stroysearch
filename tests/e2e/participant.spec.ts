@@ -90,7 +90,7 @@ test.describe("Кабинет участника", () => {
     await page.getByRole("button", { name: "Купить монеты" }).click();
     await page.locator("#buyAmount").fill("10");
     await page.getByRole("button", { name: "Отправить заявку" }).click();
-    await expect(page.getByText("Требуется оплата")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Требуется оплата", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Счёт №/).first()).toBeVisible();
 
     // Восстанавливаем профиль

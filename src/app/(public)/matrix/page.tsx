@@ -86,6 +86,7 @@ export default async function MatrixPage({
     FROM products p
     JOIN companies c ON c.id = p."companyId"
     JOIN product_tree_items t ON t.id = p."treeItemId"
+    LEFT JOIN company_billing cb ON cb."companyId" = c.id
     LEFT JOIN (
       SELECT "companyId", AVG("weightedAverage") AS rating
       FROM reviews WHERE "companyId" IS NOT NULL AND status = 'ACTIVE' GROUP BY "companyId"
@@ -95,7 +96,11 @@ export default async function MatrixPage({
   const selectSql = `
     SELECT p.id, p.name, p.description, p.classes, p."regions", p."imageUrl", p.unit, p.characteristics,
       p.price, p.views, p."companyId",
-      c.name AS "companyName", c.inn AS "companyInn", c.phone AS "companyPhone", c.email AS "companyEmail",
+      c.name AS "companyName", c.inn AS "companyInn",
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.phone END AS "companyPhone",
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.email END AS "companyEmail",
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.website END AS "companyWebsite",
+      (cb.status = 'HIDDEN') AS "contactsBlocked",
       t."fullNumberPath" AS "treeItemPath", t.name AS "treeItemName",
       cr.rating AS rating
     ${base}
@@ -125,6 +130,8 @@ export default async function MatrixPage({
     companyInn: string;
     companyPhone: string | null;
     companyEmail: string | null;
+    companyWebsite: string | null;
+    contactsBlocked: number;
     treeItemPath: string;
     treeItemName: string;
     rating: number | null;
@@ -150,6 +157,8 @@ export default async function MatrixPage({
     companyRating: p.rating !== null ? Math.round(p.rating * 10) / 10 : null,
     companyPhone: p.companyPhone,
     companyEmail: p.companyEmail,
+    companyWebsite: p.companyWebsite,
+    contactsBlocked: !!p.contactsBlocked,
   }));
 
   return (

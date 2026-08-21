@@ -13,7 +13,7 @@ import {
 import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
 import { cn, telHref, mailtoHref, parseCharacteristic } from "@/lib/utils";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, Globe, MapPin, Lock } from "lucide-react";
 
 export interface ProductCardData {
   name: string;
@@ -39,8 +39,11 @@ interface ProductCardProps {
   /** Контакты с раскрытием (для матрицы) */
   phone?: string | null;
   email?: string | null;
-  revealed?: { phone?: boolean; email?: boolean };
-  onReveal?: (field: "phone" | "email") => void;
+  website?: string | null;
+  revealed?: { phone?: boolean; email?: boolean; website?: boolean; rating?: boolean };
+  onReveal?: (field: "phone" | "email" | "website" | "rating") => void;
+  /** Санкция: контакты компании скрыты администратором */
+  contactsBlocked?: boolean;
   /** Бейдж под названием (например, категория — для ЛК) */
   badge?: React.ReactNode;
   /** Кнопки действий (например, редактировать/удалить — для ЛК) */
@@ -64,8 +67,10 @@ export function ProductCard({
   onRatingClick,
   phone,
   email,
+  website,
   revealed = {},
   onReveal,
+  contactsBlocked,
   badge,
   actions,
   footer,
@@ -113,20 +118,27 @@ export function ProductCard({
 
           {rating !== null && rating !== undefined && (
             <div className="flex items-center gap-1 mb-2">
-              {onRatingClick ? (
-                <button
-                  type="button"
-                  onClick={onRatingClick}
-                  className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
-                  title="Показать отзывы"
-                >
-                  <StarRating rating={rating} size="sm" />
-                  <span className="text-xs text-muted-foreground">{rating}</span>
-                </button>
+              {!onReveal || revealed.rating ? (
+                onRatingClick ? (
+                  <button
+                    type="button"
+                    onClick={onRatingClick}
+                    className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+                    title="Показать отзывы"
+                  >
+                    <StarRating rating={rating} size="sm" />
+                    <span className="text-xs text-muted-foreground">{rating}</span>
+                  </button>
+                ) : (
+                  <>
+                    <StarRating rating={rating} size="sm" />
+                    <span className="text-xs text-muted-foreground">{rating}</span>
+                  </>
+                )
               ) : (
                 <>
-                  <StarRating rating={rating} size="sm" />
-                  <span className="text-xs text-muted-foreground">{rating}</span>
+                  <EyeButton onClick={() => onReveal("rating")} fieldLabel="рейтинг" />
+                  <span className="text-xs text-muted-foreground">Скрыт</span>
                 </>
               )}
             </div>
@@ -167,33 +179,60 @@ export function ProductCard({
             </div>
           )}
 
-          {(phone || email) && (
+          {(phone || email || website || contactsBlocked) && (
             <div className="flex items-center gap-2 mt-auto pt-2 border-t">
-              {phone && (
-                revealed.phone ? (
-                  <a href={telHref(phone)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
-                    {phone}
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
-                    <EyeButton onClick={() => onReveal?.("phone")} fieldLabel="телефон" />
-                  </span>
-                )
-              )}
-              {email && (
-                revealed.email ? (
-                  <a href={mailtoHref(email)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
-                    <Mail className="h-3 w-3 text-muted-foreground" />
-                    {email}
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <Mail className="h-3 w-3 text-muted-foreground" />
-                    <EyeButton onClick={() => onReveal?.("email")} fieldLabel="email" />
-                  </span>
-                )
+              {contactsBlocked ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Контакты скрыты администратором">
+                  <Lock className="h-3 w-3" />
+                  Контакты скрыты
+                </span>
+              ) : (
+                <>
+                  {phone && (
+                    revealed.phone ? (
+                      <a href={telHref(phone)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
+                        <Phone className="h-3 w-3 text-muted-foreground" />
+                        {phone}
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-muted-foreground" />
+                        <EyeButton onClick={() => onReveal?.("phone")} fieldLabel="телефон" />
+                      </span>
+                    )
+                  )}
+                  {email && (
+                    revealed.email ? (
+                      <a href={mailtoHref(email)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
+                        <Mail className="h-3 w-3 text-muted-foreground" />
+                        {email}
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-muted-foreground" />
+                        <EyeButton onClick={() => onReveal?.("email")} fieldLabel="email" />
+                      </span>
+                    )
+                  )}
+                  {website && (
+                    revealed.website ? (
+                      <a
+                        href={website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs flex items-center gap-1 hover:text-menthol transition-colors"
+                      >
+                        <Globe className="h-3 w-3 text-muted-foreground" />
+                        {website.replace(/^https?:\/\//, "")}
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-3 w-3 text-muted-foreground" />
+                        <EyeButton onClick={() => onReveal?.("website")} fieldLabel="сайт" />
+                      </span>
+                    )
+                  )}
+                </>
               )}
             </div>
           )}

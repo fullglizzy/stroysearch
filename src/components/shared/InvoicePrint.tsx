@@ -3,12 +3,9 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Printer, Download, Loader2 } from "lucide-react";
-import { formatRub, formatInvoiceDate, pluralRu, rublesInWords } from "@/lib/invoices";
+import { formatRub, formatInvoiceDate, rublesInWords } from "@/lib/invoices";
 import { printHtmlNode } from "@/lib/print";
 import { downloadHtmlNodeAsPdf } from "@/lib/pdf";
-
-// Название платформы в формулировке предмета счёта
-const SITE_NAME = "ЕНЦПР";
 
 interface InvoiceItemRow {
   description: string;
@@ -25,8 +22,10 @@ export interface InvoicePrintData {
   subtotal: number;
   discount: number;
   total: number;
-  /** PURCHASE — покупка монет, PAYOUT — выплата за просмотры, ACTIVITY — за активность */
-  kind?: "PURCHASE" | "PAYOUT" | "ACTIVITY";
+  /** PURCHASE — покупка монет, BILLING — абонплата и просмотры */
+  kind?: "PURCHASE" | "BILLING";
+  periodFrom?: Date | string | null;
+  periodTo?: Date | string | null;
   buyerName: string;
   buyerInn: string | null;
   buyerKpp: string | null;
@@ -53,6 +52,11 @@ export interface BillingRequisites {
   invoiceBasis: string | null;
   /** Дата публикации оферты (/terms), ISO */
   offerDate?: string | null;
+  /** Названия счетов и примечания из шаблонов (редактируются в админке) */
+  docTemplates?: {
+    billing_invoice?: { title?: { text: string; enabled: boolean }; note?: { text: string; enabled: boolean } };
+    coin_invoice?: { title?: { text: string; enabled: boolean }; note?: { text: string; enabled: boolean } };
+  };
 }
 
 function round2(v: number): number {
@@ -68,6 +72,15 @@ function formatShortDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Стандартные название и примечание счёта (если шаблон не задан)
+const DEFAULT_TITLE = "Счёт на оплату № {number} от {date}";
+const DEFAULT_NOTE =
+  "Оплата данного счёта означает полное и безоговорочное согласие с условиями Публичной оферты (акцепт оферты согласно ст. 438 ГК РФ).\n*Упрощенная система налогообложения (УСН) / ст. 346.11 НК РФ (или пп. 26 п. 2 ст. 149 НК РФ, если софт в реестре РФ).";
+
+function fillTemplate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? vars[key] : match));
+}
+
 /**
  * Печатный вид счёта. При печати (window.print) печатается только этот блок —
  * см. правила @media print в globals.css (.invoice-print).
@@ -78,11 +91,33 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
   const vatTotal = withVat ? round2(invoice.total * vatRate / 100) : 0;
   const toPay = round2(invoice.total + vatTotal);
 
-  const isPayout = invoice.kind === "PAYOUT";
+  const isBilling = invoice.kind === "BILLING";
   const buyerIsCompany = invoice.buyerKind === "company";
   const termsUrl = (typeof window !== "undefined" ? window.location.origin : "") + "/terms";
   const docRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+
+  // Название и примечание — из шаблона (настройки), с фолбэком на стандартные
+  const docTpl = requisites.docTemplates?.[isBilling ? "billing_invoice" : "coin_invoice"];
+  const titleVars = {
+    number: invoice.number,
+    date: formatInvoiceDate(invoice.date),
+    period:
+      invoice.periodFrom && invoice.periodTo
+        ? `${formatShortDate(invoice.periodFrom)} — ${formatShortDate(invoice.periodTo)}`
+        : "",
+    total: formatRub(invoice.total),
+  };
+  const titleText =
+    docTpl?.title && docTpl.title.enabled && docTpl.title.text.trim()
+      ? fillTemplate(docTpl.title.text, titleVars)
+      : fillTemplate(DEFAULT_TITLE, titleVars);
+  const noteText = (() => {
+    if (!docTpl?.note) return fillTemplate(DEFAULT_NOTE, titleVars);
+    if (!docTpl.note.enabled) return null;
+    const text = docTpl.note.text.trim();
+    return text ? fillTemplate(text, titleVars) : null;
+  })();
 
   async function handleDownload() {
     if (!docRef.current || downloading) return;
@@ -123,9 +158,12 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
       <div ref={docRef} className="invoice-print border rounded-lg p-6 bg-white text-black text-sm">
         {/* Заголовок */}
         <div className="mb-6">
-          <p className="text-lg font-bold text-center">
-            Счёт на оплату № {invoice.number} от {formatInvoiceDate(invoice.date)}
-          </p>
+          <p className="text-lg font-bold text-center">{titleText}</p>
+          {isBilling && invoice.periodFrom && invoice.periodTo && (
+            <p className="text-center text-xs text-gray-600 mt-1">
+              Период оказания услуг: {formatShortDate(invoice.periodFrom)} — {formatShortDate(invoice.periodTo)}
+            </p>
+          )}
           <p className="text-right text-xs text-gray-600 mt-1">
             Оплатить до: {formatInvoiceDate(invoice.dueDate)}
           </p>
@@ -202,24 +240,14 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
               <tr key={i} className="align-top">
                 <td className="py-2 pr-2">{i + 1}</td>
                 <td className="py-2 px-2">
-                  {isPayout ? (
+                  {isBilling ? (
                     <p>{item.description}</p>
                   ) : (
-                    <>
-                      <p>
-                        Предоставление права использования функционала платформы {SITE_NAME}{" "}
-                        (Лицензионное вознаграждение)
-                      </p>
-                      <p>
-                        Объем прав: {item.quantity}{" "}
-                        {pluralRu(item.quantity, "условная единица", "условные единицы", "условных единиц")}{" "}
-                        ({pluralRu(item.quantity, "монета", "монеты", "монет")})
-                      </p>
-                    </>
+                    item.description.split("\n").map((line, li) => <p key={li}>{line}</p>)
                   )}
                 </td>
                 <td className="py-2 px-2 text-right">{item.quantity}</td>
-                <td className="py-2 px-2 text-right">{isPayout ? "шт." : "усл. ед."}</td>
+                <td className="py-2 px-2 text-right">{isBilling ? (item.quantity > 1 ? "шт." : "усл.") : "усл. ед."}</td>
                 <td className="py-2 px-2 text-right">{formatNumber(item.unitPrice)}</td>
                 <td className="py-2 px-2 text-right">{formatNumber(item.total)}</td>
               </tr>
@@ -230,6 +258,18 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
         {/* Итоги */}
         <div className="flex justify-end mb-4">
           <div className="w-72 text-sm">
+            {invoice.discount > 0 && (
+              <>
+                <div className="flex justify-between py-1">
+                  <span>Сумма:</span>
+                  <span>{formatRub(invoice.subtotal)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span>Скидка:</span>
+                  <span>-{formatRub(invoice.discount)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between py-1">
               <span>Итого без НДС:</span>
               <span>{formatRub(invoice.total)}</span>
@@ -258,17 +298,14 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
         <hr className="my-4 border-t-2 border-dashed border-gray-400" />
 
         {/* Примечание */}
-        <div className="mb-6 text-xs">
-          <p className="font-semibold mb-1">ВНИМАНИЕ / ПРИМЕЧАНИЕ:</p>
-          <p>
-            Оплата данного счёта означает полное и безоговорочное согласие с условиями Публичной
-            оферты (акцепт оферты согласно ст. 438 ГК РФ).
-          </p>
-          <p>
-            *Упрощенная система налогообложения (УСН) / ст. 346.11 НК РФ (или пп. 26 п. 2 ст. 149 НК
-            РФ, если софт в реестре РФ).
-          </p>
-        </div>
+        {noteText !== null && (
+          <div className="mb-6 text-xs">
+            <p className="font-semibold mb-1">ВНИМАНИЕ / ПРИМЕЧАНИЕ:</p>
+            {noteText.split("\n").map((line, li) => (
+              <p key={li}>{line}</p>
+            ))}
+          </div>
+        )}
 
         {/* Подписи */}
         <div className="flex items-end justify-between">

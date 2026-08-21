@@ -29,7 +29,7 @@ export async function GET(
         select: {
           username: true,
           ownedCompany: {
-            select: { name: true, legalAddress: true },
+            select: { name: true, legalAddress: true, inn: true, kpp: true },
           },
           profile: {
             select: { nick: true, inn: true, kpp: true, legalAddress: true, regions: true, companyName: true, firstName: true, lastName: true, middleName: true },
@@ -46,14 +46,19 @@ export async function GET(
   const profile = invoice.user.profile;
   const ownedCompany = invoice.user.ownedCompany;
 
-  // Юр.лицо/ИП — по ИНН в профиле; физ.лицо — по ФИО
-  const buyerKind = profile?.inn ? "company" : "individual";
-  const buyerName =
-    buyerKind === "company"
+  // Счёт за услуги платформы (BILLING) выставляется компании — её реквизиты
+  // берём из карточки компании, а не из профиля пользователя.
+  const isBilling = invoice.kind === "BILLING";
+  const buyerKind = isBilling || profile?.inn ? "company" : "individual";
+  const buyerName = isBilling
+    ? ownedCompany?.name || profile?.companyName || profile?.nick || invoice.user.username
+    : profile?.inn
       ? profile?.companyName || ownedCompany?.name || profile?.nick || invoice.user.username
       : [profile?.firstName, profile?.lastName, profile?.middleName].filter(Boolean).join(" ").trim() ||
         profile?.nick ||
         invoice.user.username;
+  const buyerInn = isBilling ? ownedCompany?.inn || profile?.inn || null : profile?.inn || null;
+  const buyerKpp = isBilling ? ownedCompany?.kpp || profile?.kpp || null : profile?.kpp || null;
 
   return NextResponse.json({
     invoice: {
@@ -67,11 +72,13 @@ export async function GET(
       discount: invoice.discount.toNumber(),
       total: invoice.total.toNumber(),
       limit: invoice.limit.toNumber(),
+      periodFrom: invoice.periodFrom,
+      periodTo: invoice.periodTo,
       buyerName,
       buyerKind,
       buyerUserId: invoice.userId,
-      buyerInn: profile?.inn || null,
-      buyerKpp: profile?.kpp || null,
+      buyerInn,
+      buyerKpp,
       buyerAddress:
         profile?.legalAddress ||
         ownedCompany?.legalAddress ||

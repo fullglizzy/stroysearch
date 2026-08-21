@@ -30,13 +30,12 @@ model User {
   conferences           Conference[]
   products              Product[]
   wallet                Wallet?
-  payoutRate            MetricsPayoutRate?
-  activityPayoutRate    ActivityPayoutRate?
   treeSnapshots         TreeSnapshot[]
   invoices              Invoice[]
   transactions          Transaction[]
   addedCompanies        Company[]             @relation("AddedCompanies")
   ownedCompany          Company?              @relation("OwnedCompany")
+  companyInvites        CompanyInvite[]
   documentPurchases     DocumentPurchase[]
   conferenceParticipants ConferenceParticipant[]
   pollVotes             PollVote[]
@@ -173,9 +172,16 @@ model Company {
   reviews       Review[]
   products      Product[]
   metrics       CompanyMetrics?
+  viewEvents    CompanyViewEvent[]
+  billing       CompanyBilling?
+  invites       CompanyInvite[]
+  notes         CompanyNote[]
+  // Имя + ИНН в нижнем регистре — поиск по кириллице (LIKE в SQLite чувствителен к регистру)
+  searchText    String          @default("")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
+  @@index([searchText])
   @@map("companies")
 }
 
@@ -189,6 +195,73 @@ model CompanyMetrics {
   ratingViews  Int     @default(0)
 
   @@map("company_metrics")
+}
+
+// Журнал просмотров контактов компании — источник данных для биллинга.
+// Каждый клик по «глазу» фиксируется отдельным событием, чтобы счёт можно
+// было выставить за произвольный период и видеть историю.
+model CompanyViewEvent {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  metric    String   // phone | email | website | reviews | rating
+  viewerId  String?
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, metric, createdAt])
+  @@map("company_view_events")
+}
+
+// Биллинг компании: индивидуальные ставки (₽), статус и «водяная отметка» —
+// дата, по которую просмотры уже выставлены в счёт (включительно).
+// Пустые ставки означают значения по умолчанию из BillingConfig.
+model CompanyBilling {
+  companyId        String    @id
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status           String    @default("INACTIVE") // INACTIVE | ACTIVE | HIDDEN
+  maintenanceFee   Decimal?
+  phonePrice       Decimal?
+  emailPrice       Decimal?
+  websitePrice     Decimal?
+  reviewsPrice     Decimal?
+  ratingPrice      Decimal?
+  monthlyCap       Decimal?
+  billingStartedAt DateTime?
+  billedThrough    DateTime?
+  hiddenReason     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("company_billing")
+}
+
+// Заметки администратора о компании: как зарегистрировалась, договорённости
+// об оплате, что нужно проверить. Дата проставляется автоматически.
+model CompanyNote {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@map("company_notes")
+}
+
+// Одноразовая ссылка-приглашение для передачи карточки компании владельцу.
+model CompanyInvite {
+  id          String    @id @default(uuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id])
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("company_invites")
 }
 
 // ─────────────────────────── ОТЗЫВЫ И РЕЙТИНГ ───────────────────────────
@@ -445,6 +518,7 @@ model GiftClaim {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   claimDate DateTime @default(now())
+  issuedAt  DateTime? // null — ожидает выдачи, заполнено — подарок выдан
 
   @@map("gift_claims")
 }
@@ -456,9 +530,17 @@ model BillingConfig {
   coinPriceRub        Decimal  @default(100)
   addCompanyCoins     Decimal  @default(1)
   reviewCoins         Decimal  @default(1)
-  maxMonthlyLimit     Decimal  @default(1000)
   vatRate             Decimal  @default(0) // ставка НДС для счетов, % (0 = без НДС)
   invoiceBasis        String?             // основание в счёте, напр. «Договор №1 от 01.01.2026»
+
+  // Ставки по умолчанию для биллинга компаний (₽)
+  maintenanceFee      Decimal  @default(1000) // абонентская плата в месяц
+  phoneViewPrice      Decimal  @default(50)   // ₽ за 1 просмотр телефона
+  emailViewPrice      Decimal  @default(30)   // ₽ за 1 просмотр эл.почты
+  websiteViewPrice    Decimal  @default(20)   // ₽ за 1 просмотр сайта
+  reviewsViewPrice    Decimal  @default(10)   // ₽ за 1 просмотр отзывов
+  ratingViewPrice     Decimal  @default(10)   // ₽ за 1 просмотр рейтинга
+  invoiceDueDays      Int      @default(5)    // срок оплаты счёта, дней
   updatedAt           DateTime @updatedAt
 
   bankName            String?
@@ -481,27 +563,74 @@ model BillingConfig {
 }
 
 model Invoice {
-  id        String         @id @default(uuid())
-  userId    String
-  user      User           @relation(fields: [userId], references: [id])
-  number    String         @unique
-  date      DateTime
-  dueDate   DateTime
-  status    String         @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
-  kind      String         @default("PURCHASE") // PURCHASE | PAYOUT
-  subtotal  Decimal
-  limit     Decimal
-  discount  Decimal        @default(0)
-  total     Decimal
-  items     InvoiceItem[]
-  ticketId  String?        @unique
-  ticket    SupportTicket? @relation(fields: [ticketId], references: [id])
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  sentAt    DateTime?
-  paidAt    DateTime?
+  id           String         @id @default(uuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  number       String         @unique
+  date         DateTime
+  dueDate      DateTime
+  status       String         @default("DRAFT") // DRAFT | SENT | PAID | SKIPPED | OVERDUE | CANCELLED
+  kind         String         @default("PURCHASE") // PURCHASE | BILLING
+  subtotal     Decimal
+  limit        Decimal
+  discount     Decimal        @default(0)
+  total        Decimal
+  items        InvoiceItem[]
+  // Период биллинга и водяная отметка (для kind = BILLING)
+  periodFrom     DateTime?
+  periodTo       DateTime?
+  billedThrough  DateTime?
+  act            ServiceAct?
+  ticketId     String?        @unique
+  ticket       SupportTicket? @relation(fields: [ticketId], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  sentAt       DateTime?
+  paidAt       DateTime?
 
+  @@index([userId, createdAt])
+  @@index([kind, status])
   @@map("invoices")
+}
+
+// Акт об оказанных услугах — создаётся при закрытии (оплате) счёта BILLING.
+model ServiceAct {
+  id        String   @id @default(uuid())
+  invoiceId String   @unique
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  number    String   @unique
+  date      DateTime
+  total     Decimal
+  itemsJson String   // JSON: снимок позиций акта на момент закрытия
+  createdAt DateTime @default(now())
+
+  @@map("service_acts")
+}
+
+// Строки шаблонов документов (счёт за обслуживание и метрики, акт,
+// счёт на покупку монет). Тексты редактирует администратор в настройках.
+// Плейсхолдеры подставляются при формировании документа.
+model DocTemplateLine {
+  id          String   @id @default(uuid())
+  docKind     String   // billing_invoice | service_act | coin_invoice
+  code        String   // ключ строки: maintenance | views | cap | services | license | scope
+  label       String   // служебное название строки для администратора
+  description String   // текст строки; плейсхолдеры: {period} {metric} {count} {price} {fee} {cap} {breakdown} {days} {invoice} {total} {units} {coins}
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([docKind, code])
+  @@map("doc_template_lines")
+}
+
+// Счётчики сквозной нумерации документов (СЧ-2026-001, АКТ-2026-001).
+model NumberSequence {
+  key   String @id // "invoice-2026" | "act-2026"
+  value Int    @default(0)
+
+  @@map("number_sequences")
 }
 
 model InvoiceItem {
@@ -516,44 +645,7 @@ model InvoiceItem {
   @@map("invoice_items")
 }
 
-// ─────────────────────────── ВЫПЛАТЫ ПО МЕТРИКАМ ───────────────────────────
-// Индивидуальные ставки (₽ за 1 просмотр) и «водяные знаки» — сколько
-// просмотров уже выставлено в счёт, чтобы не выставлять их повторно.
-model MetricsPayoutRate {
-  userId           String   @id
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  phonePrice       Decimal  @default(0)
-  emailPrice       Decimal  @default(0)
-  websitePrice     Decimal  @default(0)
-  ratingPrice      Decimal  @default(0)
-  reviewsPrice     Decimal  @default(0)
-  phonePaidViews   Int      @default(0)
-  emailPaidViews   Int      @default(0)
-  websitePaidViews Int      @default(0)
-  ratingPaidViews  Int      @default(0)
-  reviewsPaidViews Int      @default(0)
-  updatedAt        DateTime @updatedAt
-
-  @@map("metrics_payout_rates")
-}
-
-// ─────────────────── ВЫПЛАТЫ ЗА АКТИВНОСТЬ ───────────────────
-// Ставки за активность компании (₽ за товар/отзыв) и дата, по которую
-// активность уже выставлена в счёт (включительно) — защита от повторного
-// выставления за тот же период.
-model ActivityPayoutRate {
-  userId        String    @id
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  productPrice  Decimal   @default(0) // ₽ за добавленный товар
-  reviewPrice   Decimal   @default(0) // ₽ за полученный отзыв
-  presencePrice Decimal   @default(0) // ₽ за день нахождения на платформе
-  billedUntil   DateTime? // период уже выставлен по эту дату (включительно)
-  updatedAt     DateTime  @updatedAt
-
-  @@map("activity_payout_rates")
-}
-
-// ─────────────────────────── СНИМКИ ДЕРЕВА ───────────────────────────
+// ─────────────────── СНИМКИ ДЕРЕВА ───────────────────
 
 // Резервные копии дерева решений («как гитхаб»): полный JSON дерева,
 // чтобы можно было вернуться к состоянию на момент снимка.
@@ -589,6 +681,8 @@ model SupportTicket {
   userId         String?
   user           User?            @relation(fields: [userId], references: [id])
   email          String
+  phone          String?
+  inn            String?
   subject        String
   message        String
   isResolved     Boolean          @default(false)

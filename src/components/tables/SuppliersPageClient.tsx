@@ -34,7 +34,7 @@ import { ReviewForm } from "@/components/forms/ReviewForm";
 import { Pagination } from "@/components/shared/Pagination";
 import { MultiSelect } from "@/components/shared/MultiSelect";
 import { AddCompanyDialog } from "@/components/forms/AddCompanyDialog";
-import { Plus, Search, MessageSquare, AlertCircle, Loader2, ArrowUpDown, Phone, Mail, Globe, X } from "lucide-react";
+import { Plus, Search, MessageSquare, AlertCircle, Loader2, ArrowUpDown, Phone, Mail, Globe, Lock, X } from "lucide-react";
 import { roleLabel } from "@/lib/roles";
 import { telHref, mailtoHref } from "@/lib/utils";
 import { matchClassifier } from "@/lib/classifier";
@@ -52,6 +52,7 @@ interface CompanyRow {
   regions: string[];
   classifierIds: string[];
   isContactsHidden: boolean;
+  billingHidden: boolean;
   rating: number | null;
   reviewCount: number;
   ownerNick: string | null;
@@ -234,7 +235,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
       // Метрика просмотров считается только для компаний,
       // только при раскрытии и один раз за сессию
       const row = rows.find((c) => c.id === companyId);
-      if (!row || row.kind === "participant" || !isReveal) return;
+      if (!row || row.kind === "participant" || row.billingHidden || !isReveal) return;
       if (countedRef.current[key]?.[field]) return;
       countedRef.current = {
         ...countedRef.current,
@@ -408,6 +409,8 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                 // Участник скрыл персональные данные — видимы только ник,
                 // классификатор, роль, рейтинг и отзывы
                 const hiddenContacts = company.kind === "participant" && company.isContactsHidden;
+                // Санкция: контакты компании скрыты администратором за неуплату
+                const contactsBlocked = hiddenContacts || company.billingHidden;
 
                 return (
                   <TableRow key={company.id}>
@@ -461,8 +464,11 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {hiddenContacts ? (
-                        "Скрыто"
+                      {contactsBlocked ? (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
+                          <Lock className="h-3 w-3" />
+                          Скрыто
+                        </span>
                       ) : company.phone ? (
                         <div className="flex items-center gap-1">
                           {rev.phone ? (
@@ -493,8 +499,11 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {hiddenContacts ? (
-                        "Скрыто"
+                      {contactsBlocked ? (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
+                          <Lock className="h-3 w-3" />
+                          Скрыто
+                        </span>
                       ) : company.email ? (
                         <div className="flex items-center gap-1">
                           {rev.email ? (
@@ -525,8 +534,11 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                       )}
                     </TableCell>
                     <TableCell>
-                      {hiddenContacts ? (
-                        "Скрыто"
+                      {contactsBlocked ? (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
+                          <Lock className="h-3 w-3" />
+                          Скрыто
+                        </span>
                       ) : company.website ? (
                         <div className="flex items-center gap-1">
                           {rev.website ? (

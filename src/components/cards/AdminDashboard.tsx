@@ -137,10 +137,10 @@ export function AdminDashboard({ stats, userType, supportUnread }: AdminDashboar
       show: isSuper(userType),
     },
     {
-      href: "/admin/payouts",
+      href: "/admin/finances?tab=companies",
       icon: Coins,
-      title: "Учёт метрик и выплаты",
-      desc: "Ставки за просмотры и счета на выплату компаниям",
+      title: "Биллинг компаний",
+      desc: "Тарифы, скидки, счета и акты за обслуживание",
       show: isRoot(userType),
     },
   ];

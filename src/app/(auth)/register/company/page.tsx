@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useForm, Controller, useWatch } from "react-hook-form";
@@ -17,6 +17,7 @@ import {
   checkUsernameAvailability,
   checkEmailAvailability,
   checkInnAvailability,
+  getInviteInfo,
 } from "@/server/auth/actions";
 import { registerCompanySchema, isValidInn, type RegisterCompanyInput } from "@/lib/validators";
 import { WelcomeDialog } from "@/components/shared/WelcomeDialog";
@@ -32,6 +33,9 @@ export default function RegisterCompanyPage() {
   const [loading, setLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [registeredDisplayName, setRegisteredDisplayName] = useState("");
+  const [inviteToken, setInviteToken] = useState("");
+  const [inviteInfo, setInviteInfo] = useState<{ inn: string; companyName: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   const {
     register,
@@ -39,6 +43,7 @@ export default function RegisterCompanyPage() {
     control,
     setError,
     setFocus,
+    setValue,
     formState: { errors },
   } = useForm<RegisterCompanyInput>({
     resolver: zodResolver(registerCompanySchema),
@@ -53,6 +58,28 @@ export default function RegisterCompanyPage() {
       agreeTerms: false,
     },
   });
+
+  // Регистрация по приглашению администратора: подставляем ИНН и название
+  // карточки компании из токена в ссылке
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token) return;
+    setInviteToken(token);
+    setInviteLoading(true);
+    getInviteInfo(token)
+      .then((raw) => {
+        const info = raw as { error?: string; inn?: string; companyName?: string };
+        if (info.error || !info.inn) {
+          setServerError(info.error || "Не удалось проверить приглашение");
+          return;
+        }
+        setInviteInfo({ inn: info.inn, companyName: info.companyName ?? "" });
+        setValue("inn", info.inn);
+        setValue("companyName", info.companyName ?? "");
+      })
+      .catch(() => setServerError("Не удалось проверить приглашение"))
+      .finally(() => setInviteLoading(false));
+  }, [setValue]);
 
   const password = useWatch({ control, name: "password" }) ?? "";
   const username = useWatch({ control, name: "username" }) ?? "";
@@ -104,6 +131,7 @@ export default function RegisterCompanyPage() {
     formData.append("inn", values.inn);
     formData.append("companyName", values.companyName);
     formData.append("agreeTerms", values.agreeTerms ? "on" : "off");
+    if (inviteToken) formData.append("invite", inviteToken);
 
     const result = await registerCompany(formData);
 
@@ -151,6 +179,19 @@ export default function RegisterCompanyPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+            {inviteLoading ? (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>Проверка приглашения...</AlertDescription>
+              </Alert>
+            ) : inviteInfo ? (
+              <Alert>
+                <AlertDescription>
+                  Регистрация по приглашению для компании <b>{inviteInfo.companyName}</b>{" "}
+                  (ИНН {inviteInfo.inn}). Карточка будет привязана к вашему аккаунту, ИНН изменять нельзя.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {serverError && (
               <Alert variant="destructive">
                 <TriangleAlert className="h-4 w-4" />
@@ -283,7 +324,7 @@ export default function RegisterCompanyPage() {
                 placeholder="10 или 12 цифр"
                 autoComplete="off"
                 maxLength={12}
-                disabled={loading}
+                disabled={loading || !!inviteInfo}
                 aria-invalid={!!errors.inn}
                 aria-describedby={
                   errors.inn
@@ -333,7 +374,7 @@ export default function RegisterCompanyPage() {
                 placeholder="ООО «Название»"
                 autoComplete="organization"
                 maxLength={255}
-                disabled={loading}
+                disabled={loading || !!inviteInfo}
                 aria-invalid={!!errors.companyName}
                 aria-describedby={errors.companyName ? "companyName-error" : undefined}
                 {...register("companyName", {

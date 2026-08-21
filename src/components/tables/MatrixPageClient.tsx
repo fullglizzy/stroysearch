@@ -34,7 +34,8 @@ interface ProductRow {
   name: string; classes: string[]; regions: string[]; imageUrl: string | null;
   unit: string | null; characteristics: string[]; price: number | null;
   views: number; treeItemPath: string; treeItemName: string;
-  companyRating: number | null; companyPhone: string | null; companyEmail: string | null;
+  companyRating: number | null; companyPhone: string | null; companyEmail: string | null; companyWebsite: string | null;
+  contactsBlocked: boolean;
 }
 
 interface TreeItem { id: string; name: string; fullNumberPath: string; }
@@ -230,6 +231,9 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
 
     // Метрика: только при раскрытии и один раз за сессию
     if (!isReveal || countedRef.current[companyId]?.[field]) return;
+    // Санкция: контакты компании скрыты администратором — не считаем (как в базе поставщиков)
+    const product = products.find((p) => p.companyId === companyId);
+    if (product?.contactsBlocked) return;
     countedRef.current = {
       ...countedRef.current,
       [companyId]: { ...countedRef.current[companyId], [field]: true },
@@ -260,6 +264,8 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
       onRatingClick={() => openReviewsPopup({ id: product.companyId, kind: "company", name: product.companyName })}
       phone={product.companyPhone}
       email={product.companyEmail}
+      website={product.companyWebsite}
+      contactsBlocked={product.contactsBlocked}
       revealed={revals[product.companyId] || {}}
       onReveal={(field) => {
         handleReveal(product.companyId, field);

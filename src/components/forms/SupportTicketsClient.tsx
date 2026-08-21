@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { SUPPORT_TOPICS, SUPPORT_TOPIC_ITEMS } from "@/lib/support";
 import { toastError, toastSuccess } from "@/lib/toast";
-import { Plus, Send, Loader2, CheckCircle2, RotateCcw, MessageSquare, LifeBuoy, Paperclip, X, FileText } from "lucide-react";
+import { Plus, Send, Loader2, CheckCircle2, RotateCcw, MessageSquare, LifeBuoy, Paperclip, X, FileText, Mail, Phone, Building2 } from "lucide-react";
 
 interface TicketRow {
   id: string;
@@ -53,6 +53,9 @@ interface TicketDetail {
   createdAt: Date;
   message: string;
   userName: string | null;
+  email: string | null;
+  phone: string | null;
+  inn: string | null;
 }
 
 interface InvoiceInfo {
@@ -432,6 +435,30 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
                   </Button>
                 )}
               </div>
+
+              {/* Контакты заявителя (для админа) */}
+              {mode === "staff" && (detail.email || detail.phone || detail.inn) && (
+                <div className="flex flex-wrap gap-2">
+                  {detail.email && (
+                    <span className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      <span className="break-all">{detail.email}</span>
+                    </span>
+                  )}
+                  {detail.phone && (
+                    <span className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      {detail.phone}
+                    </span>
+                  )}
+                  {detail.inn && (
+                    <span className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      ИНН {detail.inn}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Первое сообщение */}
               <div className={`flex ${mode === "staff" ? "justify-start" : "justify-end"}`}>

@@ -70,7 +70,7 @@ export function Header() {
       {/* Хедер шире контента страниц, чтобы ссылки занимали меньше строк */}
       <div className="mx-auto w-full max-w-[1900px] px-4 sm:px-6 lg:px-8 flex min-h-16 items-center justify-between">
         {/* Logo */}
-        <Link href="/" aria-label="ЕНЦПР — на главную" className="flex items-center gap-0 flex-shrink-0">
+        <Link href="/" aria-label="ЕНЦПР — на главную" className="flex items-center mr-[0.5em] gap-0 flex-shrink-0">
           <img
             src="/logo/logo.svg"
             alt="ЕНЦПР"
@@ -84,15 +84,15 @@ export function Header() {
               </span>
         </Link>
 
-        {/* Desktop Nav — при нехватке места переносится на следующую строку */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 flex-wrap justify-center">
+        {/* Desktop Nav — ссылки всегда в один ряд, при нехватке места текст переносится внутри ссылки */}
+        <nav className="hidden lg:flex items-stretch gap-1 flex-1 justify-center">
           {navLinks.map((link) => {
             const isActive = pathname.startsWith(link.href);
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-2.5 xl:px-3 py-2 text-sm font-medium whitespace-normal text-center rounded-md bg-menthol/30 transition-colors ${
+                className={`px-2.5 xl:px-3 py-2 text-sm font-medium whitespace-normal leading-snug text-center rounded-md bg-menthol/30 transition-colors flex-1 min-w-0 flex items-center justify-center break-words ${
                   isActive
                     ? "text-primary-foreground bg-orange-accent/80"
                     : "text-foreground hover:text-foreground hover:bg-menthol/80"
@@ -178,7 +178,7 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="lg:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -188,7 +188,7 @@ export function Header() {
 
       {/* Mobile Nav */}
       {mobileOpen && (
-        <nav className="md:hidden border-t bg-background p-4">
+        <nav className="lg:hidden border-t bg-background p-4">
           <div className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <Link

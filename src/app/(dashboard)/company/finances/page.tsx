@@ -3,14 +3,22 @@ export const dynamic = "force-dynamic";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { FinancesPage } from "@/components/cards/FinancesPage";
+import { CompanyFinancesTabs } from "@/components/cards/CompanyFinancesTabs";
 import { getMissingInvoiceProfileFields } from "@/lib/invoices";
 
-export default async function CompanyFinancesPage() {
+export default async function CompanyFinancesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const userId = (session.user as any).id as string;
+
+  const sp = await searchParams;
+  const tabRaw = typeof sp.tab === "string" ? sp.tab : "";
+  const initialTab = ["overview", "invoices", "coins"].includes(tabRaw) ? tabRaw : "overview";
 
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   const transactions = await prisma.transaction.findMany({
@@ -37,8 +45,9 @@ export default async function CompanyFinancesPage() {
   return (
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-2">Мои финансы</h1>
-      <p className="text-muted-foreground mb-6">Баланс монет, счета и подарки</p>
-      <FinancesPage
+      <p className="text-muted-foreground mb-6">Тариф, счета и акты, монеты и подарки</p>
+      <CompanyFinancesTabs
+        initialTab={initialTab}
         balance={wallet ? wallet.balance.toNumber() : 0}
         transactions={transactions.map((t) => ({
           id: t.id,

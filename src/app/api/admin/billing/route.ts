@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { SessionUser } from "@/types";
 
 const ADMIN_TYPES = ["SUPER", "ROOT"];
 
@@ -9,8 +10,14 @@ const NUMERIC_FIELDS = [
   "coinPriceRub",
   "addCompanyCoins",
   "reviewCoins",
-  "maxMonthlyLimit",
   "vatRate",
+  "maintenanceFee",
+  "phoneViewPrice",
+  "emailViewPrice",
+  "websiteViewPrice",
+  "reviewsViewPrice",
+  "ratingViewPrice",
+  "invoiceDueDays",
 ] as const;
 
 const STRING_FIELDS = [
@@ -38,7 +45,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = (session.user as SessionUser).type as string;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getMissingInvoiceProfileFields } from "@/lib/invoices";
+import { getMissingInvoiceProfileFields, pluralRu } from "@/lib/invoices";
+import { docTemplateLines, DEFAULT_COIN_LINES, renderDocTemplate } from "@/lib/billing";
+import type { SessionUser } from "@/types";
 import crypto from "crypto";
 
 const PURCHASE_SUBJECT = "Покупка монет";
@@ -13,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id as string;
+    const userId = (session.user as SessionUser).id as string;
     const email = session.user.email || "";
 
     // Покупатель в печатном счёте заполняется из профиля (название/ФИО и адрес) —
@@ -59,29 +61,22 @@ export async function POST(request: Request) {
     const coinPrice = billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100;
     const total = Math.round(amount * coinPrice * 100) / 100;
 
-    // Контроль месячного лимита: учитываем все неотменённые счета текущего месяца
-    const monthLimit = billing?.maxMonthlyLimit ? billing.maxMonthlyLimit.toNumber() : 1000;
-    if (monthLimit > 0) {
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-
-      const monthlyAgg = await prisma.invoice.aggregate({
-        where: {
-          userId,
-          date: { gte: monthStart },
-          status: { not: "CANCELLED" },
-        },
-        _sum: { total: true },
-      });
-      const already = monthlyAgg._sum.total ? monthlyAgg._sum.total.toNumber() : 0;
-      if (already + total > monthLimit) {
-        return NextResponse.json(
-          { error: `Превышен месячный лимит покупок (${monthLimit} ₽). Доступно: ${Math.max(0, monthLimit - already)} ₽` },
-          { status: 400 },
-        );
-      }
-    }
+    // Описание позиции счёта — из шаблона (настраивается в админке);
+    // название и примечание шаблона в позицию не попадают
+    const tplRows = await docTemplateLines("coin_invoice");
+    const itemRows = tplRows.filter((r) => r.code === "license" || r.code === "scope");
+    const lines = itemRows.length > 0 ? itemRows.map((r) => r.description) : DEFAULT_COIN_LINES;
+    const itemDescription = lines
+      .map((line) =>
+        renderDocTemplate(line, {
+          count: String(amount),
+          units: pluralRu(amount, "условная единица", "условные единицы", "условных единиц"),
+          coins: pluralRu(amount, "монета", "монеты", "монет"),
+          price: coinPrice.toLocaleString("ru-RU", { maximumFractionDigits: 2 }),
+          total: total.toLocaleString("ru-RU", { maximumFractionDigits: 2 }),
+        }),
+      )
+      .join("\n");
 
     const number = `INV-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
@@ -103,13 +98,13 @@ export async function POST(request: Request) {
           date: new Date(),
           dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
           subtotal: total,
-          limit: monthLimit,
+          limit: 0,
           total,
           ticketId: ticket.id,
           items: {
             create: [
               {
-                description: `Покупка ${amount} монет`,
+                description: itemDescription,
                 quantity: amount,
                 unitPrice: coinPrice,
                 total,

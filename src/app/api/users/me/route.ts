@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { profileSchema } from "@/lib/validators";
+import { companySearchText } from "@/lib/company";
 import type { SessionUser } from "@/types";
 
 export async function GET() {
@@ -119,12 +120,21 @@ export async function PATCH(request: Request) {
       phone !== undefined ||
       classifierIds !== undefined
     ) {
+      // При переименовании обновляем и строку поиска (ИНН берём из карточки)
+      const ownedCompany = companyName && companyName.trim()
+        ? await prisma.company.findFirst({
+            where: { ownerUserId: userId },
+            select: { inn: true },
+          })
+        : null;
       await prisma.company.updateMany({
         where: { ownerUserId: userId },
         data: {
           ...(website !== undefined ? { website: normalizedWebsite } : {}),
           ...(regions !== undefined ? { regions: regionsCsv } : {}),
-          ...(companyName && companyName.trim() ? { name: companyName.trim() } : {}),
+          ...(companyName && companyName.trim() && ownedCompany
+            ? { name: companyName.trim(), searchText: companySearchText(companyName.trim(), ownedCompany.inn) }
+            : {}),
           ...(kpp !== undefined ? { kpp: kpp || null } : {}),
           ...(legalAddress !== undefined ? { legalAddress: legalAddress || null } : {}),
           ...(phone !== undefined ? { phone: phone || null } : {}),

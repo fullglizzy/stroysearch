@@ -1,5 +1,5 @@
 export const INVOICE_STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Ожидает оплаты",
+  DRAFT: "Черновик",
   SENT: "Выставлен",
   PAID: "Оплачен",
   SKIPPED: "Пропущен",

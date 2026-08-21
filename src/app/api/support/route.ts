@@ -68,10 +68,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Email берём из аккаунта (если авторизован); у гостей — пустая строка
+    // Гости обязаны оставить контакты для связи — без них поддержка не сможет ответить
+    if (!session?.user) {
+      if (!parsed.data.email) {
+        return NextResponse.json({ error: "Укажите email для связи" }, { status: 400 });
+      }
+      if (!parsed.data.phone) {
+        return NextResponse.json({ error: "Укажите телефон для связи" }, { status: 400 });
+      }
+    }
+
+    // Email берём из аккаунта (если авторизован); у гостей — из формы
     const ticket = await prisma.supportTicket.create({
       data: {
-        email: session?.user?.email || "",
+        email: session?.user?.email || parsed.data.email,
+        phone: parsed.data.phone || null,
+        inn: parsed.data.inn || null,
         subject: parsed.data.subject,
         message: parsed.data.message,
         userId: session?.user ? (session.user as any).id : null,

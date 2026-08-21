@@ -11,14 +11,30 @@ export async function GET() {
     return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
   }
 
-  const [config, termsDoc] = await Promise.all([
+  const [config, termsDoc, tplRows] = await Promise.all([
     prisma.billingConfig.findUnique({ where: { id: "default" } }),
     // Дата публикации оферты для поля «Основание» в печатном виде счёта
     prisma.legalDocument.findUnique({
       where: { key: "terms" },
       select: { updatedAt: true },
     }),
+    // Названия счетов и примечания из шаблонов (редактируются в админке)
+    prisma.docTemplateLine.findMany({
+      where: {
+        docKind: { in: ["billing_invoice", "coin_invoice"] },
+        code: { in: ["title", "note"] },
+      },
+      select: { docKind: true, code: true, description: true, enabled: true },
+    }),
   ]);
+
+  const docTemplates: Record<string, { title?: { text: string; enabled: boolean }; note?: { text: string; enabled: boolean } }> = {};
+  for (const row of tplRows) {
+    docTemplates[row.docKind] ??= {};
+    if (row.code === "title" || row.code === "note") {
+      docTemplates[row.docKind][row.code] = { text: row.description, enabled: row.enabled };
+    }
+  }
 
   return NextResponse.json({
     organizationName: config?.organizationName || null,
@@ -35,5 +51,6 @@ export async function GET() {
     vatRate: config?.vatRate ? config.vatRate.toNumber() : 0,
     invoiceBasis: config?.invoiceBasis || null,
     offerDate: termsDoc?.updatedAt?.toISOString() || null,
+    docTemplates,
   });
 }
