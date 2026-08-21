@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     // Email берём из аккаунта (если авторизован); у гостей — из формы
     const ticket = await prisma.supportTicket.create({
       data: {
-        email: session?.user?.email || parsed.data.email,
+        email: session?.user?.email || parsed.data.email || "",
         phone: parsed.data.phone || null,
         inn: parsed.data.inn || null,
         subject: parsed.data.subject,

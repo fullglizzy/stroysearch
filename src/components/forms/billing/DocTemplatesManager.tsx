@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Save, Eye } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/toast";
-import { InvoicePrint, type BillingRequisites } from "@/components/shared/InvoicePrint";
+import { InvoicePrint, type InvoicePrintData, type BillingRequisites } from "@/components/shared/InvoicePrint";
 import { ServiceActPrint, type ServiceActData } from "@/components/shared/ServiceActPrint";
 import { fetchRequisites } from "./shared";
 
@@ -148,7 +148,7 @@ export function DocTemplatesManager() {
   }
 
   // Шаблонные данные счёта — строки берутся из текущего состояния редактора
-  function sampleInvoice(kind: "billing_invoice" | "coin_invoice") {
+  function sampleInvoice(kind: "billing_invoice" | "coin_invoice"): InvoicePrintData {
     const itemLines = groupOf(kind).filter(
       (l) => l.enabled && l.code !== "title" && l.code !== "note",
     );

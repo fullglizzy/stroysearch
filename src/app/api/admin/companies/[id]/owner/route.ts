@@ -53,6 +53,7 @@ export async function POST(
     if (body.mode !== "create") {
       return NextResponse.json({ error: "Укажите режим: create" }, { status: 400 });
     }
+    const mode = "create";
 
     const username = String(body.username ?? "").trim();
     const email = String(body.email ?? "").trim().toLowerCase();
