@@ -266,7 +266,7 @@ export function InvoicePrint({ invoice, requisites }: { invoice: InvoicePrintDat
                 </div>
                 <div className="flex justify-between py-1">
                   <span>Скидка:</span>
-                  <span>-{formatRub(invoice.discount)}</span>
+                  <span>{formatRub(invoice.discount)}</span>
                 </div>
               </>
             )}

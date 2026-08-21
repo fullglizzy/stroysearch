@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileText, Upload, Download, Eye, Trash2, Coins, UploadCloud, Pencil } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { toastSuccess } from "@/lib/toast";
+import { docHref } from "@/lib/doc-url";
 
 interface DocRow {
   id: string; title: string; coinPrice: number; fileUrl: string;
@@ -238,7 +239,7 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={docHref(doc.fileUrl)} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm">Открыть</Button>
                     </a>
                     <Button
@@ -283,7 +284,7 @@ export function MyLibraryClient({ myDocs, treeItems, purchases }: Props) {
                       Приобретён: {new Date(p.purchasedAt).toLocaleDateString("ru-RU")}
                     </p>
                   </div>
-                  <a href={p.fileUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={docHref(p.fileUrl)} target="_blank" rel="noopener noreferrer">
                     <Button variant="outline" size="sm">Открыть</Button>
                   </a>
                 </CardContent>

@@ -6,6 +6,7 @@ import { registerSchema, registerCompanySchema } from "@/lib/validators";
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
 import { companySearchText } from "@/lib/company";
+import { sendMail, buildRegistrationEmail } from "@/lib/mailer";
 
 /**
  * Проверка доступности логина при регистрации (live-валидация формы).
@@ -122,6 +123,9 @@ export async function registerUser(formData: FormData) {
       },
     },
   });
+
+  // Приветственное письмо (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+  await sendMail(buildRegistrationEmail(email, { username, company: false }));
 
   return { success: true, userId: user.id, displayName: username };
 }
@@ -248,6 +252,9 @@ export async function registerCompany(formData: FormData) {
   if (invite) {
     await prisma.companyInvite.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
   }
+
+  // Приветственное письмо (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+  await sendMail(buildRegistrationEmail(email, { username, company: true }));
 
   // Для приветствия отдаём реальное название компании (в т.ч. при привязке к существующей)
   return {

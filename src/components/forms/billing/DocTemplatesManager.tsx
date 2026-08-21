@@ -53,7 +53,6 @@ const PLACEHOLDER_HINTS: Record<string, string> = {
   note: "Плейсхолдеры: {number}, {date}, {period}, {total} — сумма. Пустое примечание не выводится.",
   maintenance: "Плейсхолдеры: {period} — период, {days} — дней, {fee} — сумма абонплаты",
   views: "Плейсхолдеры: {metric} — метрика, {count} — просмотров, {price} — ставка, {period} — период",
-  cap: "Плейсхолдеры: {period}, {breakdown} — раскладка по метрикам, {cap} — потолок",
   services: "Плейсхолдеры: {period}, {invoice} — номер счёта, {total} — сумма",
   license: "Строка без плейсхолдеров",
   scope: "Плейсхолдеры: {count} — монет, {units} — условные единицы, {coins} — монеты",
@@ -170,14 +169,6 @@ export function DocTemplatesManager() {
               quantity: 12,
               unitPrice: 50,
               total: 600,
-            };
-          }
-          if (l.code === "cap") {
-            return {
-              description: fillSample(l.description, { period: SAMPLE_PERIOD, breakdown: "телефон: 12, эл.почта: 3", cap: "1 000" }),
-              quantity: 1,
-              unitPrice: 1000,
-              total: 1000,
             };
           }
           return null;

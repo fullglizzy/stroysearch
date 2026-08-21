@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,6 @@ const quickLogins = [
 const showQuickLogins = process.env.NEXT_PUBLIC_DEMO_LOGIN === "1";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeRole, setActiveRole] = useState<string | null>(null);
@@ -68,28 +66,32 @@ export default function LoginPage() {
         return;
       }
 
+      // Полная перезагрузка вместо router.push: пока пользователь не авторизован,
+      // proxy редиректит /account и /company в /login, и Next кэширует этот редирект
+      // в клиентском Router Cache — router.push после входа молча возвращал бы на /login.
+      // window.location.replace этот кэш обходит и не оставляет /login в истории.
+
       // Возвращаем пользователя туда, откуда его отправил proxy (защищённая страница)
       const params = new URLSearchParams(window.location.search);
       const callbackUrl = params.get("callbackUrl") || "";
-      if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") && callbackUrl !== "/login") {
-        router.push(callbackUrl);
-        router.refresh();
-        return;
-      }
+      const hasCallback = callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") && callbackUrl !== "/login";
 
       // Без callbackUrl — в кабинет по роли
-      const session = await getSession();
-      const userType = (session?.user as any)?.type as string;
+      let target = callbackUrl;
+      if (!hasCallback) {
+        const session = await getSession();
+        const userType = (session?.user as any)?.type as string;
 
-      let dashboard = "/account";
-      if (userType === "COMPANY") {
-        dashboard = "/company";
-      } else if (["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
-        dashboard = "/admin";
+        if (userType === "COMPANY") {
+          target = "/company";
+        } else if (["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
+          target = "/admin";
+        } else {
+          target = "/account";
+        }
       }
 
-      router.push(dashboard);
-      router.refresh();
+      window.location.replace(target);
     } catch (err) {
       // Сетевая ошибка или устаревший JS-бандл — показываем ошибку вместо «тихого» зависания
       console.error("Ошибка входа", err);

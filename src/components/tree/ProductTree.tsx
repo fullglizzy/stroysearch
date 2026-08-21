@@ -68,7 +68,9 @@ export function ProductTree({ items, expandAll }: ProductTreeProps) {
   const tree = useMemo(() => buildTree(items), [items]);
 
   return (
-    <div className="border rounded-lg divide-y">
+    // Шаг отступа уровней через переменную: на мобильном меньше,
+    // чтобы глубокие уровни не вытесняли название и кнопки
+    <div className="border rounded-lg divide-y [--tree-indent:24px] max-sm:[--tree-indent:12px]">
       {tree.map((node) => (
         <TreeNodeItem key={node.id} node={node} expandAll={expandAll} />
       ))}
@@ -83,12 +85,12 @@ function TreeNodeItem({ node, expandAll }: { node: TreeNode; expandAll?: boolean
   return (
     <div>
       <div
-        className={`flex items-center justify-between px-4 py-3 hover:bg-secondary/50 transition-colors ${
+        className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 sm:px-4 py-3 hover:bg-secondary/50 transition-colors ${
           node.level > 0 ? "border-t" : ""
         }`}
-        style={{ paddingLeft: `${16 + node.level * 24}px` }}
+        style={{ paddingLeft: `calc(16px + ${node.level} * var(--tree-indent))` }}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-[140px] flex-1">
           {/* Indent for leaf nodes without children to align with siblings */}
           {hasChildren ? (
             <button

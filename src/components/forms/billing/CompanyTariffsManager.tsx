@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,12 +17,19 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { InvoicePrint, type BillingRequisites } from "@/components/shared/InvoicePrint";
 import { ServiceActPrint, type ServiceActData } from "@/components/shared/ServiceActPrint";
 import { toastSuccess, toastError } from "@/lib/toast";
-import { METRIC_LABELS, VIEW_METRICS, buildBillingItems, type ViewMetric } from "@/lib/billing";
+import { METRIC_LABELS, VIEW_METRICS } from "@/lib/billing";
 import {
   Search, Loader2, KeyRound, Link2, FilePlus2, CheckCircle2, Eye, EyeOff, Save,
-  Printer, Trash2, Plus, Ban, ShieldCheck, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
+  Printer, Trash2, Plus, Ban, ShieldCheck, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Users,
 } from "lucide-react";
 import { BillingStatusBadge, InvoiceStatusBadge, fetchRequisites, formatRubShort, formatDateShort } from "./shared";
+import { MassInvoiceDialog } from "./MassInvoiceDialog";
+
+/** Сегодня в формате YYYY-MM-DD (для input type="date") */
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 interface BillingRow {
   status: string;
@@ -44,7 +51,19 @@ interface CompanyRow {
   name: string;
   registeredAt: string;
   owner: { id: string; username: string; email: string; status: string } | null;
-  billing: { status: string; hiddenReason: string | null } | null;
+  billing: {
+    status: string;
+    hiddenReason: string | null;
+    maintenanceFee: number | null;
+    phonePrice: number | null;
+    emailPrice: number | null;
+    websitePrice: number | null;
+    reviewsPrice: number | null;
+    ratingPrice: number | null;
+    monthlyCap: number | null;
+    /** Дата, с которой компания активна (начало биллинга) */
+    billingStartedAt: string | null;
+  } | null;
   metrics: { phoneViews: number; emailViews: number; websiteViews: number; reviewsViews: number; ratingViews: number } | null;
   debt: number;
   pays: boolean | null;
@@ -52,6 +71,16 @@ interface CompanyRow {
   pendingViews: number | null;
   lastInvoice: { number: string; status: string; total: number } | null;
   notesCount: number;
+}
+
+/** Ставки по умолчанию из настроек — для панели тарифа над таблицей */
+interface ListDefaults {
+  maintenanceFee: number;
+  phoneViewPrice: number;
+  emailViewPrice: number;
+  websiteViewPrice: number;
+  reviewsViewPrice: number;
+  ratingViewPrice: number;
 }
 
 interface CompanyDetail {
@@ -84,14 +113,14 @@ interface CompanyDetail {
   /** Шаблоны строк счёта из настроек */
   templates: { maintenance: string; views: string; cap: string };
   period: { from: string; to: string } | null;
-  /** Период завершён (постоплата): null — периода нет */
-  periodCompleted: boolean | null;
   preview: {
     items: { description: string; quantity: number; unitPrice: number; total: number }[];
     maintenanceDays: number;
     viewsCost: number;
-    capApplied: boolean;
+    /** Скидка по потолку счёта: излишек над потолком вычитается из итога */
+    capDiscount: number;
     subtotal: number;
+    total: number;
   } | null;
   debt: number;
   totalViews: number;
@@ -126,11 +155,29 @@ const RATE_FIELDS = [
   { key: "monthlyCap", label: "Потолок счёта (₽/период)" },
 ] as const;
 
+/** Глобальные расценки из настроек — дублируются в панель над таблицей */
+const GLOBAL_FIELDS = [
+  { key: "maintenanceFee", label: "Абонентская плата (₽/мес)" },
+  { key: "phoneViewPrice", label: "Просмотр телефона (₽)" },
+  { key: "emailViewPrice", label: "Просмотр почты (₽)" },
+  { key: "websiteViewPrice", label: "Просмотр сайта (₽)" },
+  { key: "reviewsViewPrice", label: "Просмотр отзывов (₽)" },
+  { key: "ratingViewPrice", label: "Просмотр рейтинга (₽)" },
+] as const;
+
 const STATUS_ITEMS = {
   INACTIVE: "Без владельца — биллинг выключен, компания бесплатна",
   ACTIVE: "Активна — счета формируются, просмотры считаются",
   HIDDEN: "Контакты скрыты — санкция за неуплату",
 } as const;
+
+/** Есть ли у компании хоть одна индивидуальная ставка или потолок (не по умолчанию) */
+function hasCustomRates(b: BillingRow | null): boolean {
+  return !!b && (
+    b.maintenanceFee != null || b.phonePrice != null || b.emailPrice != null ||
+    b.websitePrice != null || b.reviewsPrice != null || b.ratingPrice != null || b.monthlyCap != null
+  );
+}
 
 type SortField = "debt" | "name" | "registeredAt";
 interface SortState {
@@ -226,41 +273,9 @@ function Section({
   );
 }
 
-/** Живой пересчёт начислений по текущим значениям полей ставок */
-function computePreview(
-  detail: CompanyDetail,
-  tariffValues: Record<string, string>,
-) {
-  if (!detail.period || !detail.viewsInPeriod) return null;
-  const num = (key: string, fallback: number) => {
-    const raw = (tariffValues[key] ?? "").trim();
-    if (raw === "") return fallback;
-    const n = parseFloat(raw);
-    return Number.isFinite(n) && n >= 0 ? n : fallback;
-  };
-  const rates = {
-    maintenanceFee: num("maintenanceFee", detail.defaults.maintenanceFee),
-    phonePrice: num("phonePrice", detail.defaults.phoneViewPrice),
-    emailPrice: num("emailPrice", detail.defaults.emailViewPrice),
-    websitePrice: num("websitePrice", detail.defaults.websiteViewPrice),
-    reviewsPrice: num("reviewsPrice", detail.defaults.reviewsViewPrice),
-    ratingPrice: num("ratingPrice", detail.defaults.ratingViewPrice),
-    // Потолок — только индивидуальный для компании, общего лимита в настройках нет
-    monthlyCap: num("monthlyCap", 0),
-    invoiceDueDays: 5,
-  };
-  const counts = detail.viewsInPeriod as Record<ViewMetric, number>;
-  return buildBillingItems(
-    rates,
-    new Date(detail.period.from),
-    new Date(detail.period.to),
-    counts,
-    detail.templates,
-  );
-}
-
 export function CompanyTariffsManager() {
   const [companies, setCompanies] = useState<CompanyRow[] | null>(null);
+  const [defaults, setDefaults] = useState<ListDefaults | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
@@ -273,17 +288,44 @@ export function CompanyTariffsManager() {
   const [detailRow, setDetailRow] = useState<CompanyRow | null>(null);
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [statusSaving, setStatusSaving] = useState(false);
-  const [tariffValues, setTariffValues] = useState<Record<string, string>>({});
-  const [tariffStatus, setTariffStatus] = useState("INACTIVE");
-  const [hiddenReason, setHiddenReason] = useState("");
+  // Дата, до которой считается предстоящий счёт в попапе (по умолчанию — сегодня)
+  const [detailDate, setDetailDate] = useState(todayStr());
+  const detailDateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [genLoading, setGenLoading] = useState(false);
   const [genResult, setGenResult] = useState("");
   const [genError, setGenError] = useState("");
+
+  // Тариф компании — редактируется в попапе карточки (кнопка «Открыть» в строке)
+  const [tariffValues, setTariffValues] = useState<Record<string, string>>({});
+  const [tariffStatus, setTariffStatus] = useState("INACTIVE");
+  const [hiddenReason, setHiddenReason] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
+  // Компания, чьи ставки сейчас в полях попапа — чтобы не затирать правки при обновлении карточки
+  const [tariffForId, setTariffForId] = useState<string | null>(null);
   // Ставки сохраняются автоматически при вводе (с задержкой)
   const [ratesSaveState, setRatesSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const ratesSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Раскрывающиеся секции попапа (по умолчанию открыты начисления)
+  // Массовое выставление счетов — диалог над таблицей
+  const [massOpen, setMassOpen] = useState(false);
+
+  // Панель «Тариф и расценки» под поисковой строкой — раскрыта по умолчанию
+  const [tariffPanelOpen, setTariffPanelOpen] = useState(true);
+  // Глобальные расценки (дубль настроек): заполняются один раз из defaults
+  const [globalValues, setGlobalValues] = useState<Record<string, string>>({});
+  const [globalSaveState, setGlobalSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const globalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const globalValuesRef = useRef<Record<string, string>>({});
+  const globalFilledRef = useRef(false);
+  // Массовый потолок: применяется кнопкой «Применить для всех» (пусто = без потолка)
+  const [globalCapValue, setGlobalCapValue] = useState("");
+  // «Применить для всех» — сброс индивидуальных расценок компаний
+  const [applyAllOpen, setApplyAllOpen] = useState(false);
+  const [applyAllLoading, setApplyAllLoading] = useState(false);
+  // Предупреждение о несохранённых расценках перед массовым выставлением
+  const [unsavedOpen, setUnsavedOpen] = useState(false);
+  const [unsavedSaving, setUnsavedSaving] = useState(false);
+
+  // Раскрывающиеся секции попапа (по умолчанию открыт предстоящий счёт)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({ period: true });
 
   // Санкции: скрытие и возврат контактов — отдельные явные действия
@@ -329,7 +371,20 @@ export function CompanyTariffsManager() {
       .then((r) => r.json())
       .then((d) => {
         setCompanies(d.companies || []);
+        setDefaults(d.defaults ?? null);
         setTotal(d.total ?? 0);
+        // Глобальные расценки заполняем один раз — дальше их правит только админ
+        if (!globalFilledRef.current && d.defaults) {
+          globalFilledRef.current = true;
+          setGlobalValues({
+            maintenanceFee: String(d.defaults.maintenanceFee),
+            phoneViewPrice: String(d.defaults.phoneViewPrice),
+            emailViewPrice: String(d.defaults.emailViewPrice),
+            websiteViewPrice: String(d.defaults.websiteViewPrice),
+            reviewsViewPrice: String(d.defaults.reviewsViewPrice),
+            ratingViewPrice: String(d.defaults.ratingViewPrice),
+          });
+        }
       })
       .catch(() => setCompanies([]));
   }, [q, statusFilter, paysFilter, hasOwnerFilter, sort, page, perPage]);
@@ -349,31 +404,30 @@ export function CompanyTariffsManager() {
     });
   }
 
-  async function fetchDetail(id: string) {
-    setDetailLoading(true);
+  async function fetchDetail(id: string, date?: string, silent = false) {
+    // silent — обновление уже открытой карточки (без спиннера, чтобы правки в полях не «мигали»)
+    setDetailLoading(!silent);
     try {
-      const res = await fetch(`/api/admin/companies/${id}/billing`);
+      const params = new URLSearchParams();
+      if (date) params.set("date", date);
+      const qs = params.toString();
+      const res = await fetch(`/api/admin/companies/${id}/billing${qs ? `?${qs}` : ""}`);
       const d = await res.json();
       if (!res.ok) {
         toastError("Ошибка", d.error || "Не удалось загрузить карточку");
         setDetailRow(null);
         return;
       }
-      const b = d.billing;
-      // Поля ставок заполняем значениями: индивидуальными компании или из настроек
-      setTariffValues({
-        maintenanceFee: b?.maintenanceFee != null ? String(b.maintenanceFee) : String(d.defaults.maintenanceFee),
-        phonePrice: b?.phonePrice != null ? String(b.phonePrice) : String(d.defaults.phoneViewPrice),
-        emailPrice: b?.emailPrice != null ? String(b.emailPrice) : String(d.defaults.emailViewPrice),
-        websitePrice: b?.websitePrice != null ? String(b.websitePrice) : String(d.defaults.websiteViewPrice),
-        reviewsPrice: b?.reviewsPrice != null ? String(b.reviewsPrice) : String(d.defaults.reviewsViewPrice),
-        ratingPrice: b?.ratingPrice != null ? String(b.ratingPrice) : String(d.defaults.ratingViewPrice),
-        monthlyCap: b?.monthlyCap != null ? String(b.monthlyCap) : "",
-      });
-      setTariffStatus(b?.status ?? "INACTIVE");
-      setHiddenReason(b?.hiddenReason ?? "");
-      setRatesSaveState("idle");
       setDetail(d);
+      // Поля тарифа заполняем при открытии карточки; при обновлении той же компании
+      // несохранённые правки админа в полях не затираем
+      if (tariffForId !== id) {
+        setTariffForId(id);
+        setTariffValues(prefillTariff(d.billing, d.defaults));
+        setTariffStatus(d.billing?.status ?? "INACTIVE");
+        setHiddenReason(d.billing?.hiddenReason ?? "");
+        setRatesSaveState("idle");
+      }
     } catch {
       toastError("Ошибка соединения");
       setDetailRow(null);
@@ -388,12 +442,43 @@ export function CompanyTariffsManager() {
     setGenError("");
     setOpenSections({ period: true });
     setNoteText("");
-    setRatesSaveState("idle");
+    setDetailDate(todayStr());
+    // Тариф заполняется заново из свежих данных при каждом открытии
+    setTariffForId(null);
     fetchDetail(c.id);
+  }
+
+  function closeDetail() {
+    // Досохраняем ставки, введённые в попапе, если авто-сохранение ещё не сработало
+    if (ratesSaveTimer.current) {
+      clearTimeout(ratesSaveTimer.current);
+      ratesSaveTimer.current = null;
+      if (detailRow) void saveRates(detailRow.id);
+    }
+    if (detailDateTimer.current) {
+      clearTimeout(detailDateTimer.current);
+      detailDateTimer.current = null;
+    }
+    setDetailRow(null);
   }
 
   function toggleSection(id: string) {
     setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  // ── Тариф компании в попапе карточки ──
+
+  /** Значения полей тарифа компании: индивидуальные или из глобальных настроек */
+  function prefillTariff(b: CompanyRow["billing"], defs: ListDefaults | null): Record<string, string> {
+    return {
+      maintenanceFee: b?.maintenanceFee != null ? String(b.maintenanceFee) : String(defs?.maintenanceFee ?? ""),
+      phonePrice: b?.phonePrice != null ? String(b.phonePrice) : String(defs?.phoneViewPrice ?? ""),
+      emailPrice: b?.emailPrice != null ? String(b.emailPrice) : String(defs?.emailViewPrice ?? ""),
+      websitePrice: b?.websitePrice != null ? String(b.websitePrice) : String(defs?.websiteViewPrice ?? ""),
+      reviewsPrice: b?.reviewsPrice != null ? String(b.reviewsPrice) : String(defs?.reviewsViewPrice ?? ""),
+      ratingPrice: b?.ratingPrice != null ? String(b.ratingPrice) : String(defs?.ratingViewPrice ?? ""),
+      monthlyCap: b?.monthlyCap != null ? String(b.monthlyCap) : "",
+    };
   }
 
   // Актуальные значения ставок для отложенного сохранения (замыкание таймера не видит свежий стейт)
@@ -402,8 +487,13 @@ export function CompanyTariffsManager() {
     tariffValuesRef.current = tariffValues;
   }, [tariffValues]);
 
+  useEffect(() => {
+    globalValuesRef.current = globalValues;
+  }, [globalValues]);
+
   useEffect(() => () => {
     if (ratesSaveTimer.current) clearTimeout(ratesSaveTimer.current);
+    if (globalSaveTimer.current) clearTimeout(globalSaveTimer.current);
   }, []);
 
   // Ставки: сохраняются автоматически при вводе, без отдельной кнопки «Сохранить»
@@ -411,18 +501,19 @@ export function CompanyTariffsManager() {
     setTariffValues((prev) => ({ ...prev, [key]: value }));
     setRatesSaveState("saving");
     if (ratesSaveTimer.current) clearTimeout(ratesSaveTimer.current);
-    ratesSaveTimer.current = setTimeout(() => { void saveRates(); }, 600);
+    ratesSaveTimer.current = setTimeout(() => { if (detailRow) void saveRates(detailRow.id); }, 600);
   }
 
-  async function saveRates(): Promise<boolean> {
-    if (!detailRow) return true;
+  async function saveRates(companyId?: string): Promise<boolean> {
+    const id = companyId ?? detailRow?.id;
+    if (!id) return true;
     const payload: Record<string, unknown> = {};
     for (const f of RATE_FIELDS) {
       const raw = (tariffValuesRef.current[f.key] ?? "").trim();
       payload[f.key] = raw === "" ? null : parseFloat(raw);
     }
     try {
-      const res = await fetch(`/api/admin/companies/${detailRow.id}/billing`, {
+      const res = await fetch(`/api/admin/companies/${id}/billing`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -430,6 +521,8 @@ export function CompanyTariffsManager() {
       const d = await res.json();
       if (res.ok) {
         setRatesSaveState("saved");
+        // Предстоящий счёт в попапе зависит от ставок — тихо обновляем карточку
+        if (detailRow && detailRow.id === id) fetchDetail(id, detailDate, true);
         return true;
       }
       setRatesSaveState("error");
@@ -457,8 +550,8 @@ export function CompanyTariffsManager() {
       const d = await res.json();
       if (res.ok) {
         toastSuccess("Сохранено", "Статус биллинга обновлён");
-        fetchDetail(detailRow.id);
         load();
+        fetchDetail(detailRow.id, detailDate, true);
       } else {
         toastError("Ошибка", d.error || "Не удалось сохранить статус");
       }
@@ -468,34 +561,202 @@ export function CompanyTariffsManager() {
     setStatusSaving(false);
   }
 
-  // Выставление счёта за текущий невыставленный период — внутри попапа компании
+  // ── Глобальные расценки (дубль настроек экономики) ──
+
+  // Расценки сохраняются автоматически при вводе, как и ставки компании
+  function onGlobalChange(key: string, value: string) {
+    setGlobalValues((prev) => ({ ...prev, [key]: value }));
+    setGlobalSaveState("saving");
+    if (globalSaveTimer.current) clearTimeout(globalSaveTimer.current);
+    globalSaveTimer.current = setTimeout(() => { void saveGlobalRates(); }, 600);
+  }
+
+  /** Сохраняет глобальные расценки; возвращает сохранённые значения или null при ошибке */
+  async function saveGlobalRates(): Promise<Record<string, number> | null> {
+    const payload: Record<string, number> = {};
+    const revert: Record<string, string> = {};
+    for (const f of GLOBAL_FIELDS) {
+      const raw = (globalValuesRef.current[f.key] ?? "").trim();
+      const n = parseFloat(raw);
+      if (raw !== "" && Number.isFinite(n) && n >= 0) {
+        payload[f.key] = Math.round(n * 100) / 100;
+      } else {
+        // Пустое/некорректное глобальное значение невозможно — откат к сохранённому
+        const stored = defaults?.[f.key as keyof ListDefaults];
+        revert[f.key] = stored != null ? String(stored) : "";
+      }
+    }
+    if (Object.keys(revert).length > 0) {
+      setGlobalValues((prev) => ({ ...prev, ...revert }));
+    }
+    if (Object.keys(payload).length === 0) {
+      setGlobalSaveState("idle");
+      return {};
+    }
+    try {
+      const res = await fetch("/api/admin/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setGlobalSaveState("saved");
+        setDefaults((prev) => (prev ? { ...prev, ...payload } : prev));
+        return payload;
+      }
+      setGlobalSaveState("error");
+      toastError("Ошибка", d.error || "Не удалось сохранить расценки");
+      return null;
+    } catch {
+      setGlobalSaveState("error");
+      toastError("Ошибка соединения");
+      return null;
+    }
+  }
+
+  /** «Применить для всех»: сбросить индивидуальные расценки и установить
+   *  всем компаниям одинаковый потолок — выставление пойдёт по значениям выше */
+  async function confirmApplyAll() {
+    setApplyAllLoading(true);
+    // Сначала фиксируем несохранённые правки глобальных расценок
+    if (globalSaveTimer.current) {
+      clearTimeout(globalSaveTimer.current);
+      globalSaveTimer.current = null;
+    }
+    const savedGlobals = await saveGlobalRates();
+    if (savedGlobals === null) {
+      setApplyAllLoading(false);
+      setApplyAllOpen(false);
+      return;
+    }
+    // Потолок: пустое поле — снять потолок всем, число — установить всем
+    const capRaw = globalCapValue.trim();
+    let monthlyCap: number | null = null;
+    if (capRaw !== "") {
+      const n = parseFloat(capRaw);
+      if (!Number.isFinite(n) || n < 0) {
+        toastError("Ошибка", "Некорректный потолок счёта — введите неотрицательное число или оставьте поле пустым");
+        setApplyAllLoading(false);
+        setApplyAllOpen(false);
+        return;
+      }
+      monthlyCap = Math.round(n * 100) / 100;
+    }
+    try {
+      const res = await fetch("/api/admin/billing/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resetRates", monthlyCap }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        const capNote = monthlyCap != null
+          ? `потолок счёта ${formatRubShort(monthlyCap)} установлен всем`
+          : "потолок счёта снят у всех";
+        toastSuccess(
+          "Применено",
+          d.updated
+            ? `${d.updated} компаний: расценки по умолчанию, ${capNote}`
+            : `Компаний с индивидуальными расценками не было; ${capNote}`,
+        );
+        load();
+        // Открытый попап компании тоже обновляем — в нём прежние цифры.
+        // Индивидуальных ставок у компании больше нет — показываем глобальные расценки
+        if (detailRow) {
+          const defs = defaults ? { ...defaults, ...savedGlobals } : null;
+          setTariffValues({ ...prefillTariff(null, defs), monthlyCap: monthlyCap != null ? String(monthlyCap) : "" });
+          setRatesSaveState("idle");
+          fetchDetail(detailRow.id, detailDate, true);
+        }
+      } else {
+        toastError("Ошибка", d.error || "Не удалось применить расценки");
+      }
+    } catch {
+      toastError("Ошибка соединения");
+    }
+    setApplyAllLoading(false);
+    setApplyAllOpen(false);
+  }
+
+  // ── Предупреждение о несохранённых расценках перед массовым выставлением ──
+
+  /** Есть ли правки расценок, которые ещё не сохранились */
+  function hasUnsavedRates(): boolean {
+    // Правка ещё в отложенном сохранении, идёт или не удалась
+    if (globalSaveTimer.current || globalSaveState === "saving" || globalSaveState === "error") return true;
+    if (detailRow && (ratesSaveTimer.current || ratesSaveState === "saving" || ratesSaveState === "error")) return true;
+    // Значение в поле отличается от сохранённого
+    if (defaults) {
+      for (const f of GLOBAL_FIELDS) {
+        const raw = (globalValuesRef.current[f.key] ?? "").trim();
+        const saved = defaults[f.key as keyof ListDefaults];
+        const rawNum = parseFloat(raw);
+        if (raw === "") return true; // очищенное поле — тоже несохранённое состояние
+        if (!Number.isFinite(rawNum) || Math.round(rawNum * 100) !== Math.round(saved * 100)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Кнопка массового выставления: сначала убеждаемся, что расценки сохранены */
+  function openMassInvoicing() {
+    if (hasUnsavedRates()) setUnsavedOpen(true);
+    else setMassOpen(true);
+  }
+
+  /** Сохранить правки расценок и открыть массовое выставление */
+  async function saveAndContinue() {
+    setUnsavedSaving(true);
+    if (globalSaveTimer.current) { clearTimeout(globalSaveTimer.current); globalSaveTimer.current = null; }
+    if (ratesSaveTimer.current) { clearTimeout(ratesSaveTimer.current); ratesSaveTimer.current = null; }
+    const g = await saveGlobalRates();
+    const r = detailRow ? await saveRates(detailRow.id) : true;
+    setUnsavedSaving(false);
+    if (g === null || r === false) return; // ошибка сохранения — остаёмся в диалоге
+    setUnsavedOpen(false);
+    setMassOpen(true);
+  }
+
+  /** Продолжить по сохранённым значениям: правки отбрасываются */
+  function continueWithoutSaving() {
+    if (globalSaveTimer.current) { clearTimeout(globalSaveTimer.current); globalSaveTimer.current = null; }
+    if (ratesSaveTimer.current) { clearTimeout(ratesSaveTimer.current); ratesSaveTimer.current = null; }
+    if (defaults) {
+      setGlobalValues({
+        maintenanceFee: String(defaults.maintenanceFee),
+        phoneViewPrice: String(defaults.phoneViewPrice),
+        emailViewPrice: String(defaults.emailViewPrice),
+        websiteViewPrice: String(defaults.websiteViewPrice),
+        reviewsViewPrice: String(defaults.reviewsViewPrice),
+        ratingViewPrice: String(defaults.ratingViewPrice),
+      });
+    }
+    if (detailRow) setTariffValues(prefillTariff(detail?.billing ?? null, defaults));
+    setGlobalSaveState("idle");
+    setRatesSaveState("idle");
+    setUnsavedOpen(false);
+    setMassOpen(true);
+  }
+
+  // Выставление счёта до выбранной даты — внутри попапа компании
   async function generateInDetail() {
     if (!detailRow) return;
     setGenLoading(true);
     setGenResult("");
     setGenError("");
-    // Сначала фиксируем введённые ставки, чтобы счёт считался по ним
-    if (ratesSaveTimer.current) {
-      clearTimeout(ratesSaveTimer.current);
-      ratesSaveTimer.current = null;
-    }
-    const ratesSaved = await saveRates();
-    if (!ratesSaved) {
-      setGenLoading(false);
-      return;
-    }
     try {
       const res = await fetch("/api/admin/billing/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: detailRow.id }),
+        body: JSON.stringify({ companyId: detailRow.id, periodTo: detailDate }),
       });
       const d = await res.json();
       if (res.ok && d.created?.length) {
         const inv = d.created[0] as { invoiceNumber: string; total: number };
-        setGenResult(`Создан счёт ${inv.invoiceNumber} на сумму ${formatRubShort(inv.total)}. Далее его можно выставить или отметить оплаченным во вкладке «Счета и акты».`);
-        toastSuccess("Счёт сформирован", `${inv.invoiceNumber} на ${formatRubShort(inv.total)}`);
-        fetchDetail(detailRow.id);
+        setGenResult(`Счёт ${inv.invoiceNumber} на сумму ${formatRubShort(inv.total)} выставлен — компания увидит его в кабинете и получит уведомление. Отметить оплату можно во вкладке «Счета и акты».`);
+        toastSuccess("Счёт выставлен", `${inv.invoiceNumber} на ${formatRubShort(inv.total)}`);
+        fetchDetail(detailRow.id, detailDate);
         load();
       } else if (res.ok) {
         setGenError(d.skipped?.[0]?.reason || "Нет периода для выставления");
@@ -523,6 +784,9 @@ export function CompanyTariffsManager() {
         toastSuccess("Санкция применена", `Контакты «${sanctionCompany.name}» скрыты в базе поставщиков`);
         setSanctionCompany(null);
         setSanctionReason("");
+        // Поля тарифа в попапе должны показывать новый статус
+        setTariffStatus("HIDDEN");
+        setHiddenReason(sanctionReason.trim() || "Неуплата");
         load();
         if (detailRow) fetchDetail(detailRow.id);
       } else {
@@ -548,6 +812,9 @@ export function CompanyTariffsManager() {
       if (res.ok) {
         toastSuccess("Контакты возвращены", `«${restoreCompany.name}» снова видна в базе поставщиков`);
         setRestoreCompany(null);
+        // Поля тарифа в попапе должны показывать новый статус
+        setTariffStatus("ACTIVE");
+        setHiddenReason("");
         load();
         if (detailRow) fetchDetail(detailRow.id);
       } else {
@@ -738,12 +1005,6 @@ export function CompanyTariffsManager() {
   const totalViews = (m: CompanyRow["metrics"]) =>
     m ? m.phoneViews + m.emailViews + m.websiteViews + m.reviewsViews + m.ratingViews : 0;
 
-  // Начисления пересчитываются на лету по введённым ставкам
-  const livePreview = useMemo(
-    () => (detail ? computePreview(detail, tariffValues) : null),
-    [detail, tariffValues],
-  );
-
   const pages = Math.max(1, Math.ceil(total / perPage));
 
   return (
@@ -785,6 +1046,88 @@ export function CompanyTariffsManager() {
         </Select>
       </div>
 
+      {/* Панель тарифа и расценок под поисковой строкой: раскрываемая; рядом — массовое выставление */}
+      <div className="border rounded-lg bg-muted/20">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+          <button
+            type="button"
+            className="flex items-center gap-2 min-w-0 text-left group"
+            onClick={() => setTariffPanelOpen((v) => !v)}
+          >
+            {tariffPanelOpen ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            )}
+            <span className="text-sm font-semibold truncate group-hover:text-menthol">Тариф и расценки</span>
+            {!tariffPanelOpen && (
+              <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">
+                расценки для выставления счетов · тариф компании — в её карточке (кнопка «Открыть»)
+              </span>
+            )}
+          </button>
+          <Button size="sm" className="bg-menthol hover:bg-menthol-dark shrink-0" onClick={openMassInvoicing}>
+            <FilePlus2 className="h-4 w-4 mr-1" />Массово выставить счета
+          </Button>
+        </div>
+
+        {tariffPanelOpen && (
+          <div className="px-4 pb-4 space-y-5">
+            {/* Глобальные расценки: по ним считаются счета компаний без индивидуальных значений */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Расценки по умолчанию — для всех компаний</p>
+                <Button variant="outline" size="sm" onClick={() => setApplyAllOpen(true)} disabled={applyAllLoading}>
+                  <Users className="h-3 w-3 mr-1" />Применить для всех
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                {GLOBAL_FIELDS.map((f) => (
+                  <div key={f.key} className="space-y-1">
+                    <Label className="text-[11px] leading-tight">{f.label}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={globalValues[f.key] ?? ""}
+                      onChange={(e) => onGlobalChange(f.key, e.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                ))}
+                <div className="space-y-1">
+                  <Label className="text-[11px] leading-tight">Потолок счёта (₽)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={globalCapValue}
+                    placeholder="без потолка"
+                    onChange={(e) => setGlobalCapValue(e.target.value)}
+                    className="h-8"
+                    title="Применяется кнопкой «Применить для всех»: пустое поле — снять потолок у всех компаний"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                По этим расценкам считаются счета компаний без индивидуальных значений. «Применить для всех»
+                сбрасывает индивидуальные расценки всех компаний и устанавливает всем потолок из поля выше
+                (пустое поле — без потолка); выставление счетов пойдёт по этим значениям.
+                Индивидуальный тариф — в карточке компании, кнопка «Открыть» в строке таблицы.
+                {" "}
+                {globalSaveState === "saving"
+                  ? "Сохранение…"
+                  : globalSaveState === "saved"
+                    ? "Сохранено ✓"
+                    : globalSaveState === "error"
+                      ? "Ошибка сохранения"
+                      : ""}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Пояснение статусов — чтобы каждый бейдж был понятен без инструкций */}
       <Alert>
         <AlertDescription className="text-xs">
@@ -820,7 +1163,12 @@ export function CompanyTariffsManager() {
               {companies.map((c) => {
                 const b = c.billing;
                 return (
-                  <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={c.id}
+                    className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${detailRow?.id === c.id ? "bg-menthol/5" : ""}`}
+                    onClick={() => openDetail(c)}
+                    title="Клик — карточка компании"
+                  >
                     <td className="py-2 px-3">
                       <p className="font-medium">{c.name}</p>
                       <p className="text-xs text-muted-foreground font-mono">ИНН {c.inn}</p>
@@ -841,6 +1189,9 @@ export function CompanyTariffsManager() {
                     </td>
                     <td className="py-2 px-3">
                       <BillingStatusBadge status={b?.status ?? "INACTIVE"} />
+                      {b?.status === "ACTIVE" && b.billingStartedAt && (
+                        <p className="text-[10px] text-muted-foreground mt-1">с {formatDateShort(b.billingStartedAt)}</p>
+                      )}
                       {b?.status === "HIDDEN" && b.hiddenReason && (
                         <p className="text-[10px] text-muted-foreground mt-1 max-w-[160px] truncate" title={b.hiddenReason}>
                           {b.hiddenReason}
@@ -880,7 +1231,7 @@ export function CompanyTariffsManager() {
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-end gap-1 flex-wrap">
                         {!c.owner && (
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAccessCompany({ id: c.id, name: c.name, inn: c.inn }); setAccessOpen(true); }}>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setAccessCompany({ id: c.id, name: c.name, inn: c.inn }); setAccessOpen(true); }}>
                             <KeyRound className="h-3 w-3 mr-1" />Доступ
                           </Button>
                         )}
@@ -890,7 +1241,7 @@ export function CompanyTariffsManager() {
                             size="sm"
                             className="h-7 text-xs text-red-600"
                             title="Санкция: скрыть контакты в базе поставщиков"
-                            onClick={() => { setSanctionCompany({ id: c.id, name: c.name, hiddenReason: b?.hiddenReason ?? null }); setSanctionReason(b?.hiddenReason ?? ""); }}
+                            onClick={(e) => { e.stopPropagation(); setSanctionCompany({ id: c.id, name: c.name, hiddenReason: b?.hiddenReason ?? null }); setSanctionReason(b?.hiddenReason ?? ""); }}
                           >
                             <EyeOff className="h-3 w-3 mr-1" />Скрыть контакты
                           </Button>
@@ -901,12 +1252,12 @@ export function CompanyTariffsManager() {
                             size="sm"
                             className="h-7 text-xs text-green-700"
                             title="Вернуть контакты в базу поставщиков (после оплаты)"
-                            onClick={() => setRestoreCompany({ id: c.id, name: c.name, hiddenReason: null })}
+                            onClick={(e) => { e.stopPropagation(); setRestoreCompany({ id: c.id, name: c.name, hiddenReason: null }); }}
                           >
                             <Eye className="h-3 w-3 mr-1" />Вернуть контакты
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openDetail(c)}>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openDetail(c); }}>
                           Открыть
                         </Button>
                       </div>
@@ -942,7 +1293,7 @@ export function CompanyTariffsManager() {
       )}
 
       {/* ── Попап компании ── */}
-      <Dialog open={!!detailRow} onOpenChange={(v) => { if (!v) { if (ratesSaveTimer.current) { clearTimeout(ratesSaveTimer.current); ratesSaveTimer.current = null; void saveRates(); } setDetailRow(null); } }}>
+      <Dialog open={!!detailRow} onOpenChange={(v) => { if (!v) closeDetail(); }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{detail?.company.name ?? "…"}</DialogTitle>
@@ -970,6 +1321,9 @@ export function CompanyTariffsManager() {
                 <div>
                   <p className="text-xs text-muted-foreground">Статус</p>
                   <BillingStatusBadge status={detail.billing?.status ?? "INACTIVE"} />
+                  {detail.billing?.status === "ACTIVE" && detail.billing.billingStartedAt && (
+                    <p className="text-xs text-muted-foreground mt-1">с {formatDateShort(detail.billing.billingStartedAt)}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Долг</p>
@@ -1005,19 +1359,103 @@ export function CompanyTariffsManager() {
                 )}
               </div>
 
-              {/* 2. Начисления за период */}
+              {/* 1.5 Тариф и расценки компании */}
+              <Section
+                id="tariff"
+                title="Тариф и расценки"
+                badge={hasCustomRates(detail.billing) ? "· индивидуальные" : "· по умолчанию"}
+                open={!!openSections.tariff}
+                onToggle={toggleSection}
+              >
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 gap-x-6">
+                    {RATE_FIELDS.map((f) => (
+                      <div key={f.key} className="space-y-1">
+                        <Label className="text-xs leading-tight">{f.label}</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={tariffValues[f.key] ?? ""}
+                          placeholder="по умолчанию"
+                          onChange={(e) => onRateChange(f.key, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1 min-w-[220px] flex-1">
+                      <Label className="text-xs">Статус биллинга</Label>
+                      <Select value={tariffStatus} items={STATUS_ITEMS} onValueChange={(v) => setTariffStatus(v ?? "INACTIVE")}>
+                        <SelectTrigger className="w-full justify-between"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(STATUS_ITEMS).map(([k, label]) => (
+                            <SelectItem key={k} value={k} label={label}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {tariffStatus === "HIDDEN" && (
+                      <div className="space-y-1 min-w-[220px] flex-1">
+                        <Label className="text-xs">Причина скрытия (видна компании)</Label>
+                        <Input value={hiddenReason} onChange={(e) => setHiddenReason(e.target.value)} placeholder="Неоплаченный счёт №…" className="h-9" />
+                      </div>
+                    )}
+                    <Button className="bg-menthol hover:bg-menthol-dark" onClick={saveStatus} disabled={statusSaving}>
+                      {statusSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}Сохранить статус
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Значения подставлены из настроек по умолчанию. Ставки сохраняются автоматически при вводе; пустое
+                    поле — вернуть значение по умолчанию. По ставкам ниже пересчитывается предстоящий счёт.{" "}
+                    {ratesSaveState === "saving"
+                      ? "Сохранение…"
+                      : ratesSaveState === "saved"
+                        ? "Сохранено ✓"
+                        : ratesSaveState === "error"
+                          ? "Ошибка сохранения"
+                          : ""}
+                  </p>
+                </div>
+              </Section>
+
+              {/* 2. Предстоящий счёт */}
               <Section
                 id="period"
-                title="Начисления за период"
-                badge={livePreview ? `итого ${formatRubShort(livePreview.subtotal)}` : ""}
+                title="Предстоящий счёт"
+                badge={detail.preview ? `итого ${formatRubShort(detail.preview.total)}` : ""}
                 open={!!openSections.period}
                 onToggle={toggleSection}
               >
-                {livePreview ? (
-                  <div className="space-y-2">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Счёт по дату — войдёт всё с прошлого счёта до неё</Label>
+                      <Input
+                        type="date"
+                        value={detailDate}
+                        max={todayStr()}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDetailDate(v);
+                          if (detailDateTimer.current) clearTimeout(detailDateTimer.current);
+                          detailDateTimer.current = setTimeout(() => {
+                            if (detailRow) fetchDetail(detailRow.id, v || todayStr());
+                          }, 400);
+                        }}
+                        className="w-[180px]"
+                      />
+                    </div>
+                    {detailDate !== todayStr() && (
+                      <Button variant="outline" size="sm" onClick={() => { setDetailDate(todayStr()); if (detailRow) fetchDetail(detailRow.id); }}>
+                        Сегодня
+                      </Button>
+                    )}
+                  </div>
+                  {detail.period && detail.preview ? (
                     <div className="text-xs space-y-0.5">
                       <p className="text-muted-foreground">
-                        Период: {formatDateShort(detail.period?.from)} — {formatDateShort(detail.period?.to)}
+                        Период: {formatDateShort(detail.period.from)} — {formatDateShort(detail.period.to)}
                       </p>
                       {(() => {
                         const pendingViews = detail.viewsInPeriod
@@ -1033,7 +1471,7 @@ export function CompanyTariffsManager() {
                           <>
                             <p className="text-muted-foreground">
                               <b>Идут в счёт:</b> {pendingViews}{breakdown ? ` (${breakdown})` : ""} — накоплены
-                              с {formatDateShort(detail.period?.from)} и попадут в этот счёт.
+                              с {formatDateShort(detail.period.from)} и попадут в этот счёт.
                             </p>
                             <p className="text-muted-foreground">
                               <b>Не идут в счёт:</b> {excludedViews} — уже учтены в выставленных счетах или набраны
@@ -1042,95 +1480,50 @@ export function CompanyTariffsManager() {
                           </>
                         );
                       })()}
-                      {livePreview.items.map((i, idx) => (
+                      {detail.preview.items.map((i, idx) => (
                         <p key={idx}>{i.description} — {formatRubShort(i.total)}</p>
                       ))}
+                      <p className="mt-1">
+                        Сумма: {formatRubShort(detail.preview.subtotal)}
+                        {detail.preview.capDiscount > 0 && (
+                          <span className="block text-muted-foreground">
+                            Скидка по потолку счёта: −{formatRubShort(detail.preview.capDiscount)}
+                          </span>
+                        )}
+                      </p>
                       <p className="font-semibold mt-1">
-                        Итого: {formatRubShort(livePreview.subtotal)}
-                        {livePreview.capApplied ? " (применён потолок)" : ""}
+                        Итого: {formatRubShort(detail.preview.total)}
                       </p>
                     </div>
-                    {genResult ? (
-                      <Alert>
-                        <AlertDescription className="flex items-start gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                          {genResult}
-                        </AlertDescription>
-                      </Alert>
-                    ) : detail.billing?.status !== "ACTIVE" ? (
-                      <p className="text-xs text-muted-foreground">
-                        Счёт формируется только для активных компаний — сначала смените статус в секции «Тариф и статус».
-                      </p>
-                    ) : detail.periodCompleted === false ? (
-                      <p className="text-xs text-muted-foreground">
-                        Период ещё не завершён — счёт за него можно будет сформировать после{" "}
-                        {formatDateShort(detail.period?.to)}.
-                      </p>
-                    ) : (
-                      <Button size="sm" className="bg-menthol hover:bg-menthol-dark" onClick={generateInDetail} disabled={genLoading}>
-                        {genLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FilePlus2 className="h-4 w-4 mr-2" />}
-                        Сформировать счёт за период
-                      </Button>
-                    )}
-                    {genError && <p className="text-xs text-red-600">{genError}</p>}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Невыставленных просмотров нет — всё уже учтено в счетах. Всего просмотров за всё время:{" "}
-                    <b>{detail.totalViews}</b>.
-                  </p>
-                )}
-              </Section>
-
-              {/* 3. Тариф и статус */}
-              <Section id="tariff" title="Тариф и статус" open={!!openSections.tariff} onToggle={toggleSection}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {RATE_FIELDS.map((f) => (
-                    <div key={f.key} className="space-y-1">
-                      <Label>{f.label}</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={tariffValues[f.key] ?? ""}
-                        placeholder="по умолчанию"
-                        onChange={(e) => onRateChange(f.key, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Значения подставлены из настроек по умолчанию. Ставки сохраняются автоматически при вводе,
-                  начисления выше пересчитываются сразу; пустое поле — вернуть значение по умолчанию.{" "}
-                  {ratesSaveState === "saving"
-                    ? "Сохранение…"
-                    : ratesSaveState === "saved"
-                      ? "Сохранено ✓"
-                      : ratesSaveState === "error"
-                        ? "Ошибка сохранения"
-                        : ""}
-                </p>
-                <div className="space-y-1">
-                  <Label>Статус биллинга</Label>
-                  <Select value={tariffStatus} items={STATUS_ITEMS} onValueChange={(v) => setTariffStatus(v ?? "INACTIVE")}>
-                    <SelectTrigger className="w-full justify-between"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(STATUS_ITEMS).map(([k, label]) => (
-                        <SelectItem key={k} value={k} label={label}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {tariffStatus === "HIDDEN" && (
-                  <div className="space-y-1">
-                    <Label>Причина скрытия (видна компании)</Label>
-                    <Input value={hiddenReason} onChange={(e) => setHiddenReason(e.target.value)} placeholder="Неоплаченный счёт №…" />
-                  </div>
-                )}
-                <div className="flex justify-end">
-                  <Button className="bg-menthol hover:bg-menthol-dark" onClick={saveStatus} disabled={statusSaving}>
-                    {statusSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}Сохранить статус
-                  </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Невыставленных просмотров нет — всё уже учтено в счетах. Всего просмотров за всё время:{" "}
+                      <b>{detail.totalViews}</b>.
+                    </p>
+                  )}
+                  {genResult ? (
+                    <Alert>
+                      <AlertDescription className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                        {genResult}
+                      </AlertDescription>
+                    </Alert>
+                  ) : detail.billing?.status !== "ACTIVE" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Счёт формируется только для активных компаний — смените статус в разделе «Тариф и расценки» этой карточки.
+                    </p>
+                  ) : !detail.preview || detail.preview.subtotal <= 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Счёт за выбранную дату получится пустым — с прошлого счёта ещё не было оплачиваемых
+                      дней и просмотров, менять дату не нужно.
+                    </p>
+                  ) : (
+                    <Button size="sm" className="bg-menthol hover:bg-menthol-dark" onClick={generateInDetail} disabled={genLoading}>
+                      {genLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FilePlus2 className="h-4 w-4 mr-2" />}
+                      Сформировать счёт
+                    </Button>
+                  )}
+                  {genError && <p className="text-xs text-red-600">{genError}</p>}
                 </div>
               </Section>
 
@@ -1288,7 +1681,7 @@ export function CompanyTariffsManager() {
               </Section>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDetailRow(null)}>Закрыть</Button>
+                <Button variant="outline" onClick={closeDetail}>Закрыть</Button>
               </div>
             </div>
           )}
@@ -1426,6 +1819,46 @@ export function CompanyTariffsManager() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Массовое выставление счетов — из панели над таблицей */}
+      <MassInvoiceDialog
+        open={massOpen}
+        onOpenChange={setMassOpen}
+        onCreated={() => { load(); }}
+      />
+
+      {/* Несохранённые расценки перед массовым выставлением */}
+      <Dialog open={unsavedOpen} onOpenChange={(v) => { if (!v && !unsavedSaving) setUnsavedOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Расценки не сохранены</DialogTitle>
+            <DialogDescription>
+              В полях расценок есть несохранённые изменения. Сохранить их перед массовым выставлением
+              или продолжить по ранее сохранённым значениям?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setUnsavedOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={continueWithoutSaving}>Продолжить без сохранения</Button>
+            <Button className="bg-menthol hover:bg-menthol-dark" onClick={saveAndContinue} disabled={unsavedSaving}>
+              {unsavedSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Сохранить и продолжить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Подтверждение «Применить для всех» */}
+      <ConfirmDialog
+        open={applyAllOpen}
+        onOpenChange={setApplyAllOpen}
+        variant="danger"
+        title="Применить расценки и потолок для всех компаний?"
+        message="Индивидуальные расценки всех компаний будут сброшены (все считать по расценкам по умолчанию), а потолок счёта — установлен всем из поля выше (пустое поле — без потолка). Выставление счетов, включая массовое, пойдёт по этим значениям. Вернуть прежние индивидуальные значения будет невозможно."
+        confirmLabel="Применить для всех"
+        onConfirm={confirmApplyAll}
+        loading={applyAllLoading}
+      />
     </div>
   );
 }

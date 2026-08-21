@@ -321,7 +321,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
           items={{ all: "Все", company: "Компании", participant: "Участники" }}
           onValueChange={(v) => updateQuery({ type: v && v !== "all" ? v : null, page: null })}
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-[calc(50%-6px)] sm:w-[140px]">
             <SelectValue placeholder="Тип" />
           </SelectTrigger>
           <SelectContent>
@@ -336,7 +336,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
           onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(","), page: null })}
           placeholder="Регион"
           searchPlaceholder="Поиск региона..."
-          className="w-[200px]"
+          className="w-[calc(50%-6px)] sm:w-[200px]"
         />
         <MultiSelect
           options={classifierOptions}
@@ -344,7 +344,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
           onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
           placeholder="Классификатор"
           searchPlaceholder="Поиск категории..."
-          className="w-[220px]"
+          className="w-[calc(50%-6px)] sm:w-[220px]"
           filter={matchClassifier}
           hideSelectedLabels
         />
@@ -636,7 +636,7 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
 
       {/* Пагинация */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} записей</span>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>

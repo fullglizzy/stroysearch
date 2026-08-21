@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { productSearchText } from "@/lib/company";
 import { isLiveTreeItem } from "@/server/admin/tree";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
@@ -55,6 +56,8 @@ export async function PATCH(
 
   const data: Record<string, unknown> = {
     name: body.name,
+    // undefined в data = «не менять» (Prisma), searchText пересчитывается вместе с name
+    searchText: body.name !== undefined ? productSearchText(body.name) : undefined,
     treeItemId: body.treeItemId,
     classes: JSON.stringify(body.classes || []),
     regions: (body.regions ?? []).join(","),

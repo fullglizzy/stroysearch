@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { FileText, Eye, Download, Trash2, CheckCircle, XCircle, Loader2, Search } from "lucide-react";
+import { docHref } from "@/lib/doc-url";
 
 interface DocRow {
   id: string;
@@ -316,7 +317,7 @@ export function LibraryModeration({ documents, total, page, totalPages, q, statu
                   </div>
                 )}
                 <a
-                  href={detail.fileUrl}
+                  href={docHref(detail.fileUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-menthol hover:underline inline-flex items-center gap-1 break-all"

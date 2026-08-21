@@ -478,7 +478,6 @@ async function main() {
     { docKind: "billing_invoice", code: "title", label: "Название счёта", description: "Счёт на оплату № {number} от {date}", sortOrder: 0 },
     { docKind: "billing_invoice", code: "maintenance", label: "Абонентская плата", description: "Абонентская плата за использование платформы ({period})", sortOrder: 1 },
     { docKind: "billing_invoice", code: "views", label: "Плата за просмотры контактов", description: "Плата за просмотры контактов: {metric} ({period})", sortOrder: 2 },
-    { docKind: "billing_invoice", code: "cap", label: "Строка при применении потолка", description: "Плата за просмотры контактов ({period}; {breakdown}; применён лимит счёта)", sortOrder: 3 },
     { docKind: "billing_invoice", code: "note", label: "Примечание", description: "Оплата данного счёта означает полное и безоговорочное согласие с условиями Публичной оферты (акцепт оферты согласно ст. 438 ГК РФ).\n*Упрощенная система налогообложения (УСН) / ст. 346.11 НК РФ (или пп. 26 п. 2 ст. 149 НК РФ, если софт в реестре РФ).", sortOrder: 10 },
     { docKind: "service_act", code: "services", label: "Оказанные услуги", description: "Услуги платформы за период {period} по счёту {invoice}", sortOrder: 1 },
     { docKind: "coin_invoice", code: "title", label: "Название счёта", description: "Счёт на оплату № {number} от {date}", sortOrder: 0 },

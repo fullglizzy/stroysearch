@@ -389,6 +389,7 @@ async function main() {
       where: { inn: u.inn! },
       update: {
         name: u.companyName!,
+        searchText: `${u.companyName!} ${u.inn!}`.toLowerCase(),
         email: u.email,
         regions: u.region,
         ownerUserId: userIdMap.get(u.username)!,
@@ -397,6 +398,7 @@ async function main() {
       create: {
         inn: u.inn!,
         name: u.companyName!,
+        searchText: `${u.companyName!} ${u.inn!}`.toLowerCase(),
         email: u.email,
         regions: u.region,
         ownerUserId: userIdMap.get(u.username)!,
@@ -423,6 +425,7 @@ async function main() {
     create: {
       inn: EXTRA_COMPANY.inn,
       name: EXTRA_COMPANY.name,
+      searchText: `${EXTRA_COMPANY.name} ${EXTRA_COMPANY.inn}`.toLowerCase(),
       email: EXTRA_COMPANY.email,
       phone: EXTRA_COMPANY.phone,
       regions: EXTRA_COMPANY.region,
@@ -464,6 +467,7 @@ async function main() {
         treeItemId,
         ownerUserId: userIdMap.get(p.company) ?? null,
         name: p.name,
+        searchText: p.name.toLowerCase(),
         classes: JSON.stringify(p.classes),
         regions: p.region,
         unit: p.unit,

@@ -232,8 +232,8 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
                   <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {conf.time} МСК</span>
                 </div>
                 <ExpandableText text={conf.description} />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <Badge variant="secondary" className="text-xs">{conf.organizerName}</Badge>
                     {conf.treeItemPath && <Badge variant="outline" className="text-[10px]">{conf.treeItemPath}{conf.treeItemName ? ` — ${conf.treeItemName}` : ""}</Badge>}
                   </div>
@@ -275,7 +275,7 @@ export function ConferencesPageClient({ conferences, total, page, totalPages, sh
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} конференций</span>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>

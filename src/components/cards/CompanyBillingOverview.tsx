@@ -36,8 +36,9 @@ interface MyBilling {
     items: { description: string; quantity: number; unitPrice: number; total: number }[];
     maintenanceDays: number;
     viewsCost: number;
-    capApplied: boolean;
+    capDiscount: number;
     subtotal: number;
+    total: number;
   } | null;
   metrics: Record<ViewMetric, number> | null;
 }
@@ -108,28 +109,48 @@ export function CompanyBillingOverview() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Предстоящий счёт за период</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Предстоящий счёт</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm">
-              Период: <b>{formatDateShort(data.period?.from)} — {formatDateShort(data.period?.to)}</b>
-            </p>
-            {data.preview ? (
-              <div className="space-y-1 text-sm">
-                <p className="text-xs text-muted-foreground">Что войдёт в счёт (к оплате):</p>
-                {data.preview.items.map((i, idx) => (
-                  <p key={idx} className="text-xs">{i.description} — {formatRubShort(i.total)}</p>
-                ))}
-                <p className="font-semibold pt-1 border-t">
-                  К оплате: {formatRubShort(data.preview.subtotal)}
-                  {data.preview.capApplied && <span className="block text-[10px] font-normal text-muted-foreground">применён потолок счёта</span>}
+            {data.period && data.preview ? (
+              <>
+                <p className="text-sm">
+                  В счёт войдёт всё за период: <b>{formatDateShort(data.period.from)} — {formatDateShort(data.period.to)}</b> (по сегодня)
                 </p>
+                {data.preview.items.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Сумма к оплате за этот период пока нулевая — она появится с первыми просмотрами контактов.
+                  </p>
+                ) : (
+                  <div className="space-y-1 text-sm">
+                    <p className="text-xs text-muted-foreground">Что войдёт в следующий счёт:</p>
+                    {data.preview.items.map((i, idx) => (
+                      <p key={idx} className="text-xs">{i.description} — {formatRubShort(i.total)}</p>
+                    ))}
+                    <p className="pt-1 border-t">
+                      Сумма: {formatRubShort(data.preview.subtotal)}
+                      {data.preview.capDiscount > 0 && (
+                        <span className="block text-[10px] font-normal text-muted-foreground">
+                          скидка по потолку счёта: −{formatRubShort(data.preview.capDiscount)}
+                        </span>
+                      )}
+                    </p>
+                    <p className="font-semibold">
+                      К оплате: {formatRubShort(data.preview.total)}
+                    </p>
+                  </div>
+                )}
                 <p className="text-[10px] text-muted-foreground">
-                  Счёт формирует администратор платформы — после выставления он появится в вашем кабинете.
+                  Счёт выставляет администратор платформы и выбирает его дату: просмотры после сегодняшнего
+                  дня тоже войдут в счёт. После выставления счёт появится в вашем кабинете.
                 </p>
-              </div>
+              </>
+            ) : !data.billing?.billingStartedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Биллинг ещё не активирован — сумма к оплате начнёт считаться после активации администратором платформы.
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Невыставленных дней нет — счёт за период уже сформирован.
+                Всё уже выставлено в счетах — новая сумма к оплате появится здесь по мере просмотров.
               </p>
             )}
           </CardContent>

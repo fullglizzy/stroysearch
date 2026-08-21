@@ -339,7 +339,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
           onChange={(v) => updateQuery({ classifier: v.join(",") })}
           placeholder="Классификатор"
           searchPlaceholder="Поиск категории..."
-          className="w-[220px]"
+          className="w-[calc(50%-6px)] sm:w-[220px]"
           filter={matchClassifier}
           hideSelectedLabels
         />
@@ -349,14 +349,14 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
           onChange={(v) => updateQuery({ region: toggleAllRegions(regionFilter, v).join(",") })}
           placeholder="Регион"
           searchPlaceholder="Поиск региона..."
-          className="w-[200px]"
+          className="w-[calc(50%-6px)] sm:w-[200px]"
         />
         <Select
           value={productClass}
           items={{ "": "Все классы", ...classLabels }}
           onValueChange={(v) => updateQuery({ class: v || null })}
         >
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[calc(50%-6px)] sm:w-[150px]">
             <SelectValue placeholder="Класс" />
           </SelectTrigger>
           <SelectContent>
@@ -369,7 +369,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
           items={SORT_ITEMS}
           onValueChange={(v) => updateQuery({ sort: v ?? "rating" })}
         >
-          <SelectTrigger className="w-[190px] justify-between">
+          <SelectTrigger className="w-[calc(50%-6px)] sm:w-[190px] justify-between">
             <SelectValue placeholder="Сортировка" />
           </SelectTrigger>
           <SelectContent>
@@ -404,7 +404,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
         <div className="space-y-8">
           {grouped.map(([path, items]) => (
             <div key={path}>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <h2 className="text-lg font-semibold mb-3 flex flex-wrap items-center gap-2 min-w-0">
                 <Badge variant="secondary" className="font-mono">{path}</Badge> {items[0]?.treeItemName}
               </h2>
               {grouped.length > 1 ? (

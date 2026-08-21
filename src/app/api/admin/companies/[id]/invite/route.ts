@@ -56,7 +56,8 @@ export async function POST(
       payload: { company: company.name, action: "create_invite" },
     });
 
-    const origin = new URL(request.url).origin;
+    // За reverse-proxy request.url указывает на localhost — публичный адрес берём из env
+    const origin = (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/+$/, "");
     return NextResponse.json({
       success: true,
       inviteUrl: `${origin}/register/company?invite=${token}`,

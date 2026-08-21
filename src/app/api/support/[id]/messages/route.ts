@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyUser, cabinetHome } from "@/lib/notifications";
+import { sendMail, buildSupportReplyEmail } from "@/lib/mailer";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
 
@@ -69,7 +70,7 @@ export async function POST(
 
     const ticket = await prisma.supportTicket.findUnique({
       where: { id },
-      select: { userId: true, user: { select: { type: true } } },
+      select: { userId: true, user: { select: { type: true, email: true } } },
     });
     if (!ticket) {
       return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
@@ -107,6 +108,16 @@ export async function POST(
           : "Служба поддержки отправила сообщение в ваше обращение.",
         link: `${cabinetHome(ticket.user?.type)}/support?ticket=${id}`,
       });
+      // Дублируем ответ письмом (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+      if (ticket.user?.email) {
+        await sendMail(
+          buildSupportReplyEmail(ticket.user.email, {
+            message: message || "Служба поддержки отправила сообщение в ваше обращение.",
+            ticketId: id,
+            cabinetBase: cabinetHome(ticket.user.type),
+          }),
+        );
+      }
     }
 
     return NextResponse.json({

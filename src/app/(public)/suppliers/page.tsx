@@ -30,13 +30,23 @@ function buildCombinedQuery(params: {
     return `?`;
   };
 
+  // Колонка searchText — нижний регистр всех searchable-полей (кириллицу
+  // лоуеркейсит JS при записи в companies.searchText; здесь — конкатенация),
+  // т.к. lower()/LIKE в SQLite регистронезависимы только для ASCII
   const companySelect = `
-    SELECT c.id, 'company' AS kind, c.inn, c.name, c.phone, c.email, c.website, c."regions",
+    SELECT c.id, 'company' AS kind, c.inn, c.name,
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.phone END AS phone,
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.email END AS email,
+      CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.website END AS website,
+      c."regions",
       COALESCE(pr.nick, NULL) AS "ownerNick",
       COALESCE(c."ownerUserId", '') AS "roleUserId",
       COALESCE(c."classifierIds", '') AS "classifierIds",
       0 AS "isContactsHidden",
       COALESCE(cb.status, 'INACTIVE') AS "billingStatus",
+      c."searchText" || ' ' || lower(COALESCE(pr.nick, '')) || ' ' ||
+        lower(COALESCE(c.phone, '')) || ' ' || lower(COALESCE(c.email, '')) || ' ' ||
+        lower(COALESCE(c.website, '')) || ' ' || lower(COALESCE(c."regions", '')) AS "searchText",
       cr.rating AS rating, COALESCE(cr.cnt, 0) AS "reviewCount"
     FROM companies c
     LEFT JOIN users ou ON ou.id = c."ownerUserId"
@@ -58,6 +68,10 @@ function buildCombinedQuery(params: {
       COALESCE(pr2."classifierIds", '') AS "classifierIds",
       COALESCE(pr2."isContactsHidden", 1) AS "isContactsHidden",
       'INACTIVE' AS "billingStatus",
+      lower(COALESCE(pr2."firstName", '')) || ' ' || lower(COALESCE(pr2."lastName", '')) || ' ' ||
+        lower(u.username) || ' ' || lower(COALESCE(pr2.nick, '')) || ' ' ||
+        lower(COALESCE(u.phone, '')) || ' ' || lower(COALESCE(u.email, '')) || ' ' ||
+        lower(COALESCE(pr2."regions", '')) AS "searchText",
       ur.rating AS rating, COALESCE(ur.cnt, 0) AS "reviewCount"
     FROM users u
     LEFT JOIN user_profiles pr2 ON pr2."userId" = u.id
@@ -73,18 +87,9 @@ function buildCombinedQuery(params: {
 
   const where: string[] = [];
   for (const token of q) {
-    const like = `%${token.toLowerCase()}%`;
-    const cols = [
-      "name",
-      `COALESCE(inn, '')`,
-      `COALESCE("ownerNick", '')`,
-      `COALESCE(phone, '')`,
-      `COALESCE(email, '')`,
-      `COALESCE(website, '')`,
-      `COALESCE(regions, '')`,
-    ];
-    const parts = cols.map((col) => `lower(${col}) LIKE ${push(like)}`);
-    where.push(`(${parts.join(" OR ")})`);
+    // Токен приходит в нижнем регистре; колонка searchText собрана в нижнем
+    const like = `%${token}%`;
+    where.push(`("searchText" LIKE ${push(like)})`);
   }
   // «Все регионы» в фильтре означает «без ограничения по региону»
   if (region.length > 0 && !region.includes(ALL_REGIONS)) {
@@ -185,7 +190,7 @@ export default async function SuppliersPage({
     ownerNick: string | null;
     roleUserId: string;
     classifierIds: string;
-    isContactsHidden: number;
+    isContactsHidden: number | string;
     billingStatus: string;
     rating: number | null;
     reviewCount: number;
@@ -224,7 +229,8 @@ export default async function SuppliersPage({
     website: r.website,
     regions: r.regions ? r.regions.split(",").map((x) => x.trim()).filter(Boolean) : [],
     classifierIds: r.classifierIds ? r.classifierIds.split(",").filter(Boolean) : [],
-    isContactsHidden: !!r.isContactsHidden,
+    // 0/1 может прийти строкой от SQLite-драйвера (!!"0" === true) — проверяем числом
+    isContactsHidden: Number(r.isContactsHidden) === 1,
     // Санкция: администратор скрыл контакты компании в базе за неуплату
     billingHidden: r.billingStatus === "HIDDEN",
     // Рейтинг — одна цифра после запятой (как раньше делал computeRating)

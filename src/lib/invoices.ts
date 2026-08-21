@@ -2,7 +2,7 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Черновик",
   SENT: "Выставлен",
   PAID: "Оплачен",
-  SKIPPED: "Пропущен",
+  SKIPPED: "Списан",
   OVERDUE: "Просрочен",
   CANCELLED: "Отменён",
 };

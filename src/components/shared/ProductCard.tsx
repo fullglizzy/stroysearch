@@ -180,7 +180,7 @@ export function ProductCard({
           )}
 
           {(phone || email || website || contactsBlocked) && (
-            <div className="flex items-center gap-2 mt-auto pt-2 border-t">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-auto pt-2 border-t">
               {contactsBlocked ? (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Контакты скрыты администратором">
                   <Lock className="h-3 w-3" />
@@ -190,26 +190,26 @@ export function ProductCard({
                 <>
                   {phone && (
                     revealed.phone ? (
-                      <a href={telHref(phone)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        {phone}
+                      <a href={telHref(phone)} className="text-xs flex items-center gap-1 min-w-0 hover:text-menthol transition-colors">
+                        <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="break-all">{phone}</span>
                       </a>
                     ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
                         <EyeButton onClick={() => onReveal?.("phone")} fieldLabel="телефон" />
                       </span>
                     )
                   )}
                   {email && (
                     revealed.email ? (
-                      <a href={mailtoHref(email)} className="text-xs flex items-center gap-1 hover:text-menthol transition-colors">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {email}
+                      <a href={mailtoHref(email)} className="text-xs flex items-center gap-1 min-w-0 hover:text-menthol transition-colors">
+                        <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="break-all">{email}</span>
                       </a>
                     ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
                         <EyeButton onClick={() => onReveal?.("email")} fieldLabel="email" />
                       </span>
                     )
@@ -220,14 +220,14 @@ export function ProductCard({
                         href={website}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs flex items-center gap-1 hover:text-menthol transition-colors"
+                        className="text-xs flex items-center gap-1 min-w-0 hover:text-menthol transition-colors"
                       >
-                        <Globe className="h-3 w-3 text-muted-foreground" />
-                        {website.replace(/^https?:\/\//, "")}
+                        <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="break-all">{website.replace(/^https?:\/\//, "")}</span>
                       </a>
                     ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <Globe className="h-3 w-3 text-muted-foreground" />
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
                         <EyeButton onClick={() => onReveal?.("website")} fieldLabel="сайт" />
                       </span>
                     )

@@ -174,6 +174,7 @@ model Company {
   metrics       CompanyMetrics?
   viewEvents    CompanyViewEvent[]
   billing       CompanyBilling?
+  hiddenPeriods BillingHiddenPeriod[]
   invites       CompanyInvite[]
   notes         CompanyNote[]
   // Имя + ИНН в нижнем регистре — поиск по кириллице (LIKE в SQLite чувствителен к регистру)
@@ -234,6 +235,21 @@ model CompanyBilling {
   updatedAt        DateTime  @updatedAt
 
   @@map("company_billing")
+}
+
+// Интервал скрытия контактов (санкция за неуплату). Пока контакты скрыты,
+// абонентская плата не начисляется: дни скрытия исключаются из счёта.
+// to = null — интервал ещё открыт (компания скрыта сейчас).
+model BillingHiddenPeriod {
+  id        String    @id @default(uuid())
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  from      DateTime
+  to        DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([companyId])
+  @@map("billing_hidden_periods")
 }
 
 // Заметки администратора о компании: как зарегистрировалась, договорённости
@@ -323,6 +339,8 @@ model Product {
   treeItem        ProductTreeItem  @relation(fields: [treeItemId], references: [id])
   name            String
   description     String? // описание товара (показывается в карточке)
+  // Название в нижнем регистре — поиск по кириллице (LIKE в SQLite чувствителен к регистру)
+  searchText      String           @default("")
   status          String           @default("PUBLISHED") // DRAFT | PUBLISHED
   classes         String           @default("[]") // JSON array: ["STANDARD","COMFORT",...]
   regions         String           @default("") // comma-separated; «Все регионы» — все регионы
@@ -338,6 +356,7 @@ model Product {
   @@map("products")
   @@index([deletedAt])
   @@index([treeItemId])
+  @@index([searchText])
 }
 
 // ─────────────────────────── БИБЛИОТЕКА ДОКУМЕНТОВ ───────────────────────────

@@ -59,7 +59,8 @@ export default async function MatrixPage({
   ];
   for (const token of q) {
     const like = `%${token}%`;
-    where.push(`(lower(p.name) LIKE ${push(like)} OR lower(c.name) LIKE ${push(like)})`);
+    // Поиск по searchText (нижний регистр) — lower() в SQLite не знает кириллицу
+    where.push(`(p."searchText" LIKE ${push(like)} OR c."searchText" LIKE ${push(like)})`);
   }
   if (productClass) {
     where.push(`p.classes LIKE ${push(`%"${productClass}"%`)}`);
@@ -100,7 +101,7 @@ export default async function MatrixPage({
       CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.phone END AS "companyPhone",
       CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.email END AS "companyEmail",
       CASE WHEN cb.status = 'HIDDEN' THEN NULL ELSE c.website END AS "companyWebsite",
-      (cb.status = 'HIDDEN') AS "contactsBlocked",
+      CAST(CASE WHEN cb.status = 'HIDDEN' THEN 1 ELSE 0 END AS INTEGER) AS "contactsBlocked",
       t."fullNumberPath" AS "treeItemPath", t.name AS "treeItemName",
       cr.rating AS rating
     ${base}
@@ -131,7 +132,8 @@ export default async function MatrixPage({
     companyPhone: string | null;
     companyEmail: string | null;
     companyWebsite: string | null;
-    contactsBlocked: number;
+    // SQLite-драйвер может вернуть 0/1 строкой; проверяем числом (!!"0" === true)
+    contactsBlocked: number | string | null;
     treeItemPath: string;
     treeItemName: string;
     rating: number | null;
@@ -158,7 +160,7 @@ export default async function MatrixPage({
     companyPhone: p.companyPhone,
     companyEmail: p.companyEmail,
     companyWebsite: p.companyWebsite,
-    contactsBlocked: !!p.contactsBlocked,
+    contactsBlocked: Number(p.contactsBlocked) === 1,
   }));
 
   return (

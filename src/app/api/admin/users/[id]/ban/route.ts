@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
 import { notifyUser, cabinetHome } from "@/lib/notifications";
+import { sendMail, buildBanEmail } from "@/lib/mailer";
 import { logAdminAction } from "@/lib/audit";
 
 /**
@@ -49,7 +50,7 @@ export async function POST(
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, type: true, username: true },
+    select: { id: true, type: true, username: true, email: true },
   });
   if (!target) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
@@ -81,6 +82,8 @@ export async function POST(
     message: `Ваш аккаунт заблокирован модератором. Причина: ${reason}`,
     link: cabinetHome(target.type),
   });
+  // Письмо о блокировке (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+  await sendMail(buildBanEmail(target.email, { username: target.username, reason }));
   await logAdminAction({
     adminId: admin.id,
     adminName: admin.username,

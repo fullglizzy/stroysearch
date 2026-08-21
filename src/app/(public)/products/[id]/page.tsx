@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { JsonLd } from "@/components/shared/JsonLd";
 import { parseCharacteristic } from "@/lib/utils";
-import { Phone, Mail } from "lucide-react";
+import { Phone, Mail, Globe, Lock } from "lucide-react";
 
 export const revalidate = 60;
 
@@ -35,7 +35,7 @@ export default async function ProductPage({ params }: PageProps) {
   const product = await prisma.product.findUnique({
     where: { id },
     include: {
-      company: { select: { id: true, name: true, inn: true, phone: true, email: true } },
+      company: { select: { id: true, name: true, inn: true, phone: true, email: true, website: true, billing: { select: { status: true } } } },
       treeItem: { select: { fullNumberPath: true, name: true } },
     },
   });
@@ -44,6 +44,7 @@ export default async function ProductPage({ params }: PageProps) {
 
   const chars = parseJsonArray(product.characteristics).map(parseCharacteristic);
   const classes = parseJsonArray(product.classes);
+  const contactsBlocked = product.company.billing?.status === "HIDDEN";
 
   return (
     <div className="container-page py-8">
@@ -121,11 +122,24 @@ export default async function ProductPage({ params }: PageProps) {
                 {product.company.name}
               </Link>
               <p className="text-xs text-muted-foreground">ИНН {product.company.inn}</p>
-              {product.company.phone && (
-                <p className="flex items-center gap-2"><Phone className="h-3 w-3 text-muted-foreground" /> {product.company.phone}</p>
-              )}
-              {product.company.email && (
-                <p className="flex items-center gap-2"><Mail className="h-3 w-3 text-muted-foreground" /> {product.company.email}</p>
+              {contactsBlocked ? (
+                <p className="flex items-center gap-2 text-muted-foreground" title="Контакты скрыты администратором">
+                  <Lock className="h-3 w-3" /> Контакты скрыты
+                </p>
+              ) : (
+                <>
+                  {product.company.phone && (
+                    <p className="flex items-center gap-2"><Phone className="h-3 w-3 text-muted-foreground" /> {product.company.phone}</p>
+                  )}
+                  {product.company.email && (
+                    <p className="flex items-center gap-2"><Mail className="h-3 w-3 text-muted-foreground" /> {product.company.email}</p>
+                  )}
+                  {product.company.website && (
+                    <a href={product.company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-menthol hover:underline">
+                      <Globe className="h-3 w-3 text-muted-foreground" /> {product.company.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

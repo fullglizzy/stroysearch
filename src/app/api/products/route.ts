@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { productSearchText } from "@/lib/company";
 import { isLiveTreeItem } from "@/server/admin/tree";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       companyId,
       treeItemId,
       name,
+      searchText: productSearchText(name),
       description: productDescription,
       status: productStatus,
       classes: JSON.stringify(classes || []),

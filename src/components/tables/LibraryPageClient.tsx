@@ -276,13 +276,13 @@ export function LibraryPageClient({ documents, total, page, totalPages, treeItem
         <div className="space-y-3">
           {documents.map((doc) => (
             <Card key={doc.id} className="hover:shadow-sm transition-shadow">
-              <CardContent className="flex items-center justify-between gap-4">
+              <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <FileText className="h-4 w-4 text-menthol flex-shrink-0" />
                     <h3 className="font-medium truncate">{doc.title}</h3>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>{doc.uploaderName}</span>
                     {doc.treeItemPath && <Badge variant="secondary" className="text-[10px]">{doc.treeItemPath}{doc.treeItemName ? ` — ${doc.treeItemName}` : ""}</Badge>}
                     <span>{formatSize(doc.fileSize)}</span>
@@ -318,7 +318,7 @@ export function LibraryPageClient({ documents, total, page, totalPages, treeItem
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} документов</span>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />
         </div>

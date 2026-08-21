@@ -267,7 +267,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
           items={{ all: "Все типы", ...POLL_TYPE_LABELS }}
           onValueChange={(v) => updateQuery({ type: v === "all" ? null : v, page: null })}
         >
-          <SelectTrigger className="w-[190px]">
+          <SelectTrigger className="w-[calc(50%-6px)] sm:w-[190px]">
             <SelectValue placeholder="Тип опроса" />
           </SelectTrigger>
           <SelectContent>
@@ -283,7 +283,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
           onChange={(v) => updateQuery({ classifier: v.join(","), page: null })}
           placeholder="Категория"
           searchPlaceholder="Поиск категории..."
-          className="w-[210px]"
+          className="w-[calc(50%-6px)] sm:w-[210px]"
         />
         {session?.user && (
           <Select
@@ -291,7 +291,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
             items={{ all: "Все", yes: "Проголосованные", no: "Не проголосованные" }}
             onValueChange={(v) => updateQuery({ voted: v === "all" ? null : v, page: null })}
           >
-            <SelectTrigger className="w-[190px]">
+            <SelectTrigger className="w-[calc(50%-6px)] sm:w-[190px]">
               <SelectValue placeholder="Голосование" />
             </SelectTrigger>
             <SelectContent>
@@ -306,7 +306,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
           items={{ created: "Сначала новые", votes: "По популярности", reward: "По награде" }}
           onValueChange={(v) => updateQuery({ sort: v === "created" ? null : v, page: null })}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[calc(50%-6px)] sm:w-[180px]">
             <SelectValue placeholder="Сортировка" />
           </SelectTrigger>
           <SelectContent>
@@ -523,7 +523,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
       </Dialog>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} опросов</span>
           <Pagination
             currentPage={page}

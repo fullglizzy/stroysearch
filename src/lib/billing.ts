@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
+import { sendMailBatch, buildInvoiceEmail, type EmailItem } from "@/lib/mailer";
 
 export const VIEW_METRICS = ["phone", "email", "website", "reviews", "rating"] as const;
 export type ViewMetric = (typeof VIEW_METRICS)[number];
@@ -66,43 +67,6 @@ export function endOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 }
 
-/** Границы календарного месяца, содержащего дату */
-export function monthBounds(d: Date): { start: Date; end: Date } {
-  return {
-    start: new Date(d.getFullYear(), d.getMonth(), 1),
-    end: endOfDay(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
-  };
-}
-
-export interface BillingPeriod {
-  from: Date;
-  to: Date;
-}
-
-/**
- * Следующий невыставленный период: от водяной отметки (или старта биллинга)
- * до конца календарного месяца этой отметки. Период всегда цельный
- * (календарный месяц или его хвост при старте) и выставляется ПОСЛЕ
- * завершения — постоплата: ничего «вперёд» не продаётся.
- */
-export function nextBillingPeriod(billing: {
-  billingStartedAt: Date | null;
-  billedThrough: Date | null;
-}): BillingPeriod | null {
-  if (!billing.billingStartedAt) return null;
-  const from = billing.billedThrough
-    ? new Date(billing.billedThrough.getTime() + 1)
-    : billing.billingStartedAt;
-  const to = endOfDay(new Date(from.getFullYear(), from.getMonth() + 1, 0));
-  if (from.getTime() > to.getTime()) return null;
-  return { from, to };
-}
-
-/** Период завершён — по нему можно выставлять счёт (постоплата) */
-export function isPeriodCompleted(period: BillingPeriod, now: Date = new Date()): boolean {
-  return period.to.getTime() < now.getTime();
-}
-
 /** Количество просмотров по каждой метрике за период (по журналу событий) */
 export async function countViews(
   companyId: string,
@@ -121,6 +85,64 @@ export async function countViews(
   return counts;
 }
 
+/**
+ * Счётчики просмотров сразу для многих компаний — для массовых операций.
+ * Один запрос на чанк компаний вместо по запросу на компанию: у каждой
+ * компании свои границы периода (JOIN по интервалам). COUNT из raw-запроса
+ * приходит как BigInt — приводим к числу.
+ */
+export async function countViewsBatch(
+  ranges: { companyId: string; from: Date; to: Date }[],
+): Promise<Map<string, Record<ViewMetric, number>>> {
+  const result = new Map<string, Record<ViewMetric, number>>();
+  for (const r of ranges) {
+    result.set(r.companyId, { phone: 0, email: 0, website: 0, reviews: 0, rating: 0 });
+  }
+  // 3 параметра на компанию; чанк с запасом против лимита переменных SQLite
+  const CHUNK = 200;
+  for (let i = 0; i < ranges.length; i += CHUNK) {
+    const chunk = ranges.slice(i, i + CHUNK);
+    const values: string[] = [];
+    const params: (string | Date)[] = [];
+    for (const r of chunk) {
+      if (values.length > 0) values.push(" UNION ALL ");
+      values.push("SELECT ? AS companyId, ? AS periodFrom, ? AS periodTo");
+      params.push(r.companyId, r.from, r.to);
+    }
+    const rows = await prisma.$queryRawUnsafe<{ companyId: string; metric: string; cnt: bigint | number }[]>(
+      `SELECT e.companyId, e.metric, COUNT(*) AS cnt
+       FROM company_view_events e
+       JOIN (${values.join("")}) r
+         ON e.companyId = r.companyId AND e.createdAt > r.periodFrom AND e.createdAt <= r.periodTo
+       GROUP BY e.companyId, e.metric`,
+      ...params,
+    );
+    for (const row of rows) {
+      const c = result.get(row.companyId);
+      if (c && row.metric in c) c[row.metric as ViewMetric] = Number(row.cnt);
+    }
+  }
+  return result;
+}
+
+/** Интервалы скрытия контактов по компаниям — одним запросом */
+export async function hiddenPeriodsByCompany(
+  companyIds: string[],
+): Promise<Map<string, { from: Date; to: Date | null }[]>> {
+  const map = new Map<string, { from: Date; to: Date | null }[]>();
+  if (companyIds.length === 0) return map;
+  const rows = await prisma.billingHiddenPeriod.findMany({
+    where: { companyId: { in: companyIds } },
+    select: { companyId: true, from: true, to: true },
+  });
+  for (const r of rows) {
+    const arr = map.get(r.companyId) ?? [];
+    arr.push({ from: r.from, to: r.to });
+    map.set(r.companyId, arr);
+  }
+  return map;
+}
+
 export interface BillingItemInput {
   description: string;
   quantity: number;
@@ -133,9 +155,12 @@ export interface BillingComputation {
   maintenanceDays: number;
   maintenanceFee: number;
   viewsCost: number;
-  capApplied: boolean;
+  /** Скидка по потолку: разница между суммой позиций и потолком счёта */
+  capDiscount: number;
   viewsByMetric: Record<ViewMetric, number>;
   subtotal: number;
+  /** К оплате: сумма позиций минус скидка по потолку */
+  total: number;
 }
 
 // ─────────────────────────── Шаблоны строк документов ───────────────────────────
@@ -144,13 +169,11 @@ export interface BillingComputation {
 export interface BillingInvoiceTemplates {
   maintenance: string;
   views: string;
-  cap: string;
 }
 
 export const DEFAULT_BILLING_TEMPLATES: BillingInvoiceTemplates = {
   maintenance: "Абонентская плата за использование платформы ({period})",
   views: "Плата за просмотры контактов: {metric} ({period})",
-  cap: "Плата за просмотры контактов ({period}; {breakdown}; применён лимит счёта)",
 };
 
 /** Тексты строк акта об оказанных услугах */
@@ -181,8 +204,9 @@ export async function docTemplateLines(
 
 /**
  * Позиции счёта за период: абонентская плата (пропорционально дням) +
- * плата за просмотры по ставкам. Сумма просмотров ограничивается
- * индивидуальным потолком компании (monthlyCap) — защита от накрутки.
+ * плата за просмотры по ставкам. Потолок компании (monthlyCap) ограничивает
+ * итоговую сумму счёта: излишек становится общей скидкой по счёту.
+ * Дни скрытия контактов (санкция) исключаются из абонентской платы.
  * Тексты строк берутся из шаблонов (настраиваются в админке).
  */
 export function buildBillingItems(
@@ -191,16 +215,24 @@ export function buildBillingItems(
   to: Date,
   counts: Record<ViewMetric, number>,
   templates: BillingInvoiceTemplates = DEFAULT_BILLING_TEMPLATES,
+  /** Интервалы скрытия контактов: оплачиваемое время периода минус они */
+  hiddenIntervals: { from: Date; to: Date | null }[] = [],
 ): BillingComputation {
   const periodLabel = `${from.toLocaleDateString("ru-RU")} — ${to.toLocaleDateString("ru-RU")}`;
   const items: BillingItemInput[] = [];
 
   const daysInMonth = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
-  const maintenanceDays = Math.min(
-    Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1),
-    daysInMonth,
-  );
-  const maintenanceFee = rates.maintenanceFee > 0
+  // Оплачиваемое время = период минус дни скрытия; открытый интервал (to = null)
+  // длится до конца периода
+  let billableMs = to.getTime() - from.getTime();
+  for (const h of hiddenIntervals) {
+    const overlap = Math.min((h.to ?? to).getTime(), to.getTime()) - Math.max(h.from.getTime(), from.getTime());
+    if (overlap > 0) billableMs -= overlap;
+  }
+  // floor + 1 — календарные дни включительно (период всегда «день начала — конец дня»);
+  // 0 — весь период пришёлся на скрытие, абонплата не начисляется
+  const maintenanceDays = billableMs <= 0 ? 0 : Math.max(1, Math.floor(billableMs / 86_400_000) + 1);
+  const maintenanceFee = rates.maintenanceFee > 0 && maintenanceDays > 0
     ? Math.round((rates.maintenanceFee * (maintenanceDays / daysInMonth)) * 100) / 100
     : 0;
   if (maintenanceFee > 0) {
@@ -235,43 +267,32 @@ export function buildBillingItems(
     }
   }
 
-  const capApplied = rates.monthlyCap > 0 && viewsCost > rates.monthlyCap;
-  if (viewsCost > 0) {
-    if (capApplied) {
-      const breakdown = perMetric
-        .map((m) => `${METRIC_LABELS[m.metric]}: ${m.count}`)
-        .join(", ");
-      items.push({
-        description: renderDocTemplate(templates.cap, {
-          period: periodLabel,
-          breakdown,
-          cap: String(rates.monthlyCap),
-        }),
-        quantity: 1,
-        unitPrice: rates.monthlyCap,
-        total: rates.monthlyCap,
-      });
-      viewsCost = rates.monthlyCap;
-    } else {
-      for (const m of perMetric) {
-        const total = Math.round(m.count * m.unitPrice * 100) / 100;
-        items.push({
-          description: renderDocTemplate(templates.views, {
-            metric: METRIC_LABELS[m.metric],
-            count: String(m.count),
-            price: String(m.unitPrice),
-            period: periodLabel,
-          }),
-          quantity: m.count,
-          unitPrice: m.unitPrice,
-          total,
-        });
-      }
-    }
+  // Просмотры всегда идут построчно по метрикам — потолок не заменяет строки
+  for (const m of perMetric) {
+    const total = Math.round(m.count * m.unitPrice * 100) / 100;
+    items.push({
+      description: renderDocTemplate(templates.views, {
+        metric: METRIC_LABELS[m.metric],
+        count: String(m.count),
+        price: String(m.unitPrice),
+        period: periodLabel,
+      }),
+      quantity: m.count,
+      unitPrice: m.unitPrice,
+      total,
+    });
   }
 
   const subtotal = Math.round(items.reduce((s, i) => s + i.total, 0) * 100) / 100;
-  return { items, maintenanceDays, maintenanceFee, viewsCost, capApplied, viewsByMetric: counts, subtotal };
+
+  // Потолок ограничивает итоговую сумму счёта (абонплата + просмотры):
+  // разница становится общей скидкой — пишется в счёте над итогом и вычитается
+  const capDiscount = rates.monthlyCap > 0 && subtotal > rates.monthlyCap
+    ? Math.round((subtotal - rates.monthlyCap) * 100) / 100
+    : 0;
+  const total = Math.round((subtotal - capDiscount) * 100) / 100;
+
+  return { items, maintenanceDays, maintenanceFee, viewsCost, capDiscount, viewsByMetric: counts, subtotal, total };
 }
 
 /** Сквозная нумерация документов: СЧ-2026-001, АКТ-2026-001 */
@@ -290,8 +311,10 @@ export async function nextDocumentNumber(
 }
 
 /**
- * Формирует черновой счёт за период для компании-владельца и сдвигает
- * водяную отметку. Вызывается внутри транзакции.
+ * Формирует счёт за период для компании-владельца и сдвигает
+ * водяную отметку. Вызывается внутри транзакции. Счёт датируется концом
+ * периода (выбранной администратором датой), срок оплаты — от неё же.
+ * По умолчанию счёт создаётся сразу выставленным (SENT).
  */
 export async function createBillingInvoice(
   tx: Prisma.TransactionClient,
@@ -300,41 +323,61 @@ export async function createBillingInvoice(
     userId: string;
     periodFrom: Date;
     periodTo: Date;
-    discount?: number;
     config: BillingConfigRow;
     billing: BillingRow & { monthlyCap: Prisma.Decimal | null };
+    /** Частичные ставки поверх тарифа компании — для перевыставления с другими расценками */
+    ratesOverride?: Partial<BillingRates>;
+    /** Готовые счётчики просмотров за период (чтобы не считать повторно при массовой генерации) */
+    counts?: Record<ViewMetric, number>;
+    /** false — создать черновик (DRAFT) вместо выставленного счёта */
+    send?: boolean;
   },
 ) {
-  const rates = effectiveRates(input.billing, input.config);
-  const counts = await countViews(input.companyId, input.periodFrom, input.periodTo);
+  const rates = { ...effectiveRates(input.billing, input.config), ...input.ratesOverride };
+  const counts = input.counts ?? (await countViews(input.companyId, input.periodFrom, input.periodTo));
 
   // Тексты строк счёта — из шаблонов (настройки), с фолбэком на стандартные
   const tplRows = await docTemplateLines("billing_invoice");
   const templates: BillingInvoiceTemplates = { ...DEFAULT_BILLING_TEMPLATES };
   for (const row of tplRows) {
-    if (row.code === "maintenance" || row.code === "views" || row.code === "cap") {
+    if (row.code === "maintenance" || row.code === "views") {
       templates[row.code] = row.description;
     }
   }
 
-  const computation = buildBillingItems(rates, input.periodFrom, input.periodTo, counts, templates);
+  // Дни скрытия контактов не тарифицируются абонентской платой
+  const hiddenIntervals = (await hiddenPeriodsByCompany([input.companyId])).get(input.companyId) ?? [];
 
-  const discount = Math.min(
-    computation.subtotal,
-    Math.max(0, Math.round((input.discount ?? 0) * 100) / 100),
+  const computation = buildBillingItems(
+    rates,
+    input.periodFrom,
+    input.periodTo,
+    counts,
+    templates,
+    hiddenIntervals,
   );
-  const total = Math.round((computation.subtotal - discount) * 100) / 100;
+
+  // Скидка по потолку: излишек над потолком счёта вычитается из итога
+  // и пишется в счёте отдельной строкой над итогом
+  const discount = computation.capDiscount;
+  const total = computation.total;
 
   const number = await nextDocumentNumber(tx, "invoice");
   const dueDays = rates.invoiceDueDays;
+  // Срок оплаты — от даты счёта, но не раньше сегодня: перевыставленный счёт
+  // за прошлый период не должен сразу становиться просроченным
+  const dueBase = input.periodTo.getTime() > Date.now() ? input.periodTo : new Date();
 
   const invoice = await tx.invoice.create({
     data: {
       userId: input.userId,
       number,
-      date: new Date(),
-      dueDate: new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000),
-      status: "DRAFT",
+      // Счёт датируется выбранной администратором датой (концом периода)
+      date: input.periodTo,
+      dueDate: new Date(dueBase.getTime() + dueDays * 24 * 60 * 60 * 1000),
+      // Выставленный счёт компания сразу видит в кабинете; черновик — только для особых случаев
+      status: input.send === false ? "DRAFT" : "SENT",
+      sentAt: input.send === false ? undefined : new Date(),
       kind: "BILLING",
       subtotal: computation.subtotal,
       limit: rates.monthlyCap,
@@ -411,8 +454,9 @@ export interface GenerationResult {
 
 /**
  * Пакетное формирование счетов: для всех ACTIVE-компаний с владельцем
- * (или только для перечисленных) за невыставленный период.
- * Используется админкой (кнопка «Сформировать») и ежемесячным кроном.
+ * (или только для перечисленных) за невыставленный период до выбранной
+ * даты (по умолчанию — до сегодня). Используется админкой: массовая
+ * кнопка и индивидуальное выставление из попапа компании.
  */
 export async function generateBillingInvoices(input: {
   companyIds?: string[];
@@ -427,39 +471,68 @@ export async function generateBillingInvoices(input: {
 
   const billings = await prisma.companyBilling.findMany({
     where,
-    include: { company: { select: { name: true, ownerUserId: true } } },
+    include: {
+      company: {
+        select: { name: true, ownerUserId: true, ownerUser: { select: { email: true } } },
+      },
+    },
     orderBy: { companyId: "asc" },
   });
 
+  const periodTo = endOfDay(input.periodTo ?? new Date());
+
+  // Тексты строк счёта — из шаблонов (настройки), общие для всех компаний
+  const tplRows = await docTemplateLines("billing_invoice");
+  const templates: BillingInvoiceTemplates = { ...DEFAULT_BILLING_TEMPLATES };
+  for (const row of tplRows) {
+    if (row.code === "maintenance" || row.code === "views") {
+      templates[row.code] = row.description;
+    }
+  }
+
   const created: GenerationResult["created"] = [];
   const skipped: GenerationResult["skipped"] = [];
+  // Письма о выставленных счетах — отправляются пакетом после формирования
+  const mails: EmailItem[] = [];
 
+  // Сначала собираем периоды всех компаний-кандидатов
+  const candidates: { b: (typeof billings)[number]; ownerId: string; from: Date }[] = [];
   for (const b of billings) {
     const ownerId = b.company.ownerUserId;
     if (!ownerId) {
       skipped.push({ companyId: b.companyId, companyName: b.company.name, reason: "Нет владельца" });
       continue;
     }
-
-    let period: BillingPeriod | null;
-    if (input.periodTo) {
-      const from = b.billedThrough ? new Date(b.billedThrough.getTime() + 1) : b.billingStartedAt;
-      period = from ? { from, to: endOfDay(input.periodTo) } : null;
-    } else {
-      period = nextBillingPeriod(b);
-    }
-    if (!period || period.from.getTime() > period.to.getTime()) {
+    // Период: всё, что накопилось с прошлого счёта, до выбранной даты
+    const from = b.billedThrough ? new Date(b.billedThrough.getTime() + 1) : b.billingStartedAt;
+    if (!from || from.getTime() > periodTo.getTime()) {
       skipped.push({ companyId: b.companyId, companyName: b.company.name, reason: "Нет периода для выставления" });
       continue;
     }
+    candidates.push({ b, ownerId, from });
+  }
 
-    // Постоплата: счёт формируется только за завершённый период
-    if (!isPeriodCompleted(period)) {
-      skipped.push({
-        companyId: b.companyId,
-        companyName: b.company.name,
-        reason: "Период ещё не завершён — счёт будет доступен после окончания месяца",
-      });
+  // Метрики и интервалы скрытия считаем пакетно — пара запросов вместо
+  // по запросу на компанию (таблица рассчитана на тысячи компаний)
+  const countsById = await countViewsBatch(
+    candidates.map((c) => ({ companyId: c.b.companyId, from: c.from, to: periodTo })),
+  );
+  const hiddenById = await hiddenPeriodsByCompany(candidates.map((c) => c.b.companyId));
+
+  for (const { b, ownerId, from } of candidates) {
+    // Считаем заранее, чтобы не создавать пустые счета (счётчик и позиции передаём готовыми)
+    const rates = effectiveRates(b, config);
+    const counts = countsById.get(b.companyId) ?? { phone: 0, email: 0, website: 0, reviews: 0, rating: 0 };
+    const computation = buildBillingItems(
+      rates,
+      from,
+      periodTo,
+      counts,
+      templates,
+      hiddenById.get(b.companyId) ?? [],
+    );
+    if (computation.subtotal <= 0) {
+      skipped.push({ companyId: b.companyId, companyName: b.company.name, reason: "Нет суммы к оплате за период" });
       continue;
     }
 
@@ -467,20 +540,33 @@ export async function generateBillingInvoices(input: {
       createBillingInvoice(tx, {
         companyId: b.companyId,
         userId: ownerId,
-        periodFrom: period.from,
-        periodTo: period.to,
+        periodFrom: from,
+        periodTo,
         config,
         billing: b,
+        counts,
       }),
     );
 
     await notifyUser({
       userId: ownerId,
       type: "INVOICE",
-      title: "Сформирован счёт",
-      message: `Сформирован счёт ${invoice.number} за период ${period.from.toLocaleDateString("ru-RU")} — ${period.to.toLocaleDateString("ru-RU")} на сумму ${invoice.total.toNumber().toLocaleString("ru-RU")} ₽.`,
+      title: "Выставлен счёт",
+      message: `Счёт ${invoice.number} за период ${from.toLocaleDateString("ru-RU")} — ${periodTo.toLocaleDateString("ru-RU")} на сумму ${invoice.total.toNumber().toLocaleString("ru-RU")} ₽ выставлен. Срок оплаты — ${invoice.dueDate.toLocaleDateString("ru-RU")}.`,
       link: "/company/finances",
     });
+
+    if (b.company.ownerUser?.email) {
+      mails.push(
+        buildInvoiceEmail(b.company.ownerUser.email, {
+          companyName: b.company.name,
+          number: invoice.number,
+          total: invoice.total.toNumber(),
+          periodLabel: `${from.toLocaleDateString("ru-RU")} — ${periodTo.toLocaleDateString("ru-RU")}`,
+          dueDate: invoice.dueDate,
+        }),
+      );
+    }
 
     created.push({
       companyId: b.companyId,
@@ -489,6 +575,9 @@ export async function generateBillingInvoices(input: {
       total: invoice.total.toNumber(),
     });
   }
+
+  // Письма о счетах — одним пакетом (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+  await sendMailBatch(mails);
 
   return { created, skipped };
 }

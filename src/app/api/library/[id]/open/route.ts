@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { docHref } from "@/lib/doc-url";
 
 // Открытие документа: инкремент просмотров + редирект на файл.
 // Используется публичной библиотекой, чтобы счётчик просмотров был честным.
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -15,7 +16,7 @@ export async function GET(
   });
 
   if (!doc || doc.deletedAt || !doc.isApproved) {
-    return NextResponse.redirect(new URL("/library", request.url));
+    return relativeRedirect("/library");
   }
 
   await prisma.libraryDocument.update({
@@ -23,5 +24,15 @@ export async function GET(
     data: { views: { increment: 1 } },
   });
 
-  return NextResponse.redirect(new URL(doc.fileUrl, request.url));
+  return relativeRedirect(docHref(doc.fileUrl));
+}
+
+// Редирект с относительным Location: за reverse-proxy request.url указывает на
+// localhost, и абсолютный Location уводил бы пользователя мимо сайта.
+// Браузеры резолвят относительный Location от origin запрошенной страницы.
+function relativeRedirect(location: string): NextResponse {
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: location },
+  });
 }

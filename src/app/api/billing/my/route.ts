@@ -6,7 +6,8 @@ import {
   countViews,
   effectiveRates,
   buildBillingItems,
-  nextBillingPeriod,
+  endOfDay,
+  hiddenPeriodsByCompany,
 } from "@/lib/billing";
 
 // Финансы компании: тариф, невыставленные просмотры, счета и акты — вкладка «Финансы»
@@ -72,12 +73,23 @@ export async function GET() {
   const config = await prisma.billingConfig.findUniqueOrThrow({ where: { id: "default" } });
   const billing = company.billing;
   const rates = effectiveRates(billing, config);
-  const period = billing ? nextBillingPeriod(billing) : null;
+  // Предпросмотр предстоящего счёта: всё, что войдёт в него с прошлого
+  // счёта до сегодня (дату выставления выбирает администратор)
+  let period: { from: Date; to: Date } | null = null;
+  if (billing) {
+    const from = billing.billedThrough
+      ? new Date(billing.billedThrough.getTime() + 1)
+      : billing.billingStartedAt;
+    const to = endOfDay(new Date());
+    if (from && from.getTime() <= to.getTime()) period = { from, to };
+  }
 
   let preview: Awaited<ReturnType<typeof buildBillingItems>> | null = null;
   if (period) {
     const counts = await countViews(company.id, period.from, period.to);
-    preview = buildBillingItems(rates, period.from, period.to, counts);
+    // Дни скрытия контактов не тарифицируются абонентской платой
+    const hiddenIntervals = (await hiddenPeriodsByCompany([company.id])).get(company.id) ?? [];
+    preview = buildBillingItems(rates, period.from, period.to, counts, undefined, hiddenIntervals);
   }
 
   const [invoices, acts] = await Promise.all([
@@ -148,8 +160,9 @@ export async function GET() {
           items: preview.items,
           maintenanceDays: preview.maintenanceDays,
           viewsCost: preview.viewsCost,
-          capApplied: preview.capApplied,
+          capDiscount: preview.capDiscount,
           subtotal: preview.subtotal,
+          total: preview.total,
         }
       : null,
     invoices: invoices.map((i) => ({

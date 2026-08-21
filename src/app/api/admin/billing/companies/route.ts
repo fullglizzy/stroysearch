@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
-import { nextBillingPeriod, markOverdueInvoices, countViews } from "@/lib/billing";
+import { logAdminAction } from "@/lib/audit";
+import { markOverdueInvoices, countViews } from "@/lib/billing";
 
 const ADMIN_TYPES = ["SUPER", "ROOT"];
 const PER_PAGE_OPTIONS = [25, 50, 100];
@@ -114,6 +115,9 @@ export async function GET(request: Request) {
   }));
   const ids = pageRows.map((r) => r.id);
 
+  // Ставки по умолчанию — для панели тарифа над таблицей (пустое поле = дефолт)
+  const config = await prisma.billingConfig.findUniqueOrThrow({ where: { id: "default" } });
+
   const companies = await prisma.company.findMany({
     where: { id: { in: ids } },
     select: {
@@ -124,7 +128,19 @@ export async function GET(request: Request) {
       ownerUserId: true,
       ownerUser: { select: { id: true, username: true, email: true, status: true } },
       billing: {
-        select: { status: true, hiddenReason: true, billingStartedAt: true, billedThrough: true },
+        select: {
+          status: true,
+          hiddenReason: true,
+          billingStartedAt: true,
+          billedThrough: true,
+          maintenanceFee: true,
+          phonePrice: true,
+          emailPrice: true,
+          websitePrice: true,
+          reviewsPrice: true,
+          ratingPrice: true,
+          monthlyCap: true,
+        },
       },
       metrics: true,
     },
@@ -193,7 +209,6 @@ export async function GET(request: Request) {
           : r.debt > 0 || r.overdueCount > 0
             ? false
             : true;
-      const period = billing ? nextBillingPeriod(billing) : null;
       return {
         id: c.id,
         inn: c.inn,
@@ -208,6 +223,13 @@ export async function GET(request: Request) {
               hiddenReason: billing.hiddenReason,
               billingStartedAt: billing.billingStartedAt,
               billedThrough: billing.billedThrough,
+              maintenanceFee: billing.maintenanceFee?.toNumber() ?? null,
+              phonePrice: billing.phonePrice?.toNumber() ?? null,
+              emailPrice: billing.emailPrice?.toNumber() ?? null,
+              websitePrice: billing.websitePrice?.toNumber() ?? null,
+              reviewsPrice: billing.reviewsPrice?.toNumber() ?? null,
+              ratingPrice: billing.ratingPrice?.toNumber() ?? null,
+              monthlyCap: billing.monthlyCap?.toNumber() ?? null,
             }
           : null,
         metrics: c.metrics
@@ -223,7 +245,6 @@ export async function GET(request: Request) {
         pays: paysValue,
         pendingViews: pendingViewsById.get(c.id) ?? null,
         lastInvoice: c.ownerUserId ? lastByOwner.get(c.ownerUserId) ?? null : null,
-        period: period ? { from: period.from, to: period.to } : null,
         notesCount: notesById.get(c.id) ?? 0,
       };
     })
@@ -232,5 +253,82 @@ export async function GET(request: Request) {
   // Порядок страницы сохраняем из SQL-запроса (сортировка по долгу и т.п.)
   list.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 
-  return NextResponse.json({ companies: list, total, page, perPage });
+  return NextResponse.json({
+    companies: list,
+    defaults: {
+      maintenanceFee: config.maintenanceFee.toNumber(),
+      phoneViewPrice: config.phoneViewPrice.toNumber(),
+      emailViewPrice: config.emailViewPrice.toNumber(),
+      websiteViewPrice: config.websiteViewPrice.toNumber(),
+      reviewsViewPrice: config.reviewsViewPrice.toNumber(),
+      ratingViewPrice: config.ratingViewPrice.toNumber(),
+    },
+    total,
+    page,
+    perPage,
+  });
+}
+
+// «Применить для всех»: сбрасывает индивидуальные расценки всех компаний —
+// все переходят на глобальные расценки из настроек. Опционально устанавливает
+// всем компаниям одинаковый потолок счёта (monthlyCap: null — без потолка).
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+    if (!ADMIN_TYPES.includes((session.user as SessionUser).type as string)) {
+      return NextResponse.json({ error: "Нет прав" }, { status: 403 });
+    }
+    const adminId = (session.user as SessionUser).id as string;
+    const adminUsername = (session.user as SessionUser).username as string | undefined;
+
+    let body: { action?: unknown; monthlyCap?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+    if (body.action !== "resetRates") {
+      return NextResponse.json({ error: "Некорректное действие" }, { status: 400 });
+    }
+
+    const data: Record<string, unknown> = {
+      maintenanceFee: null,
+      phonePrice: null,
+      emailPrice: null,
+      websitePrice: null,
+      reviewsPrice: null,
+      ratingPrice: null,
+    };
+
+    // Потолок: отсутствие поля — не трогаем; null — снимаем всем; число — ставим всем
+    if ("monthlyCap" in body) {
+      if (body.monthlyCap === null) {
+        data.monthlyCap = null;
+      } else {
+        const v = Number(body.monthlyCap);
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: "Некорректный потолок счёта" }, { status: 400 });
+        }
+        data.monthlyCap = Math.round(v * 100) / 100;
+      }
+    }
+
+    const res = await prisma.companyBilling.updateMany({ data });
+
+    await logAdminAction({
+      adminId,
+      adminName: adminUsername ?? adminId,
+      action: "billing",
+      entityType: "company",
+      entityId: undefined,
+      payload: { action: "resetRates", updated: res.count, monthlyCap: data.monthlyCap ?? "unchanged" },
+    });
+
+    return NextResponse.json({ success: true, updated: res.count });
+  } catch {
+    return NextResponse.json({ error: "Не удалось применить расценки" }, { status: 500 });
+  }
 }

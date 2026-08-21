@@ -51,16 +51,28 @@ export function MultiSelect({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const updatePosition = useCallback(() => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // На узких экранах дропдаун растягиваем почти на весь экран —
+    // иначе список («1.2.3 — Название категории») нечитаем в ширину триггера
+    const vw = window.innerWidth;
+    if (vw < 640) {
       setDropdownStyle({
         position: "fixed",
-        left: rect.left,
+        left: 8,
         top: rect.bottom + 4,
-        minWidth: rect.width,
+        width: vw - 16,
         zIndex: 50,
       });
+      return;
     }
+    setDropdownStyle({
+      position: "fixed",
+      left: rect.left,
+      top: rect.bottom + 4,
+      minWidth: rect.width,
+      zIndex: 50,
+    });
   }, []);
 
   // Position dropdown synchronously before paint (no flicker)

@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
 import { logAdminAction } from "@/lib/audit";
-import { generateBillingInvoices, markOverdueInvoices } from "@/lib/billing";
+import { generateBillingInvoices, markOverdueInvoices, endOfDay } from "@/lib/billing";
 
 const ADMIN_TYPES = ["SUPER", "ROOT"];
 const PER_PAGE_OPTIONS = [25, 50, 100];
@@ -38,13 +38,14 @@ export async function GET(request: Request) {
   // в OVERDUE сами, санкцию за неуплату администратор применяет вручную.
   await markOverdueInvoices();
 
-  // Фильтр по месяцу периода счёта (YYYY-MM)
+  // Фильтр по месяцу даты счёта (YYYY-MM) — дата равна выбранной админом дате
+  // выставления; периоды могут пересекать месяцы, поэтому фильтруем по date
   let periodFilter: Prisma.InvoiceWhereInput = {};
   if (/^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split("-").map(Number);
     const monthStart = new Date(y, m - 1, 1);
     const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
-    periodFilter = { periodFrom: { gte: monthStart, lte: monthEnd } };
+    periodFilter = { date: { gte: monthStart, lte: monthEnd } };
   }
 
   // Поиск: номер счёта (точный регистр или только цифры), логин владельца,
@@ -148,6 +149,9 @@ export async function POST(request: Request) {
       periodTo = new Date(body.periodTo);
       if (Number.isNaN(periodTo.getTime())) {
         return NextResponse.json({ error: "Некорректная дата окончания периода" }, { status: 400 });
+      }
+      if (periodTo.getTime() > endOfDay(new Date()).getTime()) {
+        return NextResponse.json({ error: "Нельзя выставить счёт за будущую дату" }, { status: 400 });
       }
     }
 

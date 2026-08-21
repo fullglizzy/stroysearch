@@ -5,3 +5,8 @@
 export function companySearchText(name: string, inn: string): string {
   return `${name} ${inn}`.toLowerCase();
 }
+
+/** Строка поиска товара: название в нижнем регистре (см. companySearchText). */
+export function productSearchText(name: string): string {
+  return name.toLowerCase();
+}

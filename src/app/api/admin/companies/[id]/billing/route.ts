@@ -4,12 +4,13 @@ import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/types";
 import { logAdminAction } from "@/lib/audit";
 import { notifyUser } from "@/lib/notifications";
+import { sendMail, buildContactsHiddenEmail } from "@/lib/mailer";
 import {
   countViews,
   effectiveRates,
   buildBillingItems,
-  nextBillingPeriod,
-  isPeriodCompleted,
+  endOfDay,
+  hiddenPeriodsByCompany,
   markOverdueInvoices,
   docTemplateLines,
   DEFAULT_BILLING_TEMPLATES,
@@ -28,9 +29,10 @@ const RATE_FIELDS = [
 ] as const;
 const STATUSES = ["INACTIVE", "ACTIVE", "HIDDEN"] as const;
 
-// Карточка биллинга компании: тариф, владелец, период, невыставленные просмотры
+// Карточка биллинга компании: тариф, владелец, невыставленный период до
+// выбранной даты (query ?date=, по умолчанию — сегодня) и его предпросмотр
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
@@ -45,6 +47,18 @@ export async function GET(
 
   // Просрочка отмечается автоматически — статусы счетов в попапе актуальны
   await markOverdueInvoices();
+
+  // Дата, до которой считается сумма к оплате (невыставленный период заканчивается ей)
+  const { searchParams } = new URL(request.url);
+  const dateRaw = searchParams.get("date");
+  let to = endOfDay(new Date());
+  if (dateRaw) {
+    const d = new Date(dateRaw);
+    if (Number.isNaN(d.getTime())) {
+      return NextResponse.json({ error: "Некорректная дата" }, { status: 400 });
+    }
+    to = endOfDay(d);
+  }
 
   const [company, config, tplRows] = await Promise.all([
     prisma.company.findUnique({
@@ -86,17 +100,26 @@ export async function GET(
   const rates = effectiveRates(billing, config);
   const templates: BillingInvoiceTemplates = { ...DEFAULT_BILLING_TEMPLATES };
   for (const row of tplRows) {
-    if (row.code === "maintenance" || row.code === "views" || row.code === "cap") {
+    if (row.code === "maintenance" || row.code === "views") {
       templates[row.code] = row.description;
     }
   }
-  const period = billing ? nextBillingPeriod(billing) : null;
+  // Невыставленный период: всё накопленное с прошлого счёта до выбранной даты
+  let period: { from: Date; to: Date } | null = null;
+  if (billing) {
+    const from = billing.billedThrough
+      ? new Date(billing.billedThrough.getTime() + 1)
+      : billing.billingStartedAt;
+    if (from && from.getTime() <= to.getTime()) period = { from, to };
+  }
   let preview: Awaited<ReturnType<typeof buildBillingItems>> | null = null;
   let viewsInPeriod: Record<string, number> | null = null;
   if (period) {
     const counts = await countViews(id, period.from, period.to);
     viewsInPeriod = counts;
-    preview = buildBillingItems(rates, period.from, period.to, counts, templates);
+    // Дни скрытия контактов не тарифицируются абонентской платой
+    const hiddenIntervals = (await hiddenPeriodsByCompany([id])).get(id) ?? [];
+    preview = buildBillingItems(rates, period.from, period.to, counts, templates, hiddenIntervals);
   }
 
   const ownerId = company.ownerUserId;
@@ -197,14 +220,14 @@ export async function GET(
     },
     templates,
     period: period ? { from: period.from, to: period.to } : null,
-    periodCompleted: period ? isPeriodCompleted(period) : null,
     preview: preview
       ? {
           items: preview.items,
           maintenanceDays: preview.maintenanceDays,
           viewsCost: preview.viewsCost,
-          capApplied: preview.capApplied,
+          capDiscount: preview.capDiscount,
           subtotal: preview.subtotal,
+          total: preview.total,
         }
       : null,
     debt: debtAgg?._sum.total?.toNumber() ?? 0,
@@ -297,7 +320,15 @@ export async function PUT(
       return NextResponse.json({ error: "Нет полей для сохранения" }, { status: 400 });
     }
 
-    const company = await prisma.company.findUnique({ where: { id }, select: { id: true, name: true, ownerUserId: true } });
+    const company = await prisma.company.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        ownerUserId: true,
+        ownerUser: { select: { email: true } },
+      },
+    });
     if (!company) {
       return NextResponse.json({ error: "Компания не найдена" }, { status: 404 });
     }
@@ -324,6 +355,20 @@ export async function PUT(
       },
     });
 
+    // Интервал скрытия: открываем при скрытии, закрываем при возврате —
+    // дни скрытия контактов не тарифицируются абонентской платой
+    if (data.status === "HIDDEN") {
+      const open = await prisma.billingHiddenPeriod.findFirst({ where: { companyId: id, to: null } });
+      if (!open) {
+        await prisma.billingHiddenPeriod.create({ data: { companyId: id, from: new Date() } });
+      }
+    } else if (data.status && data.status !== "HIDDEN" && before?.status === "HIDDEN") {
+      await prisma.billingHiddenPeriod.updateMany({
+        where: { companyId: id, to: null },
+        data: { to: new Date() },
+      });
+    }
+
     await logAdminAction({
       adminId,
       adminName: adminUsername ?? adminId,
@@ -341,6 +386,15 @@ export async function PUT(
         message: `Контакты компании «${company.name}» скрыты в базе поставщиков. Причина: ${(data.hiddenReason as string) || "не указана"}. Оплатите задолженность — после этого администратор вернёт контакты.`,
         link: "/company/finances",
       });
+      // Дублируем письмом владельцу (отключено без POSTAL_API_URL/POSTAL_API_KEY)
+      if (company.ownerUser?.email) {
+        await sendMail(
+          buildContactsHiddenEmail(company.ownerUser.email, {
+            companyName: company.name,
+            reason: (data.hiddenReason as string) || null,
+          }),
+        );
+      }
     }
 
     return NextResponse.json({
