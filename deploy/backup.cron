@@ -1,0 +1,11 @@
+# Бэкапы stroysearch — устанавливаются в crontab пользователя root скриптом deploy.sh.
+# БД — безопасный снапшот SQLite (работает и с WAL), загрузки — rsync, ротация 14 дней.
+
+# SQLite
+0 3 * * * sqlite3 /opt/stroysearch/prisma/prod.db ".backup '/var/backups/stroysearch/prod-$(date +\%F).db'"
+
+# Загруженные пользователями файлы
+10 3 * * * rsync -a --delete /var/lib/stroysearch/uploads/ /var/backups/stroysearch/uploads/
+
+# Ротация: хранить 14 дней
+0 4 * * * find /var/backups/stroysearch -name 'prod-*.db' -mtime +14 -delete

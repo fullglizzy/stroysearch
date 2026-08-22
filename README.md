@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# stroysearch — платформа ЕНЦПР
 
-## Getting Started
+Поиск поставщиков и заказчиков, матрица материалов, продуктовая библиотека,
+встречи и конференции, опросы, геймификация (монеты/подарки) и финансы.
 
-First, run the development server:
+## Стек
+
+- Next.js 16 (App Router), React 19, TypeScript
+- Prisma + SQLite (WAL-режим)
+- Tailwind CSS 4, shadcn/ui (base-ui)
+- next-auth v5 (Credentials), argon2
+- Почта: self-hosted Postal (без `POSTAL_API_URL`/`POSTAL_API_KEY` письма отключены)
+
+## Локальная разработка
 
 ```bash
+npm ci
+cp .env.example .env   # DATABASE_URL="file:./dev.db"
+npx prisma migrate deploy
+npx prisma db seed
+npx tsx prisma/seed-classifier.ts   # дерево классификатора
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Проверка перед коммитом: `npm run lint` и `npx tsc --noEmit`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Прод-деплой на VPS
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Готовый деплой-пакет лежит в `deploy/` (ветка `prod-clean`):
 
-## Learn More
+```bash
+git clone -b prod-clean https://github.com/fullglizzy/stroysearch.git
+cd stroysearch
+sudo bash deploy/deploy.sh ваш-домен.ru admin@ваш-домен.ru
+```
 
-To learn more about Next.js, take a look at the following resources:
+Скрипт идемпотентен: первый запуск — установка пакетов, база, сиды, SSL, cron-бэкапы;
+последующие — обновление кода, миграции, пересборка, рестарт.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Что делает `deploy.sh`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Устанавливает Node 22, Nginx, certbot, pm2; создаёт пользователя `deploy`.
+2. Клонирует ветку `prod-clean` в `/opt/stroysearch`.
+3. Создаёт `.env` (секрет генерируется) — база `file:/opt/stroysearch/prisma/prod.db`.
+4. Применяет миграции; при первом запуске — сиды (базовые данные, классификатор, searchText).
+5. Собирает `next build` (standalone) и раскладывает: `.next/static`, `public`, `.env`.
+6. Загруженные файлы живут в `/var/lib/stroysearch/uploads` вне репозитория
+   (симлинк в standalone) — обновления их не затирают.
+7. Запускает приложение под PM2 (`stroysearch`, автозапуск при ребуте), Nginx + Let's Encrypt.
+8. Ставит ежедневные бэкапы (SQLite-снапшот + uploads, хранение 14 дней).
 
-## Deploy on Vercel
+Обновление прода: `sudo bash /opt/stroysearch/deploy/deploy.sh`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Требования к VPS: 2–4 vCPU, 4 ГБ RAM, 60+ ГБ NVMe SSD, Ubuntu 22.04/24.04.
+На 150–200 одновременных пользователей одной машины достаточно; 2000+ онлайн — выносить БД
+и `public/uploads` на отдельные сервисы.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Структура
+
+- `src/app` — страницы и API-роуты (App Router)
+- `src/components` — UI-компоненты
+- `src/lib` — серверные модули (auth, billing, invoices, mailer, валидаторы)
+- `src/server` — серверная логика (дерево классификатора, регионы, аудит)
+- `prisma` — схема БД и сиды
+- `deploy` — деплой-пакет для VPS
