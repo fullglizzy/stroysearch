@@ -60,6 +60,7 @@ export default async function AdminFinancesPage({
                 websiteViewPrice: config.websiteViewPrice.toNumber(),
                 reviewsViewPrice: config.reviewsViewPrice.toNumber(),
                 ratingViewPrice: config.ratingViewPrice.toNumber(),
+                monthlyCap: config.monthlyCap != null ? config.monthlyCap.toNumber() : null,
                 invoiceDueDays: config.invoiceDueDays,
               }
             : null

@@ -31,6 +31,7 @@ export type BillingConfigRow = {
   websiteViewPrice: Prisma.Decimal;
   reviewsViewPrice: Prisma.Decimal;
   ratingViewPrice: Prisma.Decimal;
+  monthlyCap: Prisma.Decimal | null;
   invoiceDueDays: number;
 };
 
@@ -56,8 +57,12 @@ export function effectiveRates(billing: BillingRow | null, config: BillingConfig
     websitePrice: pick(billing?.websitePrice, config.websiteViewPrice),
     reviewsPrice: pick(billing?.reviewsPrice, config.reviewsViewPrice),
     ratingPrice: pick(billing?.ratingPrice, config.ratingViewPrice),
-    // Потолок — только индивидуальный для компании; общего лимита в настройках нет
-    monthlyCap: billing?.monthlyCap != null ? billing.monthlyCap.toNumber() : 0,
+    // Потолок: индивидуальный компании, иначе глобальный из настроек (0 = без потолка)
+    monthlyCap: billing?.monthlyCap != null
+      ? billing.monthlyCap.toNumber()
+      : config.monthlyCap != null
+        ? config.monthlyCap.toNumber()
+        : 0,
     invoiceDueDays: config.invoiceDueDays,
   };
 }

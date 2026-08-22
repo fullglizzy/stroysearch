@@ -217,6 +217,7 @@ export async function GET(
       websiteViewPrice: config.websiteViewPrice.toNumber(),
       reviewsViewPrice: config.reviewsViewPrice.toNumber(),
       ratingViewPrice: config.ratingViewPrice.toNumber(),
+      monthlyCap: config.monthlyCap != null ? config.monthlyCap.toNumber() : null,
     },
     templates,
     period: period ? { from: period.from, to: period.to } : null,

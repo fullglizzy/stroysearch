@@ -45,6 +45,7 @@ interface MyData {
 export function CompanyInvoicesManager() {
   const [data, setData] = useState<MyData | null>(null);
   const [reqs, setReqs] = useState<BillingRequisites | null>(null);
+  const [error, setError] = useState("");
   const [invoiceView, setInvoiceView] = useState<InvoicePrintData | null>(null);
   const [actView, setActView] = useState<ServiceActData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,12 +57,12 @@ export function CompanyInvoicesManager() {
       fetchRequisites(),
     ])
       .then(([d, r]) => {
-        if (!cancelled) {
-          setData(d);
-          setReqs(r);
-        }
+        if (cancelled) return;
+        setReqs(r);
+        if (d.error) setError(d.error);
+        else setData(d);
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setError("Ошибка загрузки"); });
     return () => { cancelled = true; };
   }, []);
 
@@ -126,6 +127,7 @@ export function CompanyInvoicesManager() {
     setLoading(false);
   }
 
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!data || !reqs) {
     return <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }

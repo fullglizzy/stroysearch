@@ -81,6 +81,7 @@ interface ListDefaults {
   websiteViewPrice: number;
   reviewsViewPrice: number;
   ratingViewPrice: number;
+  monthlyCap: number | null;
 }
 
 interface CompanyDetail {
@@ -109,6 +110,7 @@ interface CompanyDetail {
     websiteViewPrice: number;
     reviewsViewPrice: number;
     ratingViewPrice: number;
+    monthlyCap: number | null;
   };
   /** Шаблоны строк счёта из настроек */
   templates: { maintenance: string; views: string; cap: string };
@@ -155,7 +157,8 @@ const RATE_FIELDS = [
   { key: "monthlyCap", label: "Потолок счёта (₽/период)" },
 ] as const;
 
-/** Глобальные расценки из настроек — дублируются в панель над таблицей */
+/** Глобальные расценки из настроек — дублируются в панель над таблицей.
+ *  monthlyCap — nullable: пустое поле = без потолка */
 const GLOBAL_FIELDS = [
   { key: "maintenanceFee", label: "Абонентская плата (₽/мес)" },
   { key: "phoneViewPrice", label: "Просмотр телефона (₽)" },
@@ -163,6 +166,7 @@ const GLOBAL_FIELDS = [
   { key: "websiteViewPrice", label: "Просмотр сайта (₽)" },
   { key: "reviewsViewPrice", label: "Просмотр отзывов (₽)" },
   { key: "ratingViewPrice", label: "Просмотр рейтинга (₽)" },
+  { key: "monthlyCap", label: "Потолок счёта (₽)" },
 ] as const;
 
 const STATUS_ITEMS = {
@@ -316,8 +320,6 @@ export function CompanyTariffsManager() {
   const globalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalValuesRef = useRef<Record<string, string>>({});
   const globalFilledRef = useRef(false);
-  // Массовый потолок: применяется кнопкой «Применить для всех» (пусто = без потолка)
-  const [globalCapValue, setGlobalCapValue] = useState("");
   // «Применить для всех» — сброс индивидуальных расценок компаний
   const [applyAllOpen, setApplyAllOpen] = useState(false);
   const [applyAllLoading, setApplyAllLoading] = useState(false);
@@ -383,6 +385,7 @@ export function CompanyTariffsManager() {
             websiteViewPrice: String(d.defaults.websiteViewPrice),
             reviewsViewPrice: String(d.defaults.reviewsViewPrice),
             ratingViewPrice: String(d.defaults.ratingViewPrice),
+            monthlyCap: d.defaults.monthlyCap != null ? String(d.defaults.monthlyCap) : "",
           });
         }
       })
@@ -477,7 +480,11 @@ export function CompanyTariffsManager() {
       websitePrice: b?.websitePrice != null ? String(b.websitePrice) : String(defs?.websiteViewPrice ?? ""),
       reviewsPrice: b?.reviewsPrice != null ? String(b.reviewsPrice) : String(defs?.reviewsViewPrice ?? ""),
       ratingPrice: b?.ratingPrice != null ? String(b.ratingPrice) : String(defs?.ratingViewPrice ?? ""),
-      monthlyCap: b?.monthlyCap != null ? String(b.monthlyCap) : "",
+      monthlyCap: b?.monthlyCap != null
+        ? String(b.monthlyCap)
+        : defs?.monthlyCap != null
+          ? String(defs.monthlyCap)
+          : "",
     };
   }
 
@@ -572,16 +579,18 @@ export function CompanyTariffsManager() {
   }
 
   /** Сохраняет глобальные расценки; возвращает сохранённые значения или null при ошибке */
-  async function saveGlobalRates(): Promise<Record<string, number> | null> {
-    const payload: Record<string, number> = {};
+  async function saveGlobalRates(): Promise<Partial<ListDefaults> | null> {
+    const payload: Partial<ListDefaults> = {};
     const revert: Record<string, string> = {};
     for (const f of GLOBAL_FIELDS) {
       const raw = (globalValuesRef.current[f.key] ?? "").trim();
       const n = parseFloat(raw);
-      if (raw !== "" && Number.isFinite(n) && n >= 0) {
+      if (f.key === "monthlyCap" && raw === "") {
+        payload.monthlyCap = null; // пустой потолок — снять ограничение
+      } else if (raw !== "" && Number.isFinite(n) && n >= 0) {
         payload[f.key] = Math.round(n * 100) / 100;
       } else {
-        // Пустое/некорректное глобальное значение невозможно — откат к сохранённому
+        // Пустая/некорректная расценка невозможна — откат к сохранённому
         const stored = defaults?.[f.key as keyof ListDefaults];
         revert[f.key] = stored != null ? String(stored) : "";
       }
@@ -630,8 +639,8 @@ export function CompanyTariffsManager() {
       setApplyAllOpen(false);
       return;
     }
-    // Потолок: пустое поле — снять потолок всем, число — установить всем
-    const capRaw = globalCapValue.trim();
+    // Потолок из общего поля панели: пустое — снять потолок всем, число — установить всем
+    const capRaw = (globalValuesRef.current.monthlyCap ?? "").trim();
     let monthlyCap: number | null = null;
     if (capRaw !== "") {
       const n = parseFloat(capRaw);
@@ -692,8 +701,14 @@ export function CompanyTariffsManager() {
         const raw = (globalValuesRef.current[f.key] ?? "").trim();
         const saved = defaults[f.key as keyof ListDefaults];
         const rawNum = parseFloat(raw);
-        if (raw === "") return true; // очищенное поле — тоже несохранённое состояние
-        if (!Number.isFinite(rawNum) || Math.round(rawNum * 100) !== Math.round(saved * 100)) return true;
+        if (raw === "") {
+          // Пустая расценка — несохранённое состояние; пустой потолок законен,
+          // только если сохранённого потолка нет
+          if (f.key !== "monthlyCap" || saved != null) return true;
+          continue;
+        }
+        if (!Number.isFinite(rawNum)) return true;
+        if (saved == null || Math.round(rawNum * 100) !== Math.round(saved * 100)) return true;
       }
     }
     return false;
@@ -730,6 +745,7 @@ export function CompanyTariffsManager() {
         websiteViewPrice: String(defaults.websiteViewPrice),
         reviewsViewPrice: String(defaults.reviewsViewPrice),
         ratingViewPrice: String(defaults.ratingViewPrice),
+        monthlyCap: defaults.monthlyCap != null ? String(defaults.monthlyCap) : "",
       });
     }
     if (detailRow) setTariffValues(prefillTariff(detail?.billing ?? null, defaults));
@@ -1092,27 +1108,15 @@ export function CompanyTariffsManager() {
                       value={globalValues[f.key] ?? ""}
                       onChange={(e) => onGlobalChange(f.key, e.target.value)}
                       className="h-8"
+                      title={f.key === "monthlyCap" ? "Потолок по умолчанию для компаний без своего; пустое поле — без потолка" : undefined}
                     />
                   </div>
                 ))}
-                <div className="space-y-1">
-                  <Label className="text-[11px] leading-tight">Потолок счёта (₽)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={globalCapValue}
-                    placeholder="без потолка"
-                    onChange={(e) => setGlobalCapValue(e.target.value)}
-                    className="h-8"
-                    title="Применяется кнопкой «Применить для всех»: пустое поле — снять потолок у всех компаний"
-                  />
-                </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                По этим расценкам считаются счета компаний без индивидуальных значений. «Применить для всех»
-                сбрасывает индивидуальные расценки всех компаний и устанавливает всем потолок из поля выше
-                (пустое поле — без потолка); выставление счетов пойдёт по этим значениям.
+                По этим расценкам считаются счета компаний без индивидуальных значений; потолок — общий
+                лимит счёта за период (пустое поле — без потолка). «Применить для всех» сбрасывает
+                индивидуальные расценки всех компаний и устанавливает всем потолок из поля выше.
                 Индивидуальный тариф — в карточке компании, кнопка «Открыть» в строке таблицы.
                 {" "}
                 {globalSaveState === "saving"

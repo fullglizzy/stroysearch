@@ -21,6 +21,7 @@ interface BillingConfig {
   websiteViewPrice: number;
   reviewsViewPrice: number;
   ratingViewPrice: number;
+  monthlyCap: number | null;
   invoiceDueDays: number;
   invoiceBasis: string | null;
   organizationName: string | null;
@@ -53,6 +54,7 @@ export function FinancesManager({ config }: Props) {
   const [websiteViewPrice, setWebsiteViewPrice] = useState(String(config?.websiteViewPrice ?? 20));
   const [reviewsViewPrice, setReviewsViewPrice] = useState(String(config?.reviewsViewPrice ?? 10));
   const [ratingViewPrice, setRatingViewPrice] = useState(String(config?.ratingViewPrice ?? 10));
+  const [monthlyCap, setMonthlyCap] = useState(config?.monthlyCap != null ? String(config.monthlyCap) : "");
   const [invoiceDueDays, setInvoiceDueDays] = useState(String(config?.invoiceDueDays ?? 5));
   const [configLoading, setConfigLoading] = useState(false);
   const [configMsg, setConfigMsg] = useState("");
@@ -74,6 +76,7 @@ export function FinancesManager({ config }: Props) {
           websiteViewPrice: parseFloat(websiteViewPrice),
           reviewsViewPrice: parseFloat(reviewsViewPrice),
           ratingViewPrice: parseFloat(ratingViewPrice),
+          monthlyCap: monthlyCap.trim() === "" ? null : parseFloat(monthlyCap),
           invoiceDueDays: parseInt(invoiceDueDays),
         }),
       });
@@ -101,6 +104,7 @@ export function FinancesManager({ config }: Props) {
           <div className="space-y-2"><Label>Просмотр сайта (₽)</Label><Input type="number" min="0" step="0.01" value={websiteViewPrice} onChange={(e) => setWebsiteViewPrice(e.target.value)} /></div>
           <div className="space-y-2"><Label>Просмотр отзывов (₽)</Label><Input type="number" min="0" step="0.01" value={reviewsViewPrice} onChange={(e) => setReviewsViewPrice(e.target.value)} /></div>
           <div className="space-y-2"><Label>Просмотр рейтинга (₽)</Label><Input type="number" min="0" step="0.01" value={ratingViewPrice} onChange={(e) => setRatingViewPrice(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Потолок счёта (₽)</Label><Input type="number" min="0" step="0.01" value={monthlyCap} placeholder="без потолка" onChange={(e) => setMonthlyCap(e.target.value)} /></div>
           <div className="space-y-2"><Label>Срок оплаты счёта (дней)</Label><Input type="number" min="1" max="90" value={invoiceDueDays} onChange={(e) => setInvoiceDueDays(e.target.value)} /></div>
         </div>
         {configMsg && <Alert><AlertDescription>{configMsg}</AlertDescription></Alert>}

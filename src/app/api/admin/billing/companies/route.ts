@@ -262,6 +262,7 @@ export async function GET(request: Request) {
       websiteViewPrice: config.websiteViewPrice.toNumber(),
       reviewsViewPrice: config.reviewsViewPrice.toNumber(),
       ratingViewPrice: config.ratingViewPrice.toNumber(),
+      monthlyCap: config.monthlyCap != null ? config.monthlyCap.toNumber() : null,
     },
     total,
     page,

@@ -73,6 +73,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // Потолок счёта по умолчанию — nullable: null = без потолка
+    if ("monthlyCap" in body) {
+      if (body.monthlyCap === null) {
+        data.monthlyCap = null;
+      } else {
+        const value = Number(body.monthlyCap);
+        if (!Number.isFinite(value) || value < 0) {
+          return NextResponse.json({ error: "Некорректное значение поля monthlyCap" }, { status: 400 });
+        }
+        data.monthlyCap = value;
+      }
+    }
+
     for (const field of STRING_FIELDS) {
       if (field in body) {
         if (typeof body[field] !== "string") {

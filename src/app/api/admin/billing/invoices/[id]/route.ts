@@ -13,6 +13,7 @@ import {
   renderDocTemplate,
   createBillingInvoice,
   endOfDay,
+  type BillingRow,
 } from "@/lib/billing";
 
 const ADMIN_TYPES = ["SUPER", "ROOT"];
@@ -263,7 +264,7 @@ export async function PATCH(
 
       const config = await prisma.billingConfig.findUniqueOrThrow({ where: { id: "default" } });
       try {
-        await prisma.$transaction(async (tx) => {
+        reissued = await prisma.$transaction(async (tx) => {
           if (await hasLaterInvoice(tx, invoice)) {
             throw new InvoiceActionError("Нельзя перевыставить: сначала отмените более поздние счета компании");
           }
@@ -310,10 +311,10 @@ export async function PATCH(
             config,
             billing:
               billingAfter ??
-              ({ companyId, status: "INACTIVE", maintenanceFee: null, phonePrice: null, emailPrice: null, websitePrice: null, reviewsPrice: null, ratingPrice: null, monthlyCap: null } as Prisma.CompanyBilling),
+              ({ maintenanceFee: null, phonePrice: null, emailPrice: null, websitePrice: null, reviewsPrice: null, ratingPrice: null, monthlyCap: null } as BillingRow),
             ratesOverride: Object.keys(ratesOverride).length > 0 ? ratesOverride : undefined,
           });
-          reissued = {
+          return {
             id: createdInvoice.id,
             number: createdInvoice.number,
             total: createdInvoice.total.toNumber(),
