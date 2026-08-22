@@ -11,12 +11,11 @@ function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
 }
 
 function AlertDialogTrigger({ children, ...props }: AlertDialogPrimitive.Trigger.Props) {
-  try {
-    const child = React.Children.only(children);
-    if (React.isValidElement(child)) {
-      return <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" render={child} {...props} />;
-    }
-  } catch { /* fall through */ }
+  const [child] = React.Children.toArray(children);
+  if (child !== undefined && React.isValidElement(child)) {
+    return <AlertDialogPrimitive.Trigger data-slot="alert-dialog" render={child} {...props} />;
+  }
+  return <AlertDialogPrimitive.Trigger data-slot="alert-dialog" {...props}>{children}</AlertDialogPrimitive.Trigger>;
   return <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props}>{children}</AlertDialogPrimitive.Trigger>;
 }
 

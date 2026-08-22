@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { X } from "lucide-react";
 
 interface PageBannerProps {
@@ -19,7 +20,7 @@ export function PageBanner({ url, alt, className }: PageBannerProps) {
 
   return (
     <div className={`relative mb-4 rounded-lg overflow-hidden ${className || ""}`}>
-      <img src={url} alt={alt} className="w-full h-auto max-h-32 object-cover" loading="lazy" decoding="async" />
+      <Image src={url} alt={alt} width={1600} height={400} className="w-full h-auto max-h-32 object-cover" loading="lazy" decoding="async" sizes="100vw" />
       <button
         type="button"
         onClick={() => setHidden(true)}

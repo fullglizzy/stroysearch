@@ -14,7 +14,7 @@ export default async function CompanyConferencesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = session.user.id;
 
   const [organized, participated, treeItems] = await Promise.all([
     prisma.conference.findMany({

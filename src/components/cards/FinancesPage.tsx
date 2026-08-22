@@ -14,7 +14,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toastSuccess } from "@/lib/toast";
@@ -83,7 +82,7 @@ const typeLabels: Record<string, string> = {
   INVOICE_PAID: "Пополнение счёта",
 };
 
-export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRub, missingInvoiceFields, profileHref, supportHref }: FinancesPageProps) {
+export function FinancesPage({ balance, transactions, gifts, coinPriceRub, missingInvoiceFields, profileHref, supportHref }: FinancesPageProps) {
   const router = useRouter();
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftTo, setGiftTo] = useState("");

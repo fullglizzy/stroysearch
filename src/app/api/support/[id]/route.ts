@@ -28,8 +28,8 @@ export async function GET(
     }
 
     const { id } = await params;
-    const userId = (session.user as any).id as string;
-    const userType = (session.user as any).type as string;
+    const userId = session.user.id;
+    const userType = session.user.type;
     const isAdmin = ADMIN_TYPES.includes(userType);
 
     const ticket = await prisma.supportTicket.findUnique({
@@ -106,7 +106,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }

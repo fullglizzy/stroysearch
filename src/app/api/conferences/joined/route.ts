@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ ids: [] });
   }
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const [parts, own] = await Promise.all([
     prisma.conferenceParticipant.findMany({

@@ -14,6 +14,7 @@ import { EyeButton } from "@/components/shared/EyeButton";
 import { StarRating } from "@/components/shared/StarRating";
 import { cn, telHref, mailtoHref, parseCharacteristic } from "@/lib/utils";
 import { Phone, Mail, Globe, MapPin, Lock } from "lucide-react";
+import Image from "next/image";
 
 export interface ProductCardData {
   name: string;
@@ -82,17 +83,17 @@ export function ProductCard({
   return (
     <>
       <Card className={cn("flex flex-col", className)}>
-        <CardContent className="pt-3 flex-1 flex flex-col">
+        <CardContent className="pt-1 flex-1 flex flex-col">
           {/* Фото слева + компания/название */}
           <div className="flex items-start gap-2 mb-2">
             {data.imageUrl && (
               <button
                 type="button"
                 onClick={() => setPreviewUrl(data.imageUrl)}
-                className="shrink-0 w-16 h-16 rounded-md border overflow-hidden bg-secondary cursor-pointer hover:opacity-80 transition-opacity"
+                className="shrink-0 w-18 h-18 rounded-md border overflow-hidden bg-secondary cursor-pointer hover:opacity-80 transition-opacity"
                 title="Открыть фото"
               >
-                <img src={data.imageUrl} alt={data.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                <Image src={data.imageUrl} alt={data.name} width={64} height={64} className="h-full w-full object-cover" loading="lazy" decoding="async" />
               </button>
             )}
             <div className="min-w-0 flex-1">
@@ -248,10 +249,13 @@ export function ProductCard({
             <DialogTitle>Фото товара</DialogTitle>
           </DialogHeader>
           {previewUrl && (
-            <img
+            <Image
               src={previewUrl}
               alt="Фото товара"
-              className="w-full max-h-[75vh] object-contain rounded-lg bg-secondary"
+              width={1200}
+              height={800}
+              className="w-full h-auto max-h-[75vh] object-contain rounded-lg bg-secondary"
+              sizes="50vw"
             />
           )}
         </DialogContent>

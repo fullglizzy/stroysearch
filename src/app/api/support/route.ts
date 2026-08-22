@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     const isAdmin = ADMIN_TYPES.includes(userType);
     const { searchParams } = new URL(request.url);
     const all = searchParams.get("all") === "1";
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
 
-    const userId = (session.user as any).id as string;
+    const userId = session.user.id;
     const tickets = await prisma.supportTicket.findMany({
       where: all ? {} : { userId },
       include: {
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         inn: parsed.data.inn || null,
         subject: parsed.data.subject,
         message: parsed.data.message,
-        userId: session?.user ? (session.user as any).id : null,
+        userId: session?.user ? session.user.id : null,
       },
     });
 

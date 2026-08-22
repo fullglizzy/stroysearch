@@ -35,7 +35,6 @@ export default function RegisterCompanyPage() {
   const [registeredDisplayName, setRegisteredDisplayName] = useState("");
   const [inviteToken, setInviteToken] = useState("");
   const [inviteInfo, setInviteInfo] = useState<{ inn: string; companyName: string } | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
 
   const {
     register,
@@ -60,25 +59,30 @@ export default function RegisterCompanyPage() {
   });
 
   // Регистрация по приглашению администратора: подставляем ИНН и название
-  // карточки компании из токена в ссылке
+  // карточки компании из токена в ссылке. Все setState — внутри промиса:
+  // синхронный setState в эффекте запрещён правилом set-state-in-effect.
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("invite");
     if (!token) return;
-    setInviteToken(token);
-    setInviteLoading(true);
+    let cancelled = false;
     getInviteInfo(token)
       .then((raw) => {
+        if (cancelled) return;
         const info = raw as { error?: string; inn?: string; companyName?: string };
         if (info.error || !info.inn) {
+          setInviteToken("");
           setServerError(info.error || "Не удалось проверить приглашение");
           return;
         }
+        setInviteToken(token);
         setInviteInfo({ inn: info.inn, companyName: info.companyName ?? "" });
         setValue("inn", info.inn);
         setValue("companyName", info.companyName ?? "");
       })
-      .catch(() => setServerError("Не удалось проверить приглашение"))
-      .finally(() => setInviteLoading(false));
+      .catch(() => setServerError("Не удалось проверить приглашение"));
+    return () => {
+      cancelled = true;
+    };
   }, [setValue]);
 
   const password = useWatch({ control, name: "password" }) ?? "";
@@ -179,12 +183,7 @@ export default function RegisterCompanyPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            {inviteLoading ? (
-              <Alert>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <AlertDescription>Проверка приглашения...</AlertDescription>
-              </Alert>
-            ) : inviteInfo ? (
+            {inviteInfo ? (
               <Alert>
                 <AlertDescription>
                   Регистрация по приглашению для компании <b>{inviteInfo.companyName}</b>{" "}

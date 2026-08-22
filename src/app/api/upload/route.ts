@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       fileSize: file.size,
       fileName: file.name,
     });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json({ error: "Ошибка загрузки файла" }, { status: 500 });
   }
 }

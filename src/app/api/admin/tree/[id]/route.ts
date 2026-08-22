@@ -6,6 +6,7 @@ import {
   restoreTreeItem,
   moveTreeItem,
 } from "@/server/admin/tree";
+import { getErrorMessage } from "@/lib/utils";
 
 // PATCH — обновить узел
 export async function PATCH(
@@ -15,7 +16,7 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -46,8 +47,8 @@ export async function PATCH(
       position: body.position,
     });
     return NextResponse.json(item);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 400 });
+  } catch (e) {
+    return NextResponse.json({ error: getErrorMessage(e) }, { status: 400 });
   }
 }
 
@@ -59,7 +60,7 @@ export async function DELETE(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -69,7 +70,7 @@ export async function DELETE(
   try {
     await deleteTreeItem(id);
     return NextResponse.json({ success: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 400 });
+  } catch (e) {
+    return NextResponse.json({ error: getErrorMessage(e) }, { status: 400 });
   }
 }

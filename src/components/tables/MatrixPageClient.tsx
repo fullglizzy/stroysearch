@@ -87,7 +87,7 @@ export function MatrixPageClient({ products, total, capped, treeItems, regions, 
   const router = useRouter();
 
   // Добавлять аналоги могут только компании и админы
-  const userType = (session?.user as any)?.type as string;
+  const userType = session?.user?.type ?? "COMMON";
   const canAddProduct =
     !!session?.user &&
     (userType === "COMPANY" || ["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType));

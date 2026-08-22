@@ -74,8 +74,8 @@ export default async function AccountReviewsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
-  const isActive = (session.user as any).status === "ACTIVE";
+  const userId = session.user.id;
+  const isActive = session.user.status === "ACTIVE";
   const { receivedReviews, givenReviews, companies, participantRows, avgRating } = await getReviewData(userId);
 
   const [regions, treeItems] = await Promise.all([
@@ -136,7 +136,7 @@ export default async function AccountReviewsPage() {
           {receivedReviews.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">У вас пока нет отзывов</p>
           ) : (
-            receivedReviews.map((review: any) => (
+            receivedReviews.map((review) => (
               <ReviewCard
                 key={review.id}
                 id={review.id}
@@ -156,7 +156,7 @@ export default async function AccountReviewsPage() {
           {givenReviews.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">Вы ещё не оставляли отзывы</p>
           ) : (
-            givenReviews.map((review: any) => (
+            givenReviews.map((review) => (
               <ReviewCard
                 key={review.id}
                 id={review.id}

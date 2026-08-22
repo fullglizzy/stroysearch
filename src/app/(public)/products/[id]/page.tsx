@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { JsonLd } from "@/components/shared/JsonLd";
 import { parseCharacteristic } from "@/lib/utils";
 import { Phone, Mail, Globe, Lock } from "lucide-react";
+import Image from "next/image";
 
 export const revalidate = 60;
 
@@ -67,11 +68,15 @@ export default async function ProductPage({ params }: PageProps) {
 
       <div className="flex flex-col md:flex-row gap-6 mt-4">
         {product.imageUrl && (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full md:w-80 h-64 object-cover rounded-lg border bg-secondary"
-          />
+          <div className="relative w-full md:w-80 h-64 rounded-lg border bg-secondary overflow-hidden">
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 320px"
+            />
+          </div>
         )}
         <div className="flex-1 space-y-4">
           <div>

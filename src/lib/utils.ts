@@ -51,3 +51,11 @@ export function parseCharacteristic(raw: string): { name: string; value: string 
   if (idx === -1) return { name: raw, value: "" };
   return { name: raw.slice(0, idx), value: raw.slice(idx + 2).trim() };
 }
+
+/**
+ * Безопасно достаёт сообщение из неизвестного исключения
+ * (catch (e) даёт unknown, а не Error).
+ */
+export function getErrorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}

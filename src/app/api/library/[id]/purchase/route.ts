@@ -13,7 +13,7 @@ export async function POST(
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
     const { id: docId } = await params;
 
     const doc = await prisma.libraryDocument.findUnique({

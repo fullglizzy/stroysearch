@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
 
     // Отзывы могут оставлять только активные пользователи
     const author = await prisma.user.findUnique({

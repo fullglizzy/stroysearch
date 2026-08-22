@@ -29,7 +29,6 @@ import {
   ArrowUp,
   ArrowDown,
   FolderTree,
-  Loader2,
   Check,
   Search,
   GripVertical,
@@ -1017,18 +1016,6 @@ function AddNodeDialog({
   onClose: () => void;
   onSave: (data: { name: string; description?: string; bannerUrl?: string }) => void;
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      setName("");
-      setDescription("");
-      setBannerUrl("");
-    }
-  }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
@@ -1038,33 +1025,48 @@ function AddNodeDialog({
             {parentId ? `Дочерний раздел для «${parentName ?? ""}»` : "Корневой раздел классификатора"}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="add-name">Название</Label>
-            <Input id="add-name" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Например: Фасадные работы" autoFocus />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="add-desc">Описание (опционально)</Label>
-            <Textarea id="add-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)}
-              placeholder="Краткое описание раздела" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="add-banner">Ссылка на баннер (опционально)</Label>
-            <Input id="add-banner" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)}
-              placeholder="https://..." />
-          </div>
-          <Button
-            className="w-full bg-menthol hover:bg-menthol-dark"
-            disabled={!name.trim()}
-            onClick={() => onSave({ name: name.trim(), description: description || undefined, bannerUrl: bannerUrl || undefined })}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Создать раздел
-          </Button>
-        </div>
+        {/* Форма монтируется при каждом открытии — поля инициализируются пустыми */}
+        {open && <AddNodeForm onSave={onSave} />}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AddNodeForm({
+  onSave,
+}: {
+  onSave: (data: { name: string; description?: string; bannerUrl?: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="add-name">Название</Label>
+        <Input id="add-name" value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="Например: Фасадные работы" autoFocus />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="add-desc">Описание (опционально)</Label>
+        <Textarea id="add-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="Краткое описание раздела" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="add-banner">Ссылка на баннер (опционально)</Label>
+        <Input id="add-banner" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)}
+          placeholder="https://..." />
+      </div>
+      <Button
+        className="w-full bg-menthol hover:bg-menthol-dark"
+        disabled={!name.trim()}
+        onClick={() => onSave({ name: name.trim(), description: description || undefined, bannerUrl: bannerUrl || undefined })}
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Создать раздел
+      </Button>
+    </div>
   );
 }
 
@@ -1083,38 +1085,52 @@ function EditNodeDialog({
   onClose: () => void;
   onSave: (patch: { name?: string; description?: string | null; bannerUrl?: string | null; parentId?: string | null }) => void;
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
-  const [parentId, setParentId] = useState("__root__");
-
-  useEffect(() => {
-    if (node) {
-      setName(node.name);
-      setDescription(node.description || "");
-      setBannerUrl(node.bannerUrl || "");
-      setParentId(node.parentId || "__root__");
-    }
-  }, [node]);
-
-  const parentOptions = useMemo(() => {
-    if (!node) return [];
-    const excluded = new Set(collectSubtreeIds(nodeById, node.id));
-    return allLive.filter((n) => !excluded.has(n.id));
-  }, [node, allLive, nodeById]);
-
-  if (!node) return null;
-
   return (
     <Dialog open={!!node} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Редактировать раздел</DialogTitle>
           <DialogDescription>
-            {node.fullNumberPath} — {node.name}
+            {node ? `${node.fullNumberPath} — ${node.name}` : ""}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        {/* Форма монтируется при каждом открытии — поля инициализируются из node */}
+        {node && (
+          <EditNodeForm
+            node={node}
+            allLive={allLive}
+            nodeById={nodeById}
+            onSave={onSave}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditNodeForm({
+  node,
+  allLive,
+  nodeById,
+  onSave,
+}: {
+  node: DraftNode;
+  allLive: DraftNode[];
+  nodeById: Map<string, DraftNode>;
+  onSave: (patch: { name?: string; description?: string | null; bannerUrl?: string | null; parentId?: string | null }) => void;
+}) {
+  const [name, setName] = useState(node.name);
+  const [description, setDescription] = useState(node.description || "");
+  const [bannerUrl, setBannerUrl] = useState(node.bannerUrl || "");
+  const [parentId, setParentId] = useState(node.parentId || "__root__");
+
+  const parentOptions = useMemo(() => {
+    const excluded = new Set(collectSubtreeIds(nodeById, node.id));
+    return allLive.filter((n) => !excluded.has(n.id));
+  }, [node, allLive, nodeById]);
+
+  return (
+    <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="edit-name">Название</Label>
             <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -1156,8 +1172,6 @@ function EditNodeDialog({
             <Check className="h-4 w-4 mr-2" />
             Сохранить изменения
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }

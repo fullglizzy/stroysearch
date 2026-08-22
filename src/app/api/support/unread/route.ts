@@ -16,9 +16,9 @@ export async function GET() {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     const isAdmin = ADMIN_TYPES.includes(userType);
-    const userId = (session.user as any).id as string;
+    const userId = session.user.id;
 
     const tickets = await prisma.supportTicket.findMany({
       where: isAdmin ? {} : { userId },

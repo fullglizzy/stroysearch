@@ -10,7 +10,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
+    const senderUsername = session.user.username;
     const body = await request.json();
     const { targetUsername, amount } = body;
 
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
           type: "GIFT_RECEIVE",
           amount: parsedAmount,
           balanceAfter: targetWallet.balance.toDecimalPlaces(2),
-          description: `Получение от пользователя ${(session.user as any).username}`,
+          description: `Получение от пользователя ${senderUsername}`,
           metadata: JSON.stringify({ fromUserId: userId }),
         },
       });

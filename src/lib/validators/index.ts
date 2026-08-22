@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/** Сужает unknown до объекта — для безопасного чтения полей из request.json() */
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Читает строковое поле unknown-объекта: обрезает пробелы, возвращает "" если не строка */
+export function readString(rec: Record<string, unknown>, key: string): string {
+  const v = rec[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
 // ────────────── Auth ──────────────
 
 export const loginSchema = z.object({

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { ExpandableText } from "@/components/shared/ExpandableText";
-import { Calendar, Clock, Users, Eye, CheckCircle, XCircle, Loader2, Coins, ExternalLink, Search } from "lucide-react";
+import { Calendar, Users, Eye, CheckCircle, XCircle, Loader2, Coins, ExternalLink, Search } from "lucide-react";
 
 interface ConfRow {
   id: string;

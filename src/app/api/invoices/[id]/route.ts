@@ -15,8 +15,8 @@ export async function GET(
     return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
   }
 
-  const userId = (session.user as any).id;
-  const userType = (session.user as any).type as string;
+  const userId = session.user.id;
+  const userType = session.user.type;
   const isStaff = STAFF_TYPES.includes(userType);
 
   const { id } = await params;

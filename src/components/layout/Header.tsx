@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import Image from "next/image";
 import { SupportDialog } from "@/components/shared/SupportDialog";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -36,12 +37,12 @@ export function Header() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportUnread, setSupportUnread] = useState(0);
 
-  // Счётчик непрочитанных обращений
+  // Счётчик непрочитанных обращений: без сессии значение производное (0),
+  // чтобы не делать синхронный setState при выходе из аккаунта
+  const unreadCount = session?.user ? supportUnread : 0;
+
   useEffect(() => {
-    if (!session?.user) {
-      setSupportUnread(0);
-      return;
-    }
+    if (!session?.user) return;
     let cancelled = false;
     const load = () =>
       fetch("/api/support/unread")
@@ -56,7 +57,7 @@ export function Header() {
     };
   }, [session?.user]);
 
-  const userType = (session?.user as any)?.type as string;
+  const userType = session?.user?.type ?? "COMMON";
 
   const dashboardHref =
     userType === "COMPANY"
@@ -71,9 +72,12 @@ export function Header() {
       <div className="mx-auto w-full max-w-[1900px] px-4 sm:px-6 lg:px-8 flex min-h-16 items-center justify-between">
         {/* Logo */}
         <Link href="/" aria-label="ЕНЦПР — на главную" className="flex items-center mr-[0.5em] gap-0 flex-shrink-0">
-          <img
+          <Image
             src="/logo/logo.svg"
             alt="ЕНЦПР"
+            width={1280}
+            height={1024}
+            unoptimized
             // Справа в холсте SVG ~33% пустоты (425px из 1280): при h-16 это ~27px —
             // убираем их отрицательным отступом, чтобы текст был вплотную к рисунку
             className="h-24 w-auto translate-y-[9.7%] -mr-[40px]"
@@ -122,7 +126,7 @@ export function Header() {
                     <User className="h-4 w-4" />
                   )}
                   <span className="max-w-[100px] truncate">
-                    {(session.user as any)?.username || session.user?.email}
+                    {session.user?.username || session.user?.email}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
@@ -144,9 +148,9 @@ export function Header() {
                 <DropdownMenuItem>
                   <Link href={`${dashboardHref}/support`} className="w-full flex items-center justify-between">
                     <span>Мои обращения</span>
-                    {supportUnread > 0 && (
+                    {unreadCount > 0 && (
                       <span className="ml-2 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-orange-accent text-white text-[10px] font-medium">
-                        {supportUnread}
+                        {unreadCount}
                       </span>
                     )}
                   </Link>

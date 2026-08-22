@@ -9,7 +9,7 @@ async function checkAccess() {
   if (!session?.user) {
     return { error: "Требуется авторизация", status: 401 } as const;
   }
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["SUPER", "ROOT"].includes(userType)) {
     return { error: "Нет прав", status: 403 } as const;
   }

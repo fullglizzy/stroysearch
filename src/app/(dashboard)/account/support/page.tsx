@@ -9,7 +9,7 @@ export default async function AccountSupportPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = session.user.id;
 
   const tickets = await prisma.supportTicket.findMany({
     where: { userId },

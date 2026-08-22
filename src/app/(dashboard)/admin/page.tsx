@@ -10,7 +10,7 @@ export default async function AdminPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
     redirect("/account");
   }
@@ -23,7 +23,10 @@ export default async function AdminPage() {
   const totalDocuments = await prisma.libraryDocument.count();
   const totalPolls = await prisma.poll.count();
 
-  // Активность за 24 часа и очереди модерации — для бейджей на дашборде
+  // Активность за 24 часа и очереди модерации — для бейджей на дашборде.
+  // Серверный компонент с force-dynamic: Date.now() здесь — честные текущие данные,
+  // правило react-hooks/purity рассчитано на клиентский рендер.
+  // eslint-disable-next-line react-hooks/purity
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [pendingDocuments, newReviews, newProducts, newCompanies, pendingGiftClaims] =
     await Promise.all([

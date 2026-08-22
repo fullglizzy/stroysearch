@@ -195,7 +195,7 @@ export function PollsPageClient({ polls, total, page, totalPages, treeItems, mod
       });
       if (res.ok) {
         const d = await res.json();
-        const userType = (session?.user as any)?.type as string;
+        const userType = session?.user?.type ?? "COMMON";
         const dashboard =
           userType === "COMPANY"
             ? "/company"

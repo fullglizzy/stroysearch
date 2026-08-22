@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Save, Upload, Eye, History, AlertCircle } from "lucide-react";
+import Image from "next/image";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 
 interface ContentManagerProps {
@@ -248,10 +249,13 @@ export function ContentManager({ pages }: ContentManagerProps) {
               )}
             </div>
             {bannerUrl && (
-              <img
+              <Image
                 src={bannerUrl}
                 alt="Превью баннера"
-                className="w-full max-h-32 object-cover rounded-lg border"
+                width={1200}
+                height={400}
+                className="w-full h-auto max-h-32 object-cover rounded-lg border"
+                sizes="100vw"
               />
             )}
           </div>

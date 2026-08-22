@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm, Controller } from "react-hook-form";
@@ -23,6 +23,7 @@ import { SearchSelect } from "@/components/shared/SearchSelect";
 import { FieldError } from "@/components/forms/fields";
 import { toastSuccess, toastError, toastWarning } from "@/lib/toast";
 import { Loader2, Upload, X } from "lucide-react";
+import Image from "next/image";
 
 // Сообщения совпадают с серверной схемой conferenceSchema
 const conferenceFormSchema = z.object({
@@ -128,11 +129,48 @@ export function ConferenceCreateDialog({
   onOpenChange: (open: boolean) => void;
   initial?: ConferenceEditData | null;
 }) {
+  const isEdit = !!initial;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Редактировать конференцию" : "Создать конференцию"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "После сохранения изменений конференция вернётся на модерацию"
+              : "После создания конференция будет отправлена на модерацию"}
+          </DialogDescription>
+        </DialogHeader>
+        {/* Форма монтируется при каждом открытии диалога (key на диалоге) —
+            состояние инициализируется заново, сброс в эффекте не нужен */}
+        {open && (
+          <ConferenceForm
+            key={initial?.id ?? "create"}
+            treeItems={treeItems}
+            initial={initial}
+            onClose={() => onOpenChange(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConferenceForm({
+  treeItems,
+  initial,
+  onClose,
+}: {
+  treeItems: TreeItem[];
+  initial?: ConferenceEditData | null;
+  onClose: () => void;
+}) {
   const { data: session } = useSession();
   const router = useRouter();
   const [createError, setCreateError] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
-  const [createLogo, setCreateLogo] = useState("");
+  const [createLogo, setCreateLogo] = useState(initial?.logoUrl || "");
   const [logoLoading, setLogoLoading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,23 +180,12 @@ export function ConferenceCreateDialog({
     register,
     handleSubmit,
     control,
-    reset,
     formState: { errors },
   } = useForm<ConferenceFormValues>({
     resolver: zodResolver(conferenceFormSchema),
     mode: "onTouched",
-    defaultValues: CONFERENCE_FORM_DEFAULTS,
+    defaultValues: initial ? initialToDefaults(initial) : CONFERENCE_FORM_DEFAULTS,
   });
-
-  // При открытии диалога подставляем значения: черновик или данные конференции
-  useEffect(() => {
-    if (open) {
-      reset(initial ? initialToDefaults(initial) : CONFERENCE_FORM_DEFAULTS);
-      setCreateLogo(initial?.logoUrl || "");
-      setCreateError("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial?.id]);
 
   async function handleLogoUpload(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -204,9 +231,7 @@ export function ConferenceCreateDialog({
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        onOpenChange(false);
-        setCreateLogo("");
-        reset(CONFERENCE_FORM_DEFAULTS);
+        onClose();
         toastSuccess(
           isEdit ? "Конференция обновлена" : "Конференция создана",
           isEdit ? "Изменения отправлены на модерацию" : "Конференция отправлена на модерацию",
@@ -221,17 +246,7 @@ export function ConferenceCreateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { setCreateLogo(""); reset(CONFERENCE_FORM_DEFAULTS); } }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Редактировать конференцию" : "Создать конференцию"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "После сохранения изменений конференция вернётся на модерацию"
-              : "После создания конференция будет отправлена на модерацию"}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(handleCreate)} className="space-y-4" noValidate>
+    <form onSubmit={handleSubmit(handleCreate)} className="space-y-4" noValidate>
           {createError && <Alert variant="destructive"><AlertDescription>{createError}</AlertDescription></Alert>}
 
           <div className="space-y-2">
@@ -338,7 +353,7 @@ export function ConferenceCreateDialog({
               </Button>
               {createLogo && (
                 <>
-                  <img src={createLogo} alt="Фото конференции" className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
+                  <Image src={createLogo} alt="Фото конференции" width={48} height={48} className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
                   <Button type="button" variant="ghost" size="sm" onClick={() => setCreateLogo("")}>
                     <X className="h-4 w-4 mr-1" />
                     Убрать
@@ -384,7 +399,5 @@ export function ConferenceCreateDialog({
             {createLoading ? "Сохранение..." : isEdit ? "Сохранить изменения" : "Создать"}
           </Button>
         </form>
-      </DialogContent>
-    </Dialog>
   );
 }

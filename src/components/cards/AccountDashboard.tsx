@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { PageBanner } from "@/components/shared/PageBanner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User,
   Wallet,
@@ -12,7 +10,6 @@ import {
   FileText,
   Calendar,
   BarChart3,
-  Settings,
   ArrowRight,
   Coins,
   LifeBuoy,

@@ -22,7 +22,7 @@ export default async function AdminUsersPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["SUPER", "ROOT"].includes(userType)) {
     redirect("/admin");
   }

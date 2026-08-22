@@ -113,7 +113,7 @@ test.describe("Кабинет компании", () => {
         status: "PUBLISHED",
       },
     });
-    const { id: originalId } = await res.json();
+    await res.json();
 
     await page.goto("/company/products");
     await page.getByTitle("Дублировать").first().click();

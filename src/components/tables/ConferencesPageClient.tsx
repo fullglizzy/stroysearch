@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuthGuard } from "@/components/shared/useAuthGuard";
 import { Pagination } from "@/components/shared/Pagination";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageBanner } from "@/components/shared/PageBanner";
 import { ImagePreview } from "@/components/shared/ImagePreview";
@@ -53,10 +52,9 @@ interface Props {
   pageTitle: string | null;
   bannerUrl: string | null;
   initialQuery: { q: string };
-  coinPriceRub: number;
 }
 
-export function ConferencesPageClient({ conferences, total, page, totalPages, showPast, treeItems, moderatorText, pageTitle, bannerUrl, initialQuery, coinPriceRub }: Props) {
+export function ConferencesPageClient({ conferences, total, page, totalPages, showPast, treeItems, moderatorText, pageTitle, bannerUrl, initialQuery }: Props) {
   const { data: session } = useSession();
   const router = useRouter();
   const { guard, dialog: authDialog } = useAuthGuard();

@@ -22,7 +22,6 @@ import {
   Ruler,
   Shield,
 } from "lucide-react";
-import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { cn } from "@/lib/utils";
 
 type IconComponent = ComponentType<{ className?: string }>;
@@ -109,14 +108,6 @@ export function DashboardShell({
   const allItems = [config.home, ...config.items.filter((i) => !i.roles || i.roles.includes(userType))];
 
   const current = findCurrent(pathname, allItems);
-
-  const crumbs =
-    current && current.href !== config.home.href
-      ? [
-          { label: config.home.label, href: config.home.href },
-          { label: current.label },
-        ]
-      : [{ label: config.home.label }];
 
   return (
     <div className="container-page">

@@ -8,18 +8,18 @@ export const authConfig: NextAuthConfig = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.username = (user as any).username;
-        token.type = (user as any).type;
-        token.status = (user as any).status;
+        token.username = user.username;
+        token.type = user.type;
+        token.status = user.status;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).username = token.username as string;
-        (session.user as any).type = token.type as string;
-        (session.user as any).status = token.status as string;
+        session.user.id = token.id ?? "";
+        session.user.username = token.username ?? "";
+        session.user.type = token.type ?? "COMMON";
+        session.user.status = token.status ?? "INACTIVE";
       }
       return session;
     },

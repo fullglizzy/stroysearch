@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { PasswordInput } from "@/components/forms/fields";
-import { Loader2, Crown, Shield, Pencil, Building2, User } from "lucide-react";
+import { Loader2, Crown, Building2, User } from "lucide-react";
 
 const quickLogins = [
   { label: "Владелец", username: "root", icon: Crown, role: "ROOT", color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
@@ -25,7 +25,6 @@ const showQuickLogins = process.env.NEXT_PUBLIC_DEMO_LOGIN === "1";
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeRole, setActiveRole] = useState<string | null>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -80,7 +79,7 @@ export default function LoginPage() {
       let target = callbackUrl;
       if (!hasCallback) {
         const session = await getSession();
-        const userType = (session?.user as any)?.type as string;
+        const userType = session?.user?.type ?? "COMMON";
 
         if (userType === "COMPANY") {
           target = "/company";
@@ -102,7 +101,6 @@ export default function LoginPage() {
   }
 
   function quickLogin(username: string) {
-    setActiveRole(username);
     setError("");
     // Fill fields
     if (usernameRef.current) usernameRef.current.value = username;

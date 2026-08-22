@@ -23,12 +23,11 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
 }
 
 function TooltipTrigger({ children, ...props }: TooltipPrimitive.Trigger.Props) {
-  try {
-    const child = React.Children.only(children);
-    if (React.isValidElement(child)) {
-      return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" render={child} {...props} />;
-    }
-  } catch { /* fall through */ }
+  const [child] = React.Children.toArray(children);
+  if (child !== undefined && React.isValidElement(child)) {
+    return <TooltipPrimitive.Trigger data-slot="tooltip-provider" render={child} {...props} />;
+  }
+  return <TooltipPrimitive.Trigger data-slot="tooltip-provider" {...props}>{children}</TooltipPrimitive.Trigger>;
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props}>{children}</TooltipPrimitive.Trigger>;
 }
 

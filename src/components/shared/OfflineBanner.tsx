@@ -1,30 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { WifiOff } from "lucide-react";
 
+function subscribe(callback: () => void) {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => {
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
+  };
+}
+
 export function OfflineBanner() {
-  const [isOffline, setIsOffline] = useState(false);
-
-  useEffect(() => {
-    function handleOnline() {
-      setIsOffline(false);
-    }
-    function handleOffline() {
-      setIsOffline(true);
-    }
-
-    // initial check
-    setIsOffline(!navigator.onLine);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  // Онлайн-статус как внешний стор: SSR отдаёт "online" (как и сейчас),
+  // на клиенте подписка на online/offline события перерисовывает баннер.
+  const isOffline = useSyncExternalStore(
+    subscribe,
+    () => !navigator.onLine,
+    () => false,
+  );
 
   if (!isOffline) return null;
 

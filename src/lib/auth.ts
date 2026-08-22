@@ -4,6 +4,7 @@ import { CredentialsSignin } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "@node-rs/argon2";
 import { authConfig } from "./auth.config";
+import type { UserType, UserStatus } from "@/types";
 
 /** Ошибка входа: аккаунт забанен. Код «banned» уходит на клиент в result.code */
 class BannedUserError extends CredentialsSignin {
@@ -50,8 +51,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           id: user.id,
           username: user.username,
           email: user.email,
-          type: user.type,
-          status: user.status,
+          type: user.type as UserType,
+          status: user.status as UserStatus,
         };
       },
     }),

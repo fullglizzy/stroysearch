@@ -30,7 +30,7 @@ interface DocRow {
   fileSize: number;
   createdAt: Date;
   updatedAt: Date;
-  user: { username: string; profile: { nick: string } | null };
+  user: { username: string; profile: { nick: string | null } | null };
   treeItem: { fullNumberPath: string; name: string } | null;
 }
 

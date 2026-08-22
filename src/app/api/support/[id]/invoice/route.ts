@@ -16,13 +16,13 @@ export async function POST(
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
 
     const { id } = await params;
-    const adminId = (session.user as any).id as string;
+    const adminId = session.user.id;
 
     let body: { action?: unknown };
     try {
@@ -114,7 +114,7 @@ export async function POST(
         message: updated.message.message,
         isStaff: true,
         createdAt: updated.message.createdAt,
-        authorName: (session.user as any).username || null,
+        authorName: session.user.username || null,
         attachments: [],
       },
     });

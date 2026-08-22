@@ -317,7 +317,7 @@ export async function applyTreeOperations(operations: TreeOperation[]): Promise<
         if (!node.deletedAt) break;
 
         // Восстанавливаем узел и всех удалённых потомков
-        const subtreeIds = [...collectSubtreeIds(nodes, id)].filter((subId) => {
+        const subtreeIds = [...collectSubtreeIds(nodes, id)].filter((_subId) => {
           // только те, что в поддереве и удалены
           return true;
         });
@@ -534,7 +534,7 @@ export async function replaceTreeFromData(raw: unknown): Promise<TreeItemFlat[]>
 export async function createTreeSnapshot(label: string | null, userId: string) {
   const items = await getAllTreeItems(true);
   const data = JSON.stringify(
-    items.map(({ productCount, docCount, conferenceCount, pollCount, ...rest }) => rest),
+    items.map(({ ...rest }) => rest),
   );
   return prisma.treeSnapshot.create({
     data: { label: label || null, data, nodeCount: items.length, createdById: userId },

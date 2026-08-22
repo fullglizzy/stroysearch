@@ -10,7 +10,7 @@ export default async function CompanyFinancesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = session.user.id;
 
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   const transactions = await prisma.transaction.findMany({

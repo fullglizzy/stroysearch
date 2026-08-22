@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isRecord, readString } from "@/lib/validators";
 
 interface Characteristic {
   name: string;
@@ -12,10 +13,10 @@ function parseCharacteristics(raw: unknown): Characteristic[] | null {
   if (!Array.isArray(raw) || raw.length > 30) return null;
   const result: Characteristic[] = [];
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) return null;
-    const name = typeof (item as any).name === "string" ? (item as any).name.trim() : "";
-    const value = typeof (item as any).value === "string" ? (item as any).value.trim() : "";
-    const unit = typeof (item as any).unit === "string" ? (item as any).unit.trim() : "";
+    if (!isRecord(item)) return null;
+    const name = readString(item, "name");
+    const value = readString(item, "value");
+    const unit = readString(item, "unit");
     if (!name || name.length > 100 || value.length > 100 || unit.length > 50) return null;
     result.push({ name, value, unit });
   }
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!["SUPER", "ROOT"].includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }

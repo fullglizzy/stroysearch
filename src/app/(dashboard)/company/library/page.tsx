@@ -9,7 +9,7 @@ export default async function CompanyLibraryPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = session.user.id;
 
   const [myDocs, treeItems, purchases] = await Promise.all([
     prisma.libraryDocument.findMany({

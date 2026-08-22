@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 interface ImagePreviewProps {
   src: string;
@@ -27,10 +28,10 @@ export function ImagePreview({ src, alt, className, title }: ImagePreviewProps) 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={cn("cursor-pointer hover:opacity-80 transition-opacity overflow-hidden", className)}
+        className={cn("relative cursor-pointer hover:opacity-80 transition-opacity overflow-hidden", className)}
         title={title ?? "Открыть фото"}
       >
-        <img src={src} alt={alt} className="h-full w-full object-cover" />
+        <Image src={src} alt={alt} fill sizes="200px" className="object-cover" />
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -38,10 +39,13 @@ export function ImagePreview({ src, alt, className, title }: ImagePreviewProps) 
           <DialogHeader>
             <DialogTitle>{alt || "Фото"}</DialogTitle>
           </DialogHeader>
-          <img
+          <Image
             src={src}
             alt={alt}
-            className="w-full max-h-[75vh] object-contain rounded-lg bg-secondary"
+            width={1200}
+            height={800}
+            className="w-full h-auto max-h-[75vh] object-contain rounded-lg bg-secondary"
+            sizes="50vw"
           />
         </DialogContent>
       </Dialog>

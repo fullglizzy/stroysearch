@@ -183,7 +183,6 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
       autoOpenRef.current = true;
       openTicket(ticketParam);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const [printInvoice, setPrintInvoice] = useState<InvoicePrintData | null>(null);

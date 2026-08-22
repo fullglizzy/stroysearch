@@ -31,7 +31,8 @@ import { FieldError } from "@/components/forms/fields";
 import { matchClassifier } from "@/lib/classifier";
 import { ALL_REGIONS, toggleAllRegions } from "@/lib/regions";
 import { toastError, toastWarning, toastSuccess } from "@/lib/toast";
-import { Plus, Edit, Trash2, Eye, Package, Upload, X, Loader2, Search, Copy, Download, UploadCloud } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, Package, Upload, X, Loader2, Search, Copy, Download } from "lucide-react";
+import Image from "next/image";
 
 interface ProductRow {
   id: string;
@@ -750,7 +751,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
           </Button>
           {imageUrl && (
             <>
-              <img src={imageUrl} alt="Фото товара" className="h-12 w-12 rounded-md border object-cover" />
+              <Image src={imageUrl} alt="Фото товара" width={48} height={48} className="h-12 w-12 rounded-md border object-cover" />
               <Button type="button" variant="ghost" size="sm" onClick={() => setImageUrl("")}>
                 <X className="h-4 w-4 mr-1" />
                 Убрать

@@ -4,12 +4,15 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExpandableText } from "@/components/shared/ExpandableText";
 import { CreateConferenceButton, CancelConferenceButton, EditConferenceButton } from "@/components/forms/ConferenceCabinetActions";
 import { Calendar, Clock, Users, Eye, Coins, ExternalLink } from "lucide-react";
+
+type ConfRow = Prisma.ConferenceGetPayload<{ include: { _count: { select: { participants: true } } } }>;
 
 async function getConferencesData(userId: string) {
   const [organized, participated] = await Promise.all([
@@ -33,7 +36,7 @@ export default async function AccountConferencesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
+  const userId = session.user.id;
   const [data, treeItems] = await Promise.all([
     getConferencesData(userId),
     prisma.productTreeItem.findMany({
@@ -47,7 +50,7 @@ export default async function AccountConferencesPage() {
   const formatDate = (d: Date) =>
     new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 
-  const ConfCard = ({ conf, showStatus }: { conf: any; showStatus?: boolean }) => (
+  const ConfCard = ({ conf, showStatus }: { conf: ConfRow; showStatus?: boolean }) => (
     <Card key={conf.id} className="hover:shadow-sm transition-shadow">
       <CardContent>
         <h3 className="font-semibold text-lg mb-2">{conf.title}</h3>

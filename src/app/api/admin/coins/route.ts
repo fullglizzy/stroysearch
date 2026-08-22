@@ -15,12 +15,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!["SUPER", "ROOT"].includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
-    const adminId = (session.user as any).id as string;
-    const adminUsername = (session.user as any).username as string | undefined;
+    const adminId = session.user.id;
+    const adminUsername = session.user.username;
 
     let body: { userId?: unknown; amount?: unknown; operation?: unknown };
     try {

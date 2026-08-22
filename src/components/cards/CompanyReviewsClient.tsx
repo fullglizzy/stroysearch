@@ -6,10 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare } from "lucide-react";
 import { ReviewCard } from "@/components/shared/ReviewCard";
 import { AddReviewSection, type ReviewCandidateCompany, type ReviewCandidateParticipant } from "@/components/forms/AddReviewSection";
+import type { ReviewRow } from "@/types";
 
 interface CompanyReviewsClientProps {
-  receivedReviews: any[];
-  givenReviews: any[];
+  receivedReviews: ReviewRow[];
+  givenReviews: ReviewRow[];
   avgRating: number | null;
   companies: ReviewCandidateCompany[];
   participants: ReviewCandidateParticipant[];
@@ -61,7 +62,7 @@ export function CompanyReviewsClient({
               <p>У компании пока нет отзывов</p>
             </div>
           ) : (
-            receivedReviews.map((r: any) => (
+            receivedReviews.map((r) => (
               <ReviewCard
                 key={r.id}
                 id={r.id}
@@ -83,7 +84,7 @@ export function CompanyReviewsClient({
               <p>Вы ещё не оставляли отзывы</p>
             </div>
           ) : (
-            givenReviews.map((r: any) => (
+            givenReviews.map((r) => (
               <ReviewCard
                 key={r.id}
                 id={r.id}

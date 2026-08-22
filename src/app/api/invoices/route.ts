@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
   }
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
 
   const invoices = await prisma.invoice.findMany({
     where: { userId, kind: "PURCHASE" },

@@ -4,18 +4,13 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Users,
-  Building2,
   Calendar,
   FileText,
   BarChart3,
-  Settings,
   Palette,
-  Shield,
   Package,
   Coins,
   Library,
-  CheckCircle,
-  Eye,
   MapPin,
   LifeBuoy,
   Ruler,

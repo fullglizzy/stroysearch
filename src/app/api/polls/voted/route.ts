@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ ids: [] });
   }
 
-  const userId = (session.user as any).id;
+  const userId = session.user.id;
   const votes = await prisma.pollVote.findMany({
     where: { userId },
     select: { pollId: true },

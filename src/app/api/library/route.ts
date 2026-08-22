@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const doc = await prisma.libraryDocument.create({
     data: {
       ...parsed.data,
-      userId: (session.user as any).id,
+      userId: session.user.id,
       treeItemId: parsed.data.treeItemId || null,
     },
   });

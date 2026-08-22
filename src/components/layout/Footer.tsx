@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { HelpCircle } from "lucide-react";
+import Image from "next/image";
 import { SupportDialog } from "@/components/shared/SupportDialog";
 
 export function Footer() {
@@ -15,9 +16,12 @@ export function Footer() {
           {/* Brand */}
           <div className="sm:col-span-2 md:col-span-1">
             <Link href="/" aria-label="ЕНЦПР — на главную" className="flex items-center gap-1 mb-2">
-              <img
+              <Image
                 src="/logo/logo.svg"
                 alt=""
+                width={1280}
+                height={1024}
+                unoptimized
                 // Справа в холсте SVG ~33% пустоты (425px из 1280): при h-36 это ~60px —
                 // убираем их отрицательным отступом, чтобы текст был вплотную к рисунку
                 className="h-36 w-auto translate-y-[9.7%] -mr-[60px]"

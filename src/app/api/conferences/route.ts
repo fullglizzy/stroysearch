@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       ...parsed.data,
       date: new Date(parsed.data.date),
       treeItemId: parsed.data.treeItemId || null,
-      organizerId: (session.user as any).id,
+      organizerId: session.user.id,
     },
   });
 

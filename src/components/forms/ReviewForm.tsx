@@ -27,7 +27,6 @@ export function ReviewForm({ targetId, targetName, companyId, criteriaLabels }: 
 
   const commentLength = comment.length;
   const commentValid = commentLength >= 100;
-  const allScored = !scores.some((s) => s === 0);
 
   function setScore(index: number, value: number) {
     const newScores = [...scores];

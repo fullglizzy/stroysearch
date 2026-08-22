@@ -13,21 +13,11 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 
 function DialogTrigger({ children, ...props }: DialogPrimitive.Trigger.Props) {
   // Use render prop to avoid button-in-button nesting when child is a single element (e.g. Button)
-  try {
-    const child = React.Children.only(children);
-    if (React.isValidElement(child)) {
-      return (
-        <DialogPrimitive.Trigger
-          data-slot="dialog-trigger"
-          render={child}
-          {...props}
-        />
-      );
-    }
-  } catch {
-    // Multiple children or no children — fall through to default
+  const [child] = React.Children.toArray(children);
+  if (child !== undefined && React.isValidElement(child)) {
+    return <DialogPrimitive.Trigger data-slot="dialog" render={child} {...props} />;
   }
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props}>{children}</DialogPrimitive.Trigger>;
+  return <DialogPrimitive.Trigger data-slot="dialog" {...props}>{children}</DialogPrimitive.Trigger>;
 }
 
 function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {

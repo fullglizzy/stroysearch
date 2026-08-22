@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   }
 
   // Создавать опросы (и назначать награду) могут только сотрудники
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!ADMIN_TYPES.includes(userType)) {
     return NextResponse.json({ error: "Нет прав" }, { status: 403 });
   }

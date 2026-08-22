@@ -15,7 +15,7 @@ export default async function AdminSupportPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userType = (session.user as any).type as string;
+  const userType = session.user.type;
   if (!["MODERATOR", "EDITOR", "SUPER", "ROOT"].includes(userType)) {
     redirect("/account");
   }

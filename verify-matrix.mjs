@@ -13,12 +13,6 @@ console.log("category sections:", groups);
 console.log("horizontal scrollers:", await page.locator('div.overflow-x-auto').count());
 console.log("fixed-width cards (w-72):", await page.locator('div.w-72').count() > 0);
 
-// default sort = by rating: pick the first category, compare ratings order
-const firstGroupRatings = await page.evaluate(() => {
-  const scroller = document.querySelector("div.overflow-x-auto");
-  if (!scroller) return null;
-  return [...scroller.querySelectorAll(".text-menthol.text-lg")].map(el => el.textContent);
-});
 
 // sort select exists with default "По рейтингу"
 const trigger = page.locator('button[role="combobox"]').first();

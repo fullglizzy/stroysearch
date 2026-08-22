@@ -25,12 +25,11 @@ export default async function ConferencesPage({
 
   const pageContent = await getPageContent("conferences");
 
-  const [treeItems, billing] = await Promise.all([
+  const [treeItems] = await Promise.all([
     prisma.productTreeItem.findMany({
       where: { deletedAt: null },
       select: { id: true, name: true, fullNumberPath: true },
     }),
-    prisma.billingConfig.findUnique({ where: { id: "default" } }),
   ]);
 
   // По умолчанию показываем только предстоящие; архив — отдельным переключателем
@@ -91,7 +90,6 @@ export default async function ConferencesPage({
       pageTitle={pageContent?.title || null}
       bannerUrl={pageContent?.bannerUrl || null}
       initialQuery={{ q }}
-      coinPriceRub={billing?.coinPriceRub ? billing.coinPriceRub.toNumber() : 100}
     />
   );
 }

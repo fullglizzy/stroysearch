@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyUser, cabinetHome } from "@/lib/notifications";
 import { sendMail, buildSupportReplyEmail } from "@/lib/mailer";
+import { isRecord, readString } from "@/lib/validators";
 
 const ADMIN_TYPES = ["MODERATOR", "EDITOR", "SUPER", "ROOT"];
 
@@ -16,19 +17,13 @@ function parseAttachments(raw: unknown): AttachmentInput[] | null {
   if (!Array.isArray(raw) || raw.length > 10) return null;
   const result: AttachmentInput[] = [];
   for (const item of raw) {
-    if (
-      typeof item !== "object" || item === null ||
-      typeof (item as any).url !== "string" ||
-      typeof (item as any).name !== "string"
-    ) {
+    if (!isRecord(item)) return null;
+    const url = readString(item, "url");
+    const name = readString(item, "name");
+    if (!url.startsWith("/uploads/") || name.length === 0 || name.length > 255) {
       return null;
     }
-    const url = (item as any).url as string;
-    const name = (item as any).name as string;
-    if (!url.startsWith("/uploads/") || name.trim().length === 0 || name.length > 255) {
-      return null;
-    }
-    result.push({ url, name: name.trim() });
+    result.push({ url, name });
   }
   return result;
 }
@@ -44,8 +39,8 @@ export async function POST(
     }
 
     const { id } = await params;
-    const userId = (session.user as any).id as string;
-    const userType = (session.user as any).type as string;
+    const userId = session.user.id;
+    const userType = session.user.type;
     const isAdmin = ADMIN_TYPES.includes(userType);
 
     let body: { message?: unknown; files?: unknown };
@@ -127,7 +122,7 @@ export async function POST(
         message: created.message,
         isStaff: created.isStaff,
         createdAt: created.createdAt,
-        authorName: (session.user as any).username || null,
+        authorName: session.user.username || null,
         attachments,
       },
     });

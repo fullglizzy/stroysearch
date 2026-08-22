@@ -11,8 +11,8 @@ export default async function CompanyReviewsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const userId = (session.user as any).id as string;
-  const canReview = (session.user as any).status === "ACTIVE";
+  const userId = session.user.id;
+  const canReview = session.user.status === "ACTIVE";
 
   const company = await prisma.company.findFirst({
     where: { ownerUserId: userId },

@@ -1,9 +1,37 @@
+import type { ReviewCriteriaItem } from "@/components/shared/ReviewCard";
+
+export type UserType = "COMMON" | "COMPANY" | "MODERATOR" | "EDITOR" | "SUPER" | "ROOT";
+export type UserStatus = "INACTIVE" | "ACTIVE" | "BANNED" | "DELETED";
+
 export interface SessionUser {
   id: string;
   username: string;
   email: string;
-  type: "COMMON" | "COMPANY" | "MODERATOR" | "EDITOR" | "SUPER" | "ROOT";
-  status: "INACTIVE" | "ACTIVE" | "BANNED" | "DELETED";
+  type: UserType;
+  status: UserStatus;
+}
+
+/**
+ * Строка отзыва для клиентских карточек (ReviewCard).
+ * Совместима с результатами prisma.review.findMany с include author/target/company/criteria.
+ */
+export interface ReviewRow {
+  id: string;
+  comment: string;
+  weightedAverage: number;
+  createdAt: Date | string;
+  companyId: string | null;
+  status: string;
+  criteria: ReviewCriteriaItem[];
+  author?: {
+    username: string;
+    profile?: { nick: string | null; firstName?: string | null; lastName?: string | null } | null;
+  } | null;
+  target?: {
+    username: string;
+    profile?: { nick: string | null; firstName?: string | null; lastName?: string | null } | null;
+  } | null;
+  company?: { id?: string; name: string; inn?: string | null } | null;
 }
 
 export interface CompanyRow {

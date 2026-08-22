@@ -13,7 +13,7 @@ export async function POST(
       return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
     const { id: giftId } = await params;
 
     const gift = await prisma.gift.findUnique({

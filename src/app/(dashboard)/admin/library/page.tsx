@@ -55,7 +55,7 @@ export default async function AdminLibraryPage({
     <div className="container-page py-8">
       <h1 className="text-3xl font-bold mb-6">Модерация библиотеки</h1>
       <LibraryModeration
-        documents={documents as any}
+        documents={documents}
         total={total}
         page={page}
         totalPages={totalPages}

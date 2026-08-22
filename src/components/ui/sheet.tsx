@@ -12,12 +12,11 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
 }
 
 function SheetTrigger({ children, ...props }: SheetPrimitive.Trigger.Props) {
-  try {
-    const child = React.Children.only(children);
-    if (React.isValidElement(child)) {
-      return <SheetPrimitive.Trigger data-slot="sheet-trigger" render={child} {...props} />;
-    }
-  } catch { /* fall through */ }
+  const [child] = React.Children.toArray(children);
+  if (child !== undefined && React.isValidElement(child)) {
+    return <SheetPrimitive.Trigger data-slot="sheet" render={child} {...props} />;
+  }
+  return <SheetPrimitive.Trigger data-slot="sheet" {...props}>{children}</SheetPrimitive.Trigger>;
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props}>{children}</SheetPrimitive.Trigger>;
 }
 

@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { comparePath } from "@/lib/utils";
-import { ProductTree } from "@/components/tree/ProductTree";
 import { getPageContent } from "@/server/admin/content";
 import { ProductsPageClient } from "@/components/cards/ProductsPageClient";
 import { PageBanner } from "@/components/shared/PageBanner";

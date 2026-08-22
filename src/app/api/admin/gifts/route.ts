@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
@@ -52,7 +52,7 @@ export async function PUT(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }
@@ -103,7 +103,7 @@ export async function DELETE(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
-    const userType = (session.user as any).type as string;
+    const userType = session.user.type;
     if (!ADMIN_TYPES.includes(userType)) {
       return NextResponse.json({ error: "Нет прав" }, { status: 403 });
     }

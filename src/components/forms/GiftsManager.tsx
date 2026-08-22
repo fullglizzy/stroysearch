@@ -20,6 +20,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { ImagePreview } from "@/components/shared/ImagePreview";
 import { toastError, toastSuccess, toastWarning } from "@/lib/toast";
 import { Loader2, Plus, Trash2, Gift, Package, Upload, X, Pencil } from "lucide-react";
+import Image from "next/image";
 
 interface GiftItem {
   id: string;
@@ -250,7 +251,7 @@ export function GiftsManager({ gifts, claims }: Props) {
                     </Button>
                     {giftImageUrl && (
                       <>
-                        <img src={giftImageUrl} alt="Фото подарка" className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
+                        <Image src={giftImageUrl} alt="Фото подарка" width={48} height={48} className="h-12 w-12 rounded-md border object-cover" loading="lazy" decoding="async" />
                         <Button type="button" variant="ghost" size="sm" onClick={() => setGiftImageUrl("")}>
                           <X className="h-4 w-4 mr-1" />
                           Убрать

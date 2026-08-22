@@ -15,6 +15,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 interface HomePageProps {
   pageContent: string;
@@ -143,10 +144,13 @@ export function HomePageClient({
             <div className="flex justify-center">
               {bannerUrl ? (
                 <div className="rounded-xl overflow-hidden shadow-lg w-full max-w-sm">
-                  <img
+                  <Image
                     src={bannerUrl}
                     alt="Баннер платформы"
+                    width={800}
+                    height={600}
                     className="w-full h-auto object-cover"
+                    sizes="(max-width: 640px) 100vw, 448px"
                   />
                 </div>
               ) : (
