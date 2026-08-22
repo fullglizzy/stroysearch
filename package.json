@@ -6,9 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "test:e2e": "playwright test",
-    "test:e2e:cleanup": "tsx scripts/e2e-cleanup.ts"
+    "lint": "eslint"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -45,7 +43,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/argon2": "^0.14.1",
     "@types/node": "^20.19.43",
@@ -55,8 +52,7 @@
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.20.0",
-    "typescript": "^5",
-    "vitest": "^4.1.10"
+    "typescript": "^5"
   },
   "allowScripts": {
     "argon2@0.45.1": true,

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Standalone-сборка для прода: минимальный образ без node_modules
+  // (деплой = .next/standalone + .next/static + public/)
+  output: "standalone",
 };
 
 export default nextConfig;
