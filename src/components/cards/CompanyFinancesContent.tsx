@@ -1,12 +1,10 @@
 "use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancesPage } from "@/components/cards/FinancesPage";
 import { CompanyBillingOverview } from "./CompanyBillingOverview";
 import { CompanyInvoicesManager } from "./CompanyInvoicesManager";
 
 interface Props {
-  initialTab?: string;
   balance: number;
   transactions: {
     id: string;
@@ -30,20 +28,26 @@ interface Props {
 }
 
 /**
- * Единая вкладка «Финансы» в кабинете компании: тариф и счета + монеты и подарки.
+ * Страница «Финансы» в кабинете компании одной лентой:
+ * счета и акты → обзор тарифа → монеты и подарки.
  */
-export function CompanyFinancesTabs({ initialTab = "overview", ...finances }: Props) {
+export function CompanyFinancesContent({ ...finances }: Props) {
   return (
-    <Tabs defaultValue={initialTab}>
-      <TabsList className="mb-6 flex-wrap h-auto justify-start">
-        <TabsTrigger value="overview">Обзор</TabsTrigger>
-        <TabsTrigger value="invoices">Счета и акты</TabsTrigger>
-        <TabsTrigger value="coins">Монеты и подарки</TabsTrigger>
-      </TabsList>
+    <div className="space-y-10">
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Счета и акты</h2>
+        <CompanyInvoicesManager />
+      </section>
 
-      <TabsContent value="overview"><CompanyBillingOverview /></TabsContent>
-      <TabsContent value="invoices"><CompanyInvoicesManager /></TabsContent>
-      <TabsContent value="coins"><FinancesPage {...finances} /></TabsContent>
-    </Tabs>
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Обзор</h2>
+        <CompanyBillingOverview />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Монеты и подарки</h2>
+        <FinancesPage {...finances} />
+      </section>
+    </div>
   );
 }
