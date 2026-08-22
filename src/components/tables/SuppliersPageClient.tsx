@@ -263,6 +263,148 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
     [rows, revals],
   );
 
+  // ── Переиспользуемые фрагменты строки: и в таблице (десктоп), и в карточке (мобильный)
+  const ratingCell = (company: CompanyRow, key: string) => {
+    const rev = revals[key] || {};
+    if (company.rating === null) return <span className="text-xs text-muted-foreground">—</span>;
+    return (
+      <div className="flex items-center gap-1">
+        {rev.rating ? (
+          <button
+            type="button"
+            onClick={() => openReviewsPopup({ id: company.id, kind: company.kind, name: company.name })}
+            className="flex items-center gap-1 cursor-pointer hover:opacity-80"
+            title="Показать отзывы"
+          >
+            <StarRating rating={company.rating} size="sm" />
+            <span className="text-xs text-muted-foreground">{company.rating}</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <EyeButton onClick={() => handleReveal(key, "rating")} />
+            <span className="text-xs text-muted-foreground">Скрыт</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const contactCell = (
+    company: CompanyRow,
+    key: string,
+    field: "phone" | "email" | "website",
+    contactsBlocked: boolean,
+  ) => {
+    const rev = revals[key] || {};
+    const value = company[field];
+    const Icon = field === "phone" ? Phone : field === "email" ? Mail : Globe;
+    const fieldLabel = field === "phone" ? "телефон" : field === "email" ? "email" : "сайт";
+    if (contactsBlocked) {
+      return (
+        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
+          <Lock className="h-3 w-3" />
+          Скрыто
+        </span>
+      );
+    }
+    if (!value) return "—";
+    return (
+      <div className="flex items-center gap-1">
+        {rev[field] ? (
+          field === "website" ? (
+            <a
+              href={value}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm flex items-center gap-1 hover:text-menthol transition-colors"
+            >
+              <Icon className="h-3 w-3 text-muted-foreground" />
+              {value.replace(/^https?:\/\//, "")}
+            </a>
+          ) : (
+            <a
+              href={field === "phone" ? telHref(value) : mailtoHref(value)}
+              className="text-sm flex items-center gap-1 hover:text-menthol transition-colors"
+            >
+              <Icon className="h-3 w-3 text-muted-foreground" />
+              {value}
+            </a>
+          )
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <Icon className="h-3 w-3 text-muted-foreground" />
+            <EyeButton onClick={() => handleReveal(key, field)} fieldLabel={fieldLabel} />
+          </span>
+        )}
+        {isAdmin && (
+          <span className="text-[10px] text-muted-foreground">
+            ({metricOverrides[company.id]?.[`${field}Views`] ?? company.metrics[`${field}Views`]})
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const classifierBadges = (company: CompanyRow) => (
+    <div className="flex flex-wrap gap-1">
+      {company.classifierIds.slice(0, 2).map((id) => (
+        <Badge key={id} variant="secondary" className="text-[10px]">
+          {classifierPathById.get(id) || id}
+        </Badge>
+      ))}
+      {company.classifierIds.length > 2 && (
+        <Badge variant="outline" className="text-[10px]">
+          +{company.classifierIds.length - 2}
+        </Badge>
+      )}
+    </div>
+  );
+
+  const roleText = (company: CompanyRow) =>
+    company.ownerRoles.length > 0
+      ? company.ownerRoles.map(roleLabel).join(", ")
+      : company.inn ? "Поставщик" : "—";
+
+  const reviewsCell = (company: CompanyRow, key: string) => {
+    const rev = revals[key] || {};
+    return (
+      <div className="flex items-center gap-1">
+        {rev.reviews ? (
+          <button
+            type="button"
+            onClick={() => openReviewsPopup({ id: company.id, kind: company.kind, name: company.name })}
+            className="text-xs text-menthol hover:underline cursor-pointer"
+          >
+            {company.reviewCount} отз.
+          </button>
+        ) : (
+          <EyeButton onClick={() => handleReveal(key, "reviews")} fieldLabel="отзывы" />
+        )}
+      </div>
+    );
+  };
+
+  const reviewButtons = (company: CompanyRow) => (
+    <div className="flex gap-1">
+      {company.kind === "company" && (canReview || !session?.user) && (
+        <GuestGuard actionLabel="оставить отзыв о компании">
+          <Button size="sm" variant="outline" className="h-7 text-xs"
+            onClick={() => setReviewTarget({ id: company.id, name: company.name, companyId: company.id, label: "компанию" })}>
+            <MessageSquare className="h-3 w-3 mr-1" />Компании
+          </Button>
+        </GuestGuard>
+      )}
+      {company.kind === "participant" && (canReview || !session?.user) && (
+        <GuestGuard actionLabel="оставить отзыв об участнике">
+          <Button size="sm" variant="outline" className="h-7 text-xs"
+            onClick={() => setReviewTarget({ id: company.id, name: company.ownerNick || company.name, label: "участника" })}>
+            <MessageSquare className="h-3 w-3 mr-1" />Участнику
+          </Button>
+        </GuestGuard>
+      )}
+    </div>
+  );
+
   return (
     <div className="container-page py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -377,8 +519,8 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
         )}
       </div>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-x-auto">
+      {/* Таблица — только десктоп (md+); на мобильных ниже карточки */}
+      <div className="hidden md:block border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -405,7 +547,6 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
             ) : (
               rows.map((company) => {
                 const key = company.id;
-                const rev = revals[key] || {};
                 // Участник скрыл персональные данные — видимы только ник,
                 // классификатор, роль, рейтинг и отзывы
                 const hiddenContacts = company.kind === "participant" && company.isContactsHidden;
@@ -433,205 +574,88 @@ export function SuppliersPageClient({ rows, total, page, pageSize, treeItems, re
                         company.name
                       )}
                     </TableCell>
+                    <TableCell>{ratingCell(company, key)}</TableCell>
+                    <TableCell>{contactCell(company, key, "phone", contactsBlocked)}</TableCell>
+                    <TableCell>{contactCell(company, key, "email", contactsBlocked)}</TableCell>
+                    <TableCell>{contactCell(company, key, "website", contactsBlocked)}</TableCell>
+                    <TableCell>{classifierBadges(company)}</TableCell>
                     <TableCell>
-                      {company.rating !== null ? (
-                        <div className="flex items-center gap-1">
-                          {rev.rating ? (
-                            <button
-                              type="button"
-                              onClick={() => openReviewsPopup({ id: company.id, kind: company.kind, name: company.name })}
-                              className="flex items-center gap-1 cursor-pointer hover:opacity-80"
-                              title="Показать отзывы"
-                            >
-                              <StarRating rating={company.rating} size="sm" />
-                              <span className="text-xs text-muted-foreground">
-                                {company.rating}
-                              </span>
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <EyeButton
-                                onClick={() => handleReveal(key, "rating")}
-                              />
-                              <span className="text-xs text-muted-foreground">
-                                Скрыт
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <span className="text-xs">{roleText(company)}</span>
                     </TableCell>
-                    <TableCell>
-                      {contactsBlocked ? (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
-                          <Lock className="h-3 w-3" />
-                          Скрыто
-                        </span>
-                      ) : company.phone ? (
-                        <div className="flex items-center gap-1">
-                          {rev.phone ? (
-                            <a
-                              href={telHref(company.phone)}
-                              className="text-sm flex items-center gap-1 hover:text-menthol transition-colors"
-                            >
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              {company.phone}
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              <EyeButton
-                                onClick={() => handleReveal(key, "phone")}
-                                fieldLabel="телефон"
-                              />
-                            </span>
-                          )}
-                          {isAdmin && (
-                            <span className="text-[10px] text-muted-foreground">
-                              ({metricOverrides[company.id]?.phoneViews ?? company.metrics.phoneViews})
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {contactsBlocked ? (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
-                          <Lock className="h-3 w-3" />
-                          Скрыто
-                        </span>
-                      ) : company.email ? (
-                        <div className="flex items-center gap-1">
-                          {rev.email ? (
-                            <a
-                              href={mailtoHref(company.email)}
-                              className="text-sm flex items-center gap-1 hover:text-menthol transition-colors"
-                            >
-                              <Mail className="h-3 w-3 text-muted-foreground" />
-                              {company.email}
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <Mail className="h-3 w-3 text-muted-foreground" />
-                              <EyeButton
-                                onClick={() => handleReveal(key, "email")}
-                                fieldLabel="email"
-                              />
-                            </span>
-                          )}
-                          {isAdmin && (
-                            <span className="text-[10px] text-muted-foreground">
-                              ({metricOverrides[company.id]?.emailViews ?? company.metrics.emailViews})
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {contactsBlocked ? (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
-                          <Lock className="h-3 w-3" />
-                          Скрыто
-                        </span>
-                      ) : company.website ? (
-                        <div className="flex items-center gap-1">
-                          {rev.website ? (
-                            <a
-                              href={company.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm flex items-center gap-1 hover:text-menthol transition-colors"
-                            >
-                              <Globe className="h-3 w-3 text-muted-foreground" />
-                              {company.website.replace(/^https?:\/\//, "")}
-                            </a>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <Globe className="h-3 w-3 text-muted-foreground" />
-                              <EyeButton
-                                onClick={() => handleReveal(key, "website")}
-                                fieldLabel="сайт"
-                              />
-                            </span>
-                          )}
-                          {isAdmin && (
-                            <span className="text-[10px] text-muted-foreground">
-                              ({metricOverrides[company.id]?.websiteViews ?? company.metrics.websiteViews})
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {company.classifierIds.slice(0, 2).map((id) => (
-                          <Badge key={id} variant="secondary" className="text-[10px]">
-                            {classifierPathById.get(id) || id}
-                          </Badge>
-                        ))}
-                        {company.classifierIds.length > 2 && (
-                          <Badge variant="outline" className="text-[10px]">
-                            +{company.classifierIds.length - 2}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs">
-                        {company.ownerRoles.length > 0
-                          ? company.ownerRoles.map(roleLabel).join(", ")
-                          : company.inn ? "Поставщик" : "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {rev.reviews ? (
-                          <button
-                            type="button"
-                            onClick={() => openReviewsPopup({ id: company.id, kind: company.kind, name: company.name })}
-                            className="text-xs text-menthol hover:underline cursor-pointer"
-                          >
-                            {company.reviewCount} отз.
-                          </button>
-                        ) : (
-                          <EyeButton onClick={() => handleReveal(key, "reviews")} fieldLabel="отзывы" />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {company.kind === "company" && (canReview || !session?.user) && (
-                          <GuestGuard actionLabel="оставить отзыв о компании">
-                            <Button size="sm" variant="outline" className="h-7 text-[10px]"
-                              onClick={() => setReviewTarget({ id: company.id, name: company.name, companyId: company.id, label: "компанию" })}>
-                              <MessageSquare className="h-3 w-3 mr-1" />Компании
-                            </Button>
-                          </GuestGuard>
-                        )}
-                        {company.kind === "participant" && (canReview || !session?.user) && (
-                          <GuestGuard actionLabel="оставить отзыв об участнике">
-                            <Button size="sm" variant="outline" className="h-7 text-[10px]"
-                              onClick={() => setReviewTarget({ id: company.id, name: company.ownerNick || company.name, label: "участника" })}>
-                              <MessageSquare className="h-3 w-3 mr-1" />Участнику
-                            </Button>
-                          </GuestGuard>
-                        )}
-                      </div>
-                    </TableCell>
+                    <TableCell>{reviewsCell(company, key)}</TableCell>
+                    <TableCell>{reviewButtons(company)}</TableCell>
                   </TableRow>
                 );
               })
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Карточки — только мобильный (<md): та же строка, но в колонку */}
+      <div className="md:hidden space-y-3">
+        {rows.length === 0 ? (
+          <div className="border rounded-lg p-8 text-center text-muted-foreground">
+            Записи не найдены
+          </div>
+        ) : (
+          rows.map((company) => {
+            const key = company.id;
+            const hiddenContacts = company.kind === "participant" && company.isContactsHidden;
+            const contactsBlocked = hiddenContacts || company.billingHidden;
+            return (
+              <div key={company.id} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground truncate">
+                      {company.ownerNick || "—"}
+                      {company.inn ? ` · ИНН ${company.inn}` : ""}
+                    </p>
+                    <p className="font-medium break-words">
+                      {hiddenContacts ? (
+                        "Скрыто"
+                      ) : company.kind === "company" ? (
+                        <Link
+                          href={`/suppliers/${company.id}`}
+                          className="hover:text-menthol transition-colors"
+                        >
+                          {company.name}
+                        </Link>
+                      ) : (
+                        company.name
+                      )}
+                    </p>
+                  </div>
+                  <div className="shrink-0">{ratingCell(company, key)}</div>
+                </div>
+
+                <div className="flex flex-col items-start gap-1 text-sm">
+                  {contactsBlocked ? (
+                    <span className="inline-flex items-center gap-1 text-muted-foreground" title="Контакты скрыты администратором">
+                      <Lock className="h-3 w-3" />
+                      Контакты скрыты
+                    </span>
+                  ) : (
+                    <>
+                      {company.phone && contactCell(company, key, "phone", false)}
+                      {company.email && contactCell(company, key, "email", false)}
+                      {company.website && contactCell(company, key, "website", false)}
+                    </>
+                  )}
+                </div>
+
+                {classifierBadges(company)}
+
+                <p className="text-xs text-muted-foreground">{roleText(company)}</p>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                  {reviewsCell(company, key)}
+                  {reviewButtons(company)}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Пагинация */}

@@ -126,7 +126,7 @@ export default async function AccountReviewsPage() {
       </div>
 
       <Tabs defaultValue="received">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto justify-start">
           <TabsTrigger value="received">Полученные ({receivedReviews.length})</TabsTrigger>
           <TabsTrigger value="given">Оставленные ({givenReviews.length})</TabsTrigger>
           <TabsTrigger value="add">Оставить отзыв</TabsTrigger>

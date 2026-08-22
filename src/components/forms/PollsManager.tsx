@@ -336,7 +336,7 @@ export function PollsManager({ polls, treeItems, total, page, totalPages, initia
               {errors.question && <FieldError id="question-error" message={errors.question.message} />}
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label>Тип</Label>
                 <Controller
@@ -372,7 +372,7 @@ export function PollsManager({ polls, treeItems, total, page, totalPages, initia
                   <FieldError id="coinReward-error" message={errors.coinReward.message} />
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 col-span-2 sm:col-span-1">
                 <Label>Категория</Label>
                 <Controller
                   name="treeItemId"
@@ -524,7 +524,7 @@ export function PollsManager({ polls, treeItems, total, page, totalPages, initia
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} опросов</span>
           <Pagination
             currentPage={page}

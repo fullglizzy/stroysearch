@@ -84,9 +84,9 @@ export function ReviewCard({
               {targetName ? `Для: ${targetName}` : ""}
             </span>
             {companyName && (
-              <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                <Building2 className="h-2 w-2 mr-1" />
-                {companyName}
+              <Badge variant="outline" className="text-[10px] min-w-0 max-w-[50%]">
+                <Building2 className="h-2 w-2 mr-1 shrink-0" />
+                <span className="truncate">{companyName}</span>
               </Badge>
             )}
           </div>

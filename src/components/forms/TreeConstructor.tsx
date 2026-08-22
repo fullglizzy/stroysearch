@@ -603,8 +603,8 @@ export function TreeConstructor({ items }: Props) {
         </div>
       </div>
 
-      {/* Дерево */}
-      <div className="border rounded-lg divide-y">
+      {/* Дерево. Шаг отступа уровней через переменную: на мобильном меньше */}
+      <div className="border rounded-lg divide-y [--tree-indent:24px] max-sm:[--tree-indent:12px]">
         {tree.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">
             <FolderTree className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -871,7 +871,7 @@ function TreeNodeRow({
         className={`flex items-center gap-2 px-4 py-2 hover:bg-secondary/30 transition-colors cursor-grab active:cursor-grabbing ${
           isDeleted ? "opacity-50 bg-red-50" : ""
         } ${isDropTarget ? "ring-2 ring-menthol ring-inset bg-menthol/10" : ""}`}
-        style={{ paddingLeft: `${16 + node.level * 24}px` }}
+        style={{ paddingLeft: `calc(16px + ${node.level} * var(--tree-indent))` }}
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
 
@@ -908,7 +908,7 @@ function TreeNodeRow({
           />
         ) : (
           <button
-            className={`font-medium text-sm truncate text-left hover:text-menthol transition-colors ${isDeleted ? "line-through" : ""}`}
+            className={`flex-1 min-w-0 font-medium text-sm truncate text-left hover:text-menthol transition-colors ${isDeleted ? "line-through" : ""}`}
             title="Нажмите, чтобы переименовать"
             onClick={() => onStartEdit(node.id, node.name)}
           >
@@ -917,16 +917,16 @@ function TreeNodeRow({
         )}
 
         {node.productCount > 0 && (
-          <Badge variant="secondary" className="text-[10px]">{node.productCount} тов.</Badge>
+          <Badge variant="secondary" className="text-[10px] max-sm:hidden">{node.productCount} тов.</Badge>
         )}
         {node.docCount > 0 && (
-          <Badge variant="outline" className="text-[10px]">{node.docCount} док.</Badge>
+          <Badge variant="outline" className="text-[10px] max-sm:hidden">{node.docCount} док.</Badge>
         )}
         {node.conferenceCount > 0 && (
-          <Badge variant="outline" className="text-[10px]">{node.conferenceCount} конф.</Badge>
+          <Badge variant="outline" className="text-[10px] max-sm:hidden">{node.conferenceCount} конф.</Badge>
         )}
         {node.pollCount > 0 && (
-          <Badge variant="outline" className="text-[10px]">{node.pollCount} опр.</Badge>
+          <Badge variant="outline" className="text-[10px] max-sm:hidden">{node.pollCount} опр.</Badge>
         )}
 
         <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">

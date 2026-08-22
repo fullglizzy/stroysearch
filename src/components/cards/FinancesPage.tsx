@@ -246,7 +246,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
       {/* Balance Card */}
       <Card className="bg-gradient-to-r from-menthol/10 to-menthol/5 border-menthol/20">
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm text-muted-foreground">Баланс монет</p>
               <div className="flex items-center gap-2 mt-1">
@@ -254,7 +254,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
                 <span className="text-4xl font-bold">{balance.toFixed(1)}</span>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -484,7 +484,7 @@ export function FinancesPage({ balance, transactions, gifts, userId, coinPriceRu
           </CardHeader>
           <CardContent className="space-y-2">
             {invoices.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b last:border-0">
                 <div>
                   <p className="text-sm font-medium">Счёт № {inv.number}</p>
                   <p className="text-xs text-muted-foreground">

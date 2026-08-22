@@ -179,7 +179,7 @@ export function GiftsManager({ gifts, claims }: Props) {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-orange-accent" /> Управление подарками</CardTitle>
           <Dialog open={giftOpen} onOpenChange={(o) => {
             setGiftOpen(o);

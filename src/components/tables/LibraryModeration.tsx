@@ -180,7 +180,7 @@ export function LibraryModeration({ documents, total, page, totalPages, q, statu
           </div>
         </div>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-menthol/50 bg-menthol/5 p-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-menthol/50 bg-menthol/5 p-3">
             <span className="text-sm font-medium">Выбрано: {selected.size}</span>
             <Button size="sm" className="bg-menthol hover:bg-menthol-dark" onClick={handleBulkApprove} disabled={bulkLoading}>
               {bulkLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
@@ -376,7 +376,7 @@ export function LibraryModeration({ documents, total, page, totalPages, q, statu
       </Dialog>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} документов</span>
           <Pagination
             currentPage={page}

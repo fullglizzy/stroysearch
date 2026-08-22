@@ -482,7 +482,7 @@ export function SupportTicketsClient({ initialTickets, mode, page, totalPages }:
                     </Badge>
                   </div>
                   {invoice.status !== "PAID" && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs text-muted-foreground">
                         Счёт можно распечатать и передать пользователю
                       </p>

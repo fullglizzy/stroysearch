@@ -803,7 +803,7 @@ export function ProductsManager({ products, treeItems, regions, companyId, compa
           <Label>Характеристики</Label>
           <div className="space-y-2">
             {categoryChars.map((c, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center">
                 <span className="text-sm text-muted-foreground">{c.name}</span>
                 <div className="flex gap-2">
                   <Input

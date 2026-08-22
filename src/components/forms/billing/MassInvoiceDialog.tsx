@@ -194,7 +194,7 @@ export function MassInvoiceDialog({
               {visibleCompanies.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">Поиск не нашёл компаний</p>
               ) : (
-                <div className="border rounded-lg max-h-[45vh] overflow-y-auto">
+                <div className="border rounded-lg max-h-[45vh] overflow-y-auto overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-muted/40">
                       <tr className="text-left text-xs text-muted-foreground">

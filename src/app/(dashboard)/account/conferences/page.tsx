@@ -61,8 +61,8 @@ export default async function AccountConferencesPage() {
         {conf.status === "REJECTED" && conf.moderatorNote && (
           <p className="text-xs text-orange-accent mt-2">Причина отклонения: {conf.moderatorNote}</p>
         )}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {conf.coinPrice > 0 ? (
               <Badge className="gap-1"><Coins className="h-3 w-3" /> {conf.coinPrice}</Badge>
             ) : (

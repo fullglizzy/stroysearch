@@ -119,9 +119,14 @@ export function DashboardShell({
       : [{ label: config.home.label }];
 
   return (
-    <div className="container-page flex gap-6">
-      <aside className="hidden lg:block w-56 shrink-0 py-8">
-        <nav className="sticky top-24 space-y-0.5" aria-label="Навигация кабинета">
+    <div className="container-page">
+      {/* Мобильная навигация кабинета (<lg): чипы с горизонтальной прокруткой.
+          На десктопе вместо неё сайдбар ниже */}
+      <nav
+        className="lg:hidden sticky top-16 z-40 -mx-4 sm:-mx-6 mt-2 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b overflow-x-auto"
+        aria-label="Навигация кабинета"
+      >
+        <div className="flex gap-1.5 w-max">
           {allItems.map((item) => {
             const active = current?.href === item.href;
             return (
@@ -129,22 +134,46 @@ export function DashboardShell({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-menthol/70 text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    ? "bg-menthol/70 border-transparent text-foreground"
+                    : "border-border text-muted-foreground hover:bg-secondary hover:text-foreground",
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                {item.label}
               </Link>
             );
           })}
-        </nav>
-      </aside>
-      <div className="flex-1 min-w-0">
-        
-        {children}
+        </div>
+      </nav>
+      <div className="flex gap-6">
+        <aside className="hidden lg:block w-56 shrink-0 py-8">
+          <nav className="sticky top-24 space-y-0.5" aria-label="Навигация кабинета">
+            {allItems.map((item) => {
+              const active = current?.href === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-menthol/70 text-foreground"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+        <div className="flex-1 min-w-0">
+
+          {children}
+        </div>
       </div>
     </div>
   );

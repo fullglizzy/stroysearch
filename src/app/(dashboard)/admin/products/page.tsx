@@ -88,7 +88,7 @@ export default async function AdminProductsPage() {
       </p>
 
       <Tabs defaultValue="products">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto justify-start">
           <TabsTrigger value="products">Товары</TabsTrigger>
           <TabsTrigger value="tree">Дерево решений</TabsTrigger>
           <TabsTrigger value="deleted">Удалённые</TabsTrigger>

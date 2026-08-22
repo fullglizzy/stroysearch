@@ -203,7 +203,7 @@ export function AuditLog({ logs, total, page, totalPages, action, q }: Props) {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 text-sm text-muted-foreground">
         <span>Всего: {total} записей</span>
         {totalPages > 1 && (
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => updateQuery({ page: String(p) })} />

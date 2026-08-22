@@ -29,7 +29,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   }
 
   return (
-    <div className="flex items-center justify-center gap-1 mt-6">
+    <div className="flex flex-wrap items-center justify-center gap-1 mt-6">
       <Button
         variant="outline"
         size="sm"

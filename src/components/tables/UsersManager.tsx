@@ -947,7 +947,7 @@ export function UsersManager({
       </Dialog>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 mt-4 text-sm text-muted-foreground">
           <span>Всего: {total} пользователей</span>
           <Pagination
             currentPage={page}
